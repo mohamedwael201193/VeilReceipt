@@ -9,9 +9,11 @@ import { JWTPayload } from '../types';
 
 const router = Router();
 
-// Extend Request to include user
+// Extend Request to include user with proper typing
 interface AuthRequest extends Request {
   user?: JWTPayload;
+  body: any;
+  params: any;
 }
 
 // Store receipt metadata after a purchase transaction
