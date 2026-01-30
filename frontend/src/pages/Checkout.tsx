@@ -7,7 +7,7 @@ import { useCartStore } from '@/stores/cartStore';
 import { api } from '@/lib/api';
 import { formatCredits, computeCartCommitment, getCurrentTimestamp, truncateAddress } from '@/lib/utils';
 import { Product, TransactionStatus } from '@/lib/types';
-import { ALEO_CONFIG } from '@/lib/aleo';
+import { ALEO_CONFIG, PaymentPrivacy } from '@/lib/aleo';
 import {
   CartIcon,
   PackageIcon,
@@ -34,7 +34,8 @@ const CheckoutPage: FC = () => {
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
   const [txId, setTxId] = useState<string | null>(null);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
-  const [useRealPayment, setUseRealPayment] = useState(ALEO_CONFIG.enableRealPayments);
+  // Payment privacy level: 'private' (max privacy), 'public' (visible), 'demo' (no payment)
+  const [privacyLevel, setPrivacyLevel] = useState<PaymentPrivacy>(ALEO_CONFIG.defaultPaymentPrivacy);
 
   // Load products
   useEffect(() => {
@@ -96,13 +97,13 @@ const CheckoutPage: FC = () => {
         timestamp,
       });
 
-      // Execute purchase transaction (with real payment if enabled)
+      // Execute purchase transaction with selected privacy level
       const transactionId = await executePurchase(
         merchantAddress,
         total,
         commitment,
         timestamp,
-        useRealPayment
+        privacyLevel
       );
 
       if (!transactionId) {
@@ -340,50 +341,118 @@ const CheckoutPage: FC = () => {
                       {/* Transaction fee notice */}
                       <div className="flex justify-between items-center text-sm mt-1">
                         <span className="text-slate-400">Network Fee</span>
-                        <span className="text-slate-400">{useRealPayment ? '~2 ₳ (2 txns)' : '~1 ₳'}</span>
+                        <span className="text-slate-400">
+                          {privacyLevel === 'private' ? '~1 ₳' : privacyLevel === 'public' ? '~2 ₳ (2 txns)' : '~1 ₳'}
+                        </span>
                       </div>
-                      {useRealPayment && (
+                      {privacyLevel !== 'demo' && (
                         <div className="flex justify-between items-center text-sm mt-1 font-semibold">
                           <span className="text-green-400">You Pay</span>
-                          <span className="text-green-400">{formatCredits(total + 2_000_000)} ₳</span>
+                          <span className="text-green-400">
+                            {formatCredits(total + (privacyLevel === 'public' ? 2_000_000 : 1_000_000))} ₳
+                          </span>
                         </div>
                       )}
                     </div>
 
-                    {/* Payment Mode Toggle */}
-                    <div className="mb-4 p-3 bg-slate-700/30 rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-300">
-                            {useRealPayment ? '💰 Real Payment' : '🎮 Demo Mode'}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setUseRealPayment(!useRealPayment)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            useRealPayment ? 'bg-green-500' : 'bg-slate-600'
+                    {/* Privacy Level Selector - KEY FOR BUILDATHON */}
+                    <div className="mb-4 p-4 bg-slate-700/30 rounded-xl border border-slate-600">
+                      <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <ShieldIcon size={16} className="text-veil-400" />
+                        Payment Privacy Level
+                      </h3>
+                      
+                      <div className="space-y-2">
+                        {/* Private Mode - RECOMMENDED */}
+                        <label 
+                          className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                            privacyLevel === 'private' 
+                              ? 'bg-veil-900/50 border-2 border-veil-500' 
+                              : 'bg-slate-800/50 border border-slate-600 hover:border-slate-500'
                           }`}
                         >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              useRealPayment ? 'translate-x-6' : 'translate-x-1'
-                            }`}
+                          <input
+                            type="radio"
+                            name="privacy"
+                            checked={privacyLevel === 'private'}
+                            onChange={() => setPrivacyLevel('private')}
+                            className="mt-1"
                           />
-                        </button>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white">🔒 Private Payment</span>
+                              <Badge variant="success">Max Privacy</Badge>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Uses your private credits. Amount & addresses hidden on-chain.
+                            </p>
+                          </div>
+                        </label>
+
+                        {/* Public Mode */}
+                        <label 
+                          className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                            privacyLevel === 'public' 
+                              ? 'bg-yellow-900/30 border-2 border-yellow-500' 
+                              : 'bg-slate-800/50 border border-slate-600 hover:border-slate-500'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="privacy"
+                            checked={privacyLevel === 'public'}
+                            onChange={() => setPrivacyLevel('public')}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white">💳 Public Payment</span>
+                              <Badge variant="warning">Visible</Badge>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Uses public credits. Transfer visible on-chain, receipt still private.
+                            </p>
+                          </div>
+                        </label>
+
+                        {/* Demo Mode */}
+                        <label 
+                          className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                            privacyLevel === 'demo' 
+                              ? 'bg-slate-700/50 border-2 border-slate-400' 
+                              : 'bg-slate-800/50 border border-slate-600 hover:border-slate-500'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="privacy"
+                            checked={privacyLevel === 'demo'}
+                            onChange={() => setPrivacyLevel('demo')}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white">🎮 Demo Mode</span>
+                              <Badge variant="default">Testing</Badge>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              No payment. Creates receipt for testing only.
+                            </p>
+                          </div>
+                        </label>
                       </div>
-                      <p className="text-xs text-slate-400 mt-2">
-                        {useRealPayment 
-                          ? `⚠️ 2-step process: 1) Transfer ${formatCredits(total)} ₳ to merchant 2) Create receipt`
-                          : 'Demo mode creates receipt without transferring credits'
-                        }
-                      </p>
                     </div>
 
                     {/* Privacy notice */}
                     <div className="flex items-start gap-2 p-3 bg-veil-900/30 border border-veil-700/50 rounded-xl mb-4">
                       <ShieldIcon size={20} className="text-veil-400 flex-shrink-0 mt-0.5" />
                       <p className="text-sm text-slate-300">
-                        Your receipt will be encrypted. Only you can view the purchase details.
+                        {privacyLevel === 'private' 
+                          ? '🔒 FULL PRIVACY: Payment amount, sender, and receiver all hidden. Receipt encrypted.'
+                          : privacyLevel === 'public'
+                          ? '⚠️ Payment visible on-chain. Receipt still encrypted and private to you.'
+                          : '🎮 Demo mode - no actual credits transferred. Receipt created for testing.'
+                        }
                       </p>
                     </div>
 
@@ -397,9 +466,11 @@ const CheckoutPage: FC = () => {
                     >
                       {!connected 
                         ? 'Connect Wallet' 
-                        : useRealPayment 
-                          ? `💰 Pay ${formatCredits(total)} ₳` 
-                          : 'Complete Purchase (Demo)'
+                        : privacyLevel === 'private' 
+                          ? `� Private Pay ${formatCredits(total)} ₳`
+                          : privacyLevel === 'public'
+                          ? `💳 Pay ${formatCredits(total)} ₳ (Public)`
+                          : '🎮 Demo Checkout'
                       }
                     </Button>
 

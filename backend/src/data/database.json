@@ -120,6 +120,27 @@
       ],
       "status": "confirmed",
       "createdAt": "2026-01-30T03:51:04.386Z"
+    },
+    {
+      "id": "0475d857-c38d-44a3-8bdb-65aa64be867f",
+      "txId": "be628a3e-f589-4bbc-ae1f-9b0fc625c14b",
+      "onChainTxId": null,
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "cartCommitment": "552993962field",
+      "timestamp": 1769747722,
+      "blockHeight": null,
+      "items": [
+        {
+          "sku": "rte",
+          "quantity": 1,
+          "price": 3000000
+        }
+      ],
+      "status": "confirmed",
+      "createdAt": "2026-01-30T04:35:59.086Z"
     }
   ],
   "returnRequests": [

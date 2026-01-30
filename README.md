@@ -3,17 +3,17 @@
   <img src="https://img.shields.io/badge/Leo-Smart%20Contract-00D9FF?style=for-the-badge" alt="Leo Smart Contract">
   <img src="https://img.shields.io/badge/Privacy-Zero%20Knowledge-10B981?style=for-the-badge" alt="Zero Knowledge">
   <img src="https://img.shields.io/badge/Status-Live%20on%20Testnet-22C55E?style=for-the-badge" alt="Live">
-  <img src="https://img.shields.io/badge/Payments-Real%20Credits-F59E0B?style=for-the-badge" alt="Real Payments">
+  <img src="https://img.shields.io/badge/Payments-PRIVATE%20Credits-F59E0B?style=for-the-badge" alt="Private Payments">
 </p>
 
 <h1 align="center">🛡️ VeilReceipt v2</h1>
 
 <p align="center">
-  <strong>Privacy-First Commerce Infrastructure on Aleo with Real Credits Transfer</strong>
+  <strong>Privacy-First Commerce Infrastructure on Aleo with PRIVATE Credits Transfer</strong>
 </p>
 
 <p align="center">
-  Real payments • Encrypted receipts • Anonymous returns • Private loyalty rewards • Zero-knowledge proofs
+  🔒 Private payments • Encrypted receipts • Anonymous returns • Private loyalty rewards • Zero-knowledge proofs
 </p>
 
 <p align="center">
@@ -26,57 +26,96 @@
 
 ---
 
-## 🆕 What's New in V2
+## 🔒 MAXIMUM PRIVACY: Private Payments
 
-VeilReceipt v2 introduces **real Aleo credits transfer** for purchases. This is no longer a demo - actual tokens are transferred from buyer to merchant!
+**VeilReceipt is the ONLY commerce dApp with fully private payments!**
 
-| Feature | V1 | V2 |
-|---------|----|----|
-| Payment | Demo mode only | ✅ **Real credits.aleo transfer** |
-| Credits Transfer | None | ✅ `credits.aleo/transfer_public` |
-| Purchase Flow | Single transaction | ✅ Two-step secure flow |
-| Token Movement | Simulated | ✅ Real on-chain transfer |
-
-### How Real Payments Work
-
-VeilReceipt v2 uses a **two-transaction flow** for maximum security:
+When you pay with private credits on VeilReceipt:
+- ❌ **Amount NOT visible** on blockchain
+- ❌ **Sender NOT visible** on blockchain  
+- ❌ **Receiver NOT visible** on blockchain
+- ✅ **Only encrypted ciphertext** appears on-chain
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          REAL PAYMENT FLOW (V2)                            │
+│                    🔒 PRIVATE PAYMENT vs 💳 PUBLIC PAYMENT                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   Step 1: Transfer Credits                                                  │
-│   ┌─────────────┐         ┌─────────────────────┐                          │
-│   │    Buyer    │────────►│   credits.aleo/     │                          │
-│   │   Wallet    │  3 cr   │   transfer_public   │                          │
-│   └─────────────┘         └──────────┬──────────┘                          │
-│                                      │                                      │
-│                                      ▼                                      │
-│                           ┌─────────────────────┐                          │
-│                           │     Merchant        │  Credits received!       │
-│                           │     Address         │                          │
-│                           └─────────────────────┘                          │
-│                                                                             │
-│   Step 2: Create Receipt                                                    │
-│   ┌─────────────┐         ┌─────────────────────┐                          │
-│   │    Buyer    │────────►│  veilreceipt_v2/    │                          │
-│   │   Wallet    │         │     purchase        │                          │
-│   └─────────────┘         └──────────┬──────────┘                          │
-│                                      │                                      │
-│                                      ▼                                      │
-│                           ┌─────────────────────┐                          │
-│                           │   Private Receipt   │  Encrypted for buyer     │
-│                           │      Record         │                          │
-│                           └─────────────────────┘                          │
+│  💳 PUBLIC (Other dApps):           🔒 PRIVATE (VeilReceipt):              │
+│  ┌─────────────────────────┐        ┌─────────────────────────┐            │
+│  │ From: aleo1abc...       │        │ CIPHERTEXT1QVQ...       │            │
+│  │ To:   aleo1xyz...       │        │ (encrypted - no data    │            │
+│  │ Amount: 3,000,000       │        │  visible to anyone!)    │            │
+│  │ ❌ EVERYONE CAN SEE!    │        │ ✅ FULLY HIDDEN         │            │
+│  └─────────────────────────┘        └─────────────────────────┘            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why Two Transactions?**
-- Cross-program calls (`credits.aleo/transfer_public` called from our contract) transfer from the **program**, not the user
-- The two-step flow ensures credits transfer directly from **user's wallet** to merchant
-- This is the secure, standard pattern for Aleo dApps
+### Verified Private Transaction on Testnet
+
+**Transaction:** [`at1mqlu6vtz294s92jdnfgkg6hyevsux7hprhlllgzl05n8ex40jgpslyp4s3`](https://testnet.explorer.provable.com/transaction/at1mqlu6vtz294s92jdnfgkg6hyevsux7hprhlllgzl05n8ex40jgpslyp4s3)
+
+| Field | What Explorer Shows |
+|-------|---------------------|
+| **Function** | `TRANSFER_PRIVATE` |
+| **Inputs** | `CIPHERTEXT...` (encrypted!) |
+| **Amount** | **HIDDEN** |
+| **Addresses** | **HIDDEN** |
+
+---
+
+## 🆕 What's New in V2
+
+VeilReceipt v2 introduces **real Aleo credits transfer** with **THREE privacy levels**:
+
+| Privacy Level | Function | Amount Visible? | Addresses Visible? | Recommended |
+|---------------|----------|-----------------|---------------------|-------------|
+| 🔒 **Private** | `transfer_private` | ❌ HIDDEN | ❌ HIDDEN | ✅ **YES** |
+| 💳 Public | `transfer_public` | ✅ Visible | ✅ Visible | For transparency |
+| 🎮 Demo | None | N/A | N/A | Testing only |
+
+### How Private Payments Work
+
+VeilReceipt uses a **two-transaction flow** with `credits.aleo/transfer_private`:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    🔒 PRIVATE PAYMENT FLOW (Maximum Privacy)               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Step 1: Private Credits Transfer (HIDDEN ON-CHAIN)                        │
+│   ┌─────────────┐         ┌─────────────────────────┐                      │
+│   │  Private    │────────►│   credits.aleo/         │                      │
+│   │  Credits    │  ??? cr │   transfer_private      │  Amount HIDDEN!      │
+│   │  Record     │         └──────────┬──────────────┘  Addresses HIDDEN!   │
+│   └─────────────┘                    │                                      │
+│                                      ▼                                      │
+│                           ┌─────────────────────────┐                      │
+│                           │   Merchant receives     │                      │
+│                           │   private credits       │                      │
+│                           └─────────────────────────┘                      │
+│                                                                             │
+│   Step 2: Create Private Receipt                                            │
+│   ┌─────────────┐         ┌─────────────────────────┐                      │
+│   │    Buyer    │────────►│  veilreceipt_v2.aleo/   │                      │
+│   │   Wallet    │         │     purchase            │                      │
+│   └─────────────┘         └──────────┬──────────────┘                      │
+│                                      │                                      │
+│                                      ▼                                      │
+│                           ┌─────────────────────────┐                      │
+│                           │   Private Receipt       │  Encrypted for       │
+│                           │   Record                │  buyer only          │
+│                           └─────────────────────────┘                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why This is Revolutionary:**
+- **No other commerce dApp** offers fully private payments
+- Payment amount is cryptographically hidden using zero-knowledge proofs
+- Only the buyer and merchant know the transaction details
+- Perfect for: salary payments, B2B transactions, private purchases
 
 ---
 
@@ -197,10 +236,11 @@ Aleo's **record model** is fundamental to VeilReceipt:
 - Cart contents never sent to blockchain
 
 **Step 3: Private Checkout (with Real Payment)**
-- **Step 3a:** User confirms purchase, wallet executes `credits.aleo/transfer_public`
-- **Step 3b:** Credits transferred from buyer to merchant (real on-chain transfer!)
-- **Step 3c:** Contract creates encrypted Receipt record via `veilreceipt_v2.aleo/purchase`
-- Only the total and commitment reach the chain
+- **Step 3a:** User selects privacy level (Private recommended!)
+- **Step 3b:** For PRIVATE: `credits.aleo/transfer_private` → Amount HIDDEN on-chain!
+- **Step 3c:** For PUBLIC: `credits.aleo/transfer_public` → Amount visible on-chain
+- **Step 3d:** Contract creates encrypted Receipt record via `veilreceipt_v2.aleo/purchase`
+- Only the receipt commitment reaches the chain (encrypted)
 
 **Step 4: View Receipts**
 - Receipts decrypted locally using wallet's view key
@@ -214,6 +254,61 @@ Aleo's **record model** is fundamental to VeilReceipt:
 - Nullifier prevents duplicate operations
 
 > ⚠️ **UTXO Model:** Each receipt can only be used **once** - either for a return OR for loyalty claim, not both. This is fundamental to Aleo's privacy model.
+
+---
+
+## 🏆 Buildathon Privacy Score
+
+VeilReceipt is designed to maximize the **40% Privacy Usage** score:
+
+### Privacy Features Used
+
+| Feature | Implementation | Privacy Level |
+|---------|----------------|---------------|
+| **Private Payments** | `credits.aleo/transfer_private` | 🔒 Maximum |
+| **Encrypted Receipts** | Private records (owner-only access) | 🔒 Maximum |
+| **Nullifier System** | Prevents double-spending, unlinkable | 🔒 Maximum |
+| **Hashed Return Reasons** | Reason converted to field hash | 🔒 Maximum |
+| **Cart Commitment** | Items hashed before submission | 🔒 Maximum |
+| **Private Loyalty Stamps** | Private records for loyalty tiers | 🔒 Maximum |
+
+### What's Encrypted On-Chain
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PRIVACY LAYERS IN VEILRECEIPT                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Layer 1: Payment (NEW - PRIVATE!)                                          │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  transfer_private → Amount: ENCRYPTED, Sender: ENCRYPTED,            │  │
+│  │                     Receiver: ENCRYPTED                               │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  Layer 2: Receipt Record                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  owner: ENCRYPTED, merchant: ENCRYPTED, amount: ENCRYPTED,           │  │
+│  │  cart_commitment: ENCRYPTED, timestamp: ENCRYPTED                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  Layer 3: Return/Loyalty Records                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  ReturnClaim: reason HASHED before encryption                         │  │
+│  │  LoyaltyStamp: tier stored in ENCRYPTED private record               │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Verified Private Transaction Proof
+
+**Transaction:** [`at1mqlu6vtz294s92jdnfgkg6hyevsux7hprhlllgzl05n8ex40jgpslyp4s3`](https://testnet.explorer.provable.com/transaction/at1mqlu6vtz294s92jdnfgkg6hyevsux7hprhlllgzl05n8ex40jgpslyp4s3)
+
+View this on the explorer - you'll see:
+- ❌ Amount NOT visible (encrypted ciphertext)
+- ❌ Sender address NOT visible (encrypted)
+- ❌ Receiver address NOT visible (encrypted)
+- ✅ Only zero-knowledge proof is public
 
 ---
 
@@ -436,9 +531,26 @@ mapping used_nullifiers: field => bool;        // Prevents double-spending
 | **Support Proof** | Generate token | Proof token returned, receipt preserved |
 
 **Privacy Features:**
+- 🔒 **PRIVATE payments** - Amount & addresses encrypted using `transfer_private`
 - Receipts decrypted using wallet's view key
 - Return reasons hashed before submission
 - Each operation protected by nullifier system
+
+**Payment Privacy Selector:**
+```
+┌──────────────────────────────────────────────────────┐
+│  Select Payment Privacy Level:                       │
+│                                                      │
+│  ◉ 🔒 Private (Recommended)                         │
+│      Amount & addresses hidden on-chain              │
+│                                                      │
+│  ○ 💳 Public                                         │
+│      Amount visible on blockchain                    │
+│                                                      │
+│  ○ 🎮 Demo Mode                                      │
+│      Testing only - no real payment                  │
+└──────────────────────────────────────────────────────┘
+```
 
 ---
 

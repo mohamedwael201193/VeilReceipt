@@ -19,13 +19,14 @@ interface WalletProviderWrapperProps {
 export const WalletProviderWrapper: FC<WalletProviderWrapperProps> = ({ children }) => {
   // Initialize wallet adapters - Leo and Shield
   // Configure with program permissions for record access
+  // IMPORTANT: Include credits.aleo for private payment support!
   const wallets = useMemo(() => {
     return [
       new LeoWalletAdapter({
         appName: 'VeilReceipt',
         programIdPermissions: {
-          testnet: [ALEO_CONFIG.programId],
-          mainnet: [ALEO_CONFIG.programId],
+          testnet: [ALEO_CONFIG.programId, 'credits.aleo'],
+          mainnet: [ALEO_CONFIG.programId, 'credits.aleo'],
         },
       }),
       new ShieldWalletAdapter({
@@ -42,7 +43,7 @@ export const WalletProviderWrapper: FC<WalletProviderWrapperProps> = ({ children
       wallets={wallets} 
       network={network as any}
       autoConnect={true}
-      programs={[ALEO_CONFIG.programId]}
+      programs={[ALEO_CONFIG.programId, 'credits.aleo']}
       decryptPermission={WalletDecryptPermission.OnChainHistory}
     >
       <WalletModalProvider>

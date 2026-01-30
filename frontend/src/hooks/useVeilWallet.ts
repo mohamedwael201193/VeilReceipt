@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWallet } from '@/components/providers/WalletProvider';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/lib/api';
-import { ALEO_CONFIG, DEFAULT_FEE } from '@/lib/aleo';
+import { ALEO_CONFIG, DEFAULT_FEE, PaymentPrivacy } from '@/lib/aleo';
 import { AleoAddress, ReceiptRecord } from '@/lib/types';
 import toast from 'react-hot-toast';
 
@@ -374,19 +374,83 @@ export function useVeilWallet() {
   }, [wallet, walletAddress, receipts]);
 
   /**
-   * Execute a REAL purchase with credits transfer
-   * Two-transaction flow:
-   * 1. Transfer credits to merchant via credits.aleo/transfer_public
-   * 2. Create receipt via veilreceipt_v2.aleo/purchase
+   * Fetch private credits records from wallet
+   * These are needed for private payments
+   */
+  const fetchPrivateCredits = useCallback(async (): Promise<any[]> => {
+    const walletAny = wallet as any;
+    
+    if (!wallet.requestRecords && !walletAny.requestRecords) {
+      log('Wallet does not support requestRecords');
+      return [];
+    }
+
+    try {
+      const requestRecordsFn = wallet.requestRecords || walletAny.requestRecords;
+      log('Requesting credits.aleo records from wallet...');
+      const response = await requestRecordsFn('credits.aleo', true);
+      
+      log('Raw credits.aleo response:', response);
+      
+      let records: any[] = [];
+      if (Array.isArray(response)) {
+        records = response;
+      } else if (response?.records) {
+        records = response.records;
+      } else if (response?.data) {
+        records = response.data;
+      }
+
+      log('Total credits records found:', records.length);
+      
+      // Filter for non-spent credits records
+      const creditRecords = records.filter((r: any) => {
+        const isSpent = r.spent === true;
+        log(`Credit record spent=${isSpent}:`, r);
+        return !isSpent;
+      });
+      
+      log('Unspent private credits records:', creditRecords.length);
+      
+      if (creditRecords.length > 0) {
+        log('First credit record FULL:', JSON.stringify(creditRecords[0], null, 2));
+        log('First credit record keys:', Object.keys(creditRecords[0]));
+        
+        // Log different possible balance locations
+        const r = creditRecords[0];
+        log('Checking balance locations:');
+        log('  r.data?.microcredits:', r.data?.microcredits);
+        log('  r.microcredits:', r.microcredits);
+        log('  r.data?.amount:', r.data?.amount);
+        log('  r.amount:', r.amount);
+        log('  r.plaintext:', r.plaintext);
+      }
+      
+      return creditRecords;
+    } catch (error: any) {
+      log('Failed to fetch private credits:', error);
+      // Check if it's a permission error
+      if (error.message?.includes('NOT_GRANTED')) {
+        toast.error('Please reconnect wallet and grant access to credits.aleo records');
+      }
+      return [];
+    }
+  }, [wallet]);
+
+  /**
+   * Execute a purchase with configurable privacy level
    * 
-   * This is the correct approach because cross-program calls use caller (program) not signer (user)
+   * Privacy Levels:
+   * - 'private': Maximum privacy - uses private credits record directly
+   * - 'public': Real payment but visible on-chain  
+   * - 'demo': No actual payment (testing only)
    */
   const executePurchase = useCallback(async (
     merchantAddress: string,
     totalMicrocredits: number,
     cartCommitment: string,
     timestamp: number,
-    useRealPayment: boolean = ALEO_CONFIG.enableRealPayments
+    privacyLevel: PaymentPrivacy = ALEO_CONFIG.defaultPaymentPrivacy
   ): Promise<string | null> => {
     const walletAny = wallet as any;
     
@@ -406,11 +470,117 @@ export function useVeilWallet() {
       return null;
     }
 
-    log(`Starting ${useRealPayment ? '💰 REAL PAYMENT' : '🎮 Demo'} purchase flow`);
+    log(`Starting purchase with privacy level: ${privacyLevel}`);
 
-    // ========== STEP 1: Transfer credits to merchant (if real payment) ==========
-    if (useRealPayment) {
-      toast.loading(`💰 Step 1/2: Transferring ${totalMicrocredits / 1_000_000} credits to merchant...`, { id: 'tx-transfer' });
+    // ========== PRIVATE PAYMENT MODE (Maximum Privacy) ==========
+    if (privacyLevel === 'private') {
+      toast.loading('🔒 Fetching private credits...', { id: 'tx-check' });
+      
+      // Get private credits records
+      const privateCredits = await fetchPrivateCredits();
+      toast.dismiss('tx-check');
+      
+      if (privateCredits.length === 0) {
+        toast.error('No private credits found! Please convert some credits to private first using your wallet.');
+        return null;
+      }
+
+      // Find a credit record with enough balance
+      let paymentRecord = null;
+      for (const record of privateCredits) {
+        // Try multiple possible locations for the balance
+        let balanceStr = 
+          record.data?.microcredits || 
+          record.microcredits ||
+          record.data?.amount ||
+          record.amount ||
+          '0';
+        
+        // Parse from plaintext if available
+        if (!balanceStr || balanceStr === '0') {
+          const plaintext = record.plaintext || '';
+          const match = plaintext.match(/microcredits:\s*(\d+)u64/);
+          if (match) {
+            balanceStr = match[1];
+          }
+        }
+        
+        const balance = BigInt(String(balanceStr).replace(/u64(\.private|\.public)?$/, ''));
+        log(`Credit record balance: ${balance} microcredits (${Number(balance) / 1_000_000} ALEO)`);
+        
+        if (balance >= BigInt(totalMicrocredits)) {
+          paymentRecord = record;
+          log('Found suitable payment record with balance:', balance.toString());
+          break;
+        }
+      }
+
+      if (!paymentRecord) {
+        toast.error(`No private credit record with enough balance. Need ${totalMicrocredits / 1_000_000} credits.`);
+        return null;
+      }
+
+      log('Using private credits record:', paymentRecord);
+      
+      // Use the plaintext from the record for the transaction
+      if (!paymentRecord.plaintext) {
+        toast.error('Credit record missing plaintext - cannot process. Please reconnect wallet.');
+        return null;
+      }
+
+      toast.loading('🔒 Step 1/2: Transferring PRIVATE credits to merchant...', { id: 'tx-private' });
+
+      // Step 1: Transfer private credits directly using credits.aleo/transfer_private
+      // This keeps the payment amount and addresses hidden on-chain!
+      const privateTransferTx = {
+        program: 'credits.aleo',
+        function: 'transfer_private',
+        inputs: [
+          paymentRecord.plaintext, // Private credits record
+          merchantAddress,         // Recipient
+          `${totalMicrocredits}u64`, // Amount
+        ],
+        fee: DEFAULT_FEE,
+        privateFee: true, // Use private fee for maximum privacy
+      };
+
+      log('Executing private credits transfer:', privateTransferTx);
+
+      try {
+        const transferResponse = await walletAny.executeTransaction(privateTransferTx);
+        toast.dismiss('tx-private');
+
+        if (!transferResponse?.transactionId) {
+          toast.error('Private transfer failed - no transaction ID');
+          return null;
+        }
+
+        log('Private credits transfer successful:', transferResponse.transactionId);
+        toast.success('🔒 Private credits transferred!');
+        
+        // Small delay to let the network process
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error: any) {
+        toast.dismiss('tx-private');
+        console.error('Private credits transfer failed:', error);
+        
+        if (error.message?.includes('reject') || error.message?.includes('denied') || error.message?.includes('cancel')) {
+          toast.error('Transfer cancelled');
+        } else if (error.message?.includes('insufficient') || error.message?.includes('balance')) {
+          toast.error(`Insufficient private credits! Need ${totalMicrocredits / 1_000_000} credits`);
+        } else {
+          toast.error(error.message || 'Private transfer failed');
+        }
+        return null;
+      }
+      
+      // Step 2: Create receipt (continue below to common receipt creation)
+    }
+
+    // ========== PUBLIC PAYMENT MODE (Visible on-chain) ==========
+    if (privacyLevel === 'public') {
+      toast.loading('💳 Step 1/2: Transferring credits...', { id: 'tx-transfer' });
       
       const transferTx = {
         program: 'credits.aleo',
@@ -423,7 +593,7 @@ export function useVeilWallet() {
         privateFee: false,
       };
 
-      log('Executing credits transfer:', transferTx);
+      log('Executing public credits transfer:', transferTx);
 
       try {
         const transferResponse = await walletAny.executeTransaction(transferTx);
@@ -435,7 +605,7 @@ export function useVeilWallet() {
         }
 
         log('Credits transfer successful:', transferResponse.transactionId);
-        toast.success(`💰 ${totalMicrocredits / 1_000_000} credits transferred!`);
+        toast.success(`💳 ${totalMicrocredits / 1_000_000} credits transferred!`);
         
         // Small delay to let the network process
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -455,13 +625,19 @@ export function useVeilWallet() {
       }
     }
 
-    // ========== STEP 2: Create receipt ==========
-    const stepLabel = useRealPayment ? 'Step 2/2: Creating receipt...' : 'Creating receipt...';
+    // ========== STEP 2: Create receipt (all payment modes) ==========
+    const isDemoMode = privacyLevel === 'demo';
+    const isPrivateMode = privacyLevel === 'private';
+    const stepLabel = isDemoMode 
+      ? '🎮 Creating demo receipt...' 
+      : isPrivateMode 
+      ? '🔒 Step 2/2: Creating private receipt...'
+      : 'Step 2/2: Creating receipt...';
     toast.loading(stepLabel, { id: 'tx-receipt' });
 
     const receiptTx = {
       program: ALEO_CONFIG.programId,
-      function: 'purchase', // Always use 'purchase' for receipt creation
+      function: 'purchase',
       inputs: [
         merchantAddress,
         `${totalMicrocredits}u64`,
@@ -469,7 +645,7 @@ export function useVeilWallet() {
         `${timestamp}u64`,
       ],
       fee: DEFAULT_FEE,
-      privateFee: false,
+      privateFee: isPrivateMode, // Use private fee for private mode
     };
 
     log('Creating receipt:', receiptTx);
@@ -481,9 +657,11 @@ export function useVeilWallet() {
       log('Receipt creation response:', response);
       
       if (response?.transactionId) {
-        const successMsg = useRealPayment
-          ? '🎉 Purchase complete! Payment sent & receipt created!'
-          : '✅ Receipt created!';
+        const successMsg = isDemoMode
+          ? '🎮 Demo receipt created!'
+          : isPrivateMode
+          ? '🔒 PRIVATE purchase complete! Payment hidden on-chain!'
+          : '🎉 Purchase complete! Receipt created!';
         toast.success(successMsg);
         return response.transactionId;
       } else {
@@ -501,7 +679,7 @@ export function useVeilWallet() {
       }
       return null;
     }
-  }, [wallet, walletAddress]);
+  }, [wallet, walletAddress, fetchPrivateCredits]);
 
   /**
    * Execute a return transaction
@@ -797,5 +975,8 @@ export function useVeilWallet() {
     executeReturn,
     executeLoyaltyClaim,
     generateSupportProof,
+    
+    // Privacy utilities
+    fetchPrivateCredits,
   };
 }

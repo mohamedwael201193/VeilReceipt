@@ -3,12 +3,17 @@
 // Network type for wallet adapter
 export type AleoNetwork = 'mainnet' | 'testnet';
 
+// Payment privacy levels
+export type PaymentPrivacy = 'public' | 'private' | 'demo';
+
 export const ALEO_CONFIG = {
   programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v2.aleo',
   network: (import.meta.env.VITE_ALEO_NETWORK || 'testnet') as AleoNetwork,
   rpcUrl: import.meta.env.VITE_ALEO_RPC_URL || 'https://api.explorer.provable.com/v1',
   // Enable real payments - V2 supports real credits transfer!
   enableRealPayments: import.meta.env.VITE_ENABLE_REAL_PAYMENTS === 'true',
+  // Default payment privacy level: 'private' for maximum privacy, 'public' for visible, 'demo' for no payment
+  defaultPaymentPrivacy: (import.meta.env.VITE_PAYMENT_PRIVACY || 'private') as PaymentPrivacy,
   // Deployment info
   deploymentTx: 'at1d4nj46almxfpplvckk5pc6uecdgqp20g3pg4sfp6ahm9tnuluc8q2xst5h',
   deploymentBlock: 14100173,
