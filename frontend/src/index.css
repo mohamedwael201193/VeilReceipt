@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Aleo Wallet Adapter UI Overrides */
+.wallet-adapter-button {
+  @apply bg-gradient-to-r from-veil-500 to-receipt-500 hover:from-veil-600 hover:to-receipt-600 
+         text-white font-semibold py-2.5 px-5 rounded-xl transition-all duration-300 
+         shadow-lg hover:shadow-xl hover:shadow-veil-500/25 border-0;
+}
+
+.wallet-adapter-button:hover {
+  @apply transform scale-[1.02];
+}
+
+.wallet-adapter-button-trigger {
+  @apply bg-gradient-to-r from-veil-500 to-receipt-500;
+}
+
+.wallet-adapter-modal-wrapper {
+  @apply bg-slate-900/95 backdrop-blur-xl;
+}
+
+.wallet-adapter-modal-container {
+  @apply bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl;
+}
+
+.wallet-adapter-modal-title {
+  @apply text-white font-bold text-xl;
+}
+
+.wallet-adapter-modal-list {
+  @apply space-y-2;
+}
+
+.wallet-adapter-modal-list li {
+  @apply bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors;
+}
+
+.wallet-adapter-modal-list-more {
+  @apply text-veil-400 hover:text-veil-300;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-800 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-600 rounded-full hover:bg-slate-500;
+}
+
+/* Selection */
+::selection {
+  @apply bg-veil-500/30 text-white;
+}
+
+/* Focus styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-veil-400 ring-offset-2 ring-offset-slate-900;
+}
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-exit {
+  opacity: 1;
+}
+
+.page-exit-active {
+  opacity: 0;
+  transition: opacity 200ms;
+}

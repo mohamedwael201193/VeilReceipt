@@ -1,0 +1,106 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment files (SENSITIVE)
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+backend/.env
+frontend/.env
+contracts/.env
+
+# Private keys and secrets (SENSITIVE)
+*.pem
+*.key
+*.secret
+private_key*
+*private*key*
+
+# Leo/Aleo sensitive files
+contracts/.env
+contracts/build/
+contracts/*.prover
+contracts/*.verifier
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# All markdown files EXCEPT README.md
+*.md
+!README.md
+
+# Package locks (optional - uncomment if needed)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Database files (if any sensitive data)
+*.sqlite
+*.sqlite3
+*.db
+
+# Cached files
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Vercel
+.vercel
+
+# Debug
+.npm/
+.node_repl_history
+
+# Optional: Backend data (contains transaction data)
+# Uncomment if you don't want to share sample data
+# backend/src/data/database.json

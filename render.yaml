@@ -1,0 +1,42 @@
+# Render deployment configuration for VeilReceipt
+
+services:
+  # Backend API
+  - type: web
+    name: veilreceipt-api
+    runtime: node
+    region: oregon
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ALEO_RPC_URL
+        value: https://api.explorer.provable.com/v1
+      - key: ALEO_NETWORK
+        value: testnet
+      - key: FRONTEND_URL
+        sync: false # Set manually after frontend is deployed
+    healthCheckPath: /health
+
+  # Frontend (Static Site)
+  - type: web
+    name: veilreceipt-app
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false # Set to backend URL after deployment
+      - key: VITE_ALEO_NETWORK
+        value: testnet
+      - key: VITE_ALEO_PROGRAM_ID
+        value: veilreceipt_v1.aleo

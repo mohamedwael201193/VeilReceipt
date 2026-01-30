@@ -1,0 +1,108 @@
+{
+  "merchants": [
+    {
+      "id": "363430ba-1bd8-43f0-9870-32622d83014e",
+      "walletAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "businessName": "Merchant aleo17l9wv...",
+      "createdAt": "2026-01-29T02:14:28.432Z"
+    },
+    {
+      "id": "f0e2bc0a-201f-40c8-88f9-697cc34ac1e2",
+      "walletAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "businessName": "Merchant aleo1df39w...",
+      "createdAt": "2026-01-29T02:52:28.881Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "7e91e6c2-6686-4de8-b654-31cd9d7b963f",
+      "merchantId": "363430ba-1bd8-43f0-9870-32622d83014e",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "name": "test",
+      "description": "test",
+      "price": 3000000,
+      "sku": "rte",
+      "category": "test",
+      "inStock": true,
+      "createdAt": "2026-01-29T02:20:13.173Z",
+      "updatedAt": "2026-01-29T02:20:13.173Z"
+    }
+  ],
+  "receiptMetas": [
+    {
+      "id": "43dad57a-027f-45a4-a961-8beb95925334",
+      "txId": "7ce5fc01-97f3-44b5-804f-a2969100923c",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "cartCommitment": "552993962field",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "createdAt": "2026-01-29T02:32:47.192Z"
+    },
+    {
+      "id": "e74d91d0-785d-47c4-b7bb-afcbaf40991e",
+      "txId": "9d33e42f-7bcb-460a-94a8-6089a09981a5",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "cartCommitment": "552993962field",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "createdAt": "2026-01-29T02:38:30.756Z"
+    },
+    {
+      "id": "9464ee1d-dec6-4529-960e-151a5df51a11",
+      "txId": "5241354b-1b2c-4bb7-a137-a558ac44622a",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "cartCommitment": "552993962field",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "createdAt": "2026-01-29T02:51:12.674Z"
+    },
+    {
+      "id": "ee1ede7d-7f19-412e-8b28-7e995b756150",
+      "txId": "b61a179c-0564-463d-8c2d-24699098a3f1",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "cartCommitment": "552993962field",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "createdAt": "2026-01-29T02:56:57.459Z"
+    },
+    {
+      "id": "88804f09-ca25-4e7f-a04e-94f44385aba5",
+      "txId": "095e27b7-dbb9-484b-bc32-9a899786d1f3",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "cartCommitment": "552993962field",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "createdAt": "2026-01-29T03:01:38.664Z"
+    }
+  ],
+  "returnRequests": [
+    {
+      "id": "9a10105e-55ad-46a3-a2bc-713bcf7c8712",
+      "txId": "3dc2158c-c530-40f5-8674-8bb1de6cc6b1",
+      "nullifier": "1404006969field",
+      "originalReceiptTxId": "3dc2158c-c530-40f5-8674-8bb1de6cc6b1",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "reason": "defective",
+      "status": "pending",
+      "refundAmount": 3000000,
+      "createdAt": "2026-01-29T05:32:44.818Z"
+    }
+  ],
+  "loyaltyClaims": [
+    {
+      "id": "451d24d2-7919-47a2-8ce1-df8489050e85",
+      "txId": "c054134e-4f5d-4d65-82d7-a5ba03a6e1f9",
+      "nullifier": "4096063529413590063820970870385383505509883984171713869931391403666747308065field",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "tier": 1,
+      "createdAt": "2026-01-29T05:33:30.883Z"
+    }
+  ],
+  "authNonces": []
+}
