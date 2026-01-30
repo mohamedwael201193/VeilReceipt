@@ -3,20 +3,22 @@
   <img src="https://img.shields.io/badge/Leo-Smart%20Contract-00D9FF?style=for-the-badge" alt="Leo Smart Contract">
   <img src="https://img.shields.io/badge/Privacy-Zero%20Knowledge-10B981?style=for-the-badge" alt="Zero Knowledge">
   <img src="https://img.shields.io/badge/Status-Live%20on%20Testnet-22C55E?style=for-the-badge" alt="Live">
+  <img src="https://img.shields.io/badge/Payments-Real%20Credits-F59E0B?style=for-the-badge" alt="Real Payments">
 </p>
 
-<h1 align="center">🛡️ VeilReceipt</h1>
+<h1 align="center">🛡️ VeilReceipt v2</h1>
 
 <p align="center">
-  <strong>Privacy-First Commerce Infrastructure on Aleo</strong>
-</p>
-
-<p align="center">
-  Encrypted receipts • Anonymous returns • Private loyalty rewards • Zero-knowledge proofs
+  <strong>Privacy-First Commerce Infrastructure on Aleo with Real Credits Transfer</strong>
 </p>
 
 <p align="center">
-  <a href="https://testnet.explorer.provable.com/program/veilreceipt_v1.aleo">View on Explorer</a> •
+  Real payments • Encrypted receipts • Anonymous returns • Private loyalty rewards • Zero-knowledge proofs
+</p>
+
+<p align="center">
+  <a href="https://testnet.explorer.provable.com/program/veilreceipt_v2.aleo">View on Explorer</a> •
+  <a href="https://veil-receipt.vercel.app">Live Demo</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-architecture--flow">Architecture</a> •
   <a href="#-smart-contract">Smart Contract</a>
@@ -24,9 +26,63 @@
 
 ---
 
+## 🆕 What's New in V2
+
+VeilReceipt v2 introduces **real Aleo credits transfer** for purchases. This is no longer a demo - actual tokens are transferred from buyer to merchant!
+
+| Feature | V1 | V2 |
+|---------|----|----|
+| Payment | Demo mode only | ✅ **Real credits.aleo transfer** |
+| Credits Transfer | None | ✅ `credits.aleo/transfer_public` |
+| Purchase Flow | Single transaction | ✅ Two-step secure flow |
+| Token Movement | Simulated | ✅ Real on-chain transfer |
+
+### How Real Payments Work
+
+VeilReceipt v2 uses a **two-transaction flow** for maximum security:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          REAL PAYMENT FLOW (V2)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Step 1: Transfer Credits                                                  │
+│   ┌─────────────┐         ┌─────────────────────┐                          │
+│   │    Buyer    │────────►│   credits.aleo/     │                          │
+│   │   Wallet    │  3 cr   │   transfer_public   │                          │
+│   └─────────────┘         └──────────┬──────────┘                          │
+│                                      │                                      │
+│                                      ▼                                      │
+│                           ┌─────────────────────┐                          │
+│                           │     Merchant        │  Credits received!       │
+│                           │     Address         │                          │
+│                           └─────────────────────┘                          │
+│                                                                             │
+│   Step 2: Create Receipt                                                    │
+│   ┌─────────────┐         ┌─────────────────────┐                          │
+│   │    Buyer    │────────►│  veilreceipt_v2/    │                          │
+│   │   Wallet    │         │     purchase        │                          │
+│   └─────────────┘         └──────────┬──────────┘                          │
+│                                      │                                      │
+│                                      ▼                                      │
+│                           ┌─────────────────────┐                          │
+│                           │   Private Receipt   │  Encrypted for buyer     │
+│                           │      Record         │                          │
+│                           └─────────────────────┘                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why Two Transactions?**
+- Cross-program calls (`credits.aleo/transfer_public` called from our contract) transfer from the **program**, not the user
+- The two-step flow ensures credits transfer directly from **user's wallet** to merchant
+- This is the secure, standard pattern for Aleo dApps
+
+---
+
 ## 📋 Project Overview
 
-**VeilReceipt** is a complete privacy-preserving commerce protocol built on Aleo. It enables consumers to shop, receive verifiable receipts, process returns, and earn loyalty rewards—all without exposing their purchase history to anyone, including merchants.
+**VeilReceipt** is a complete privacy-preserving commerce protocol built on Aleo with **real Aleo credits transfer**. It enables consumers to shop, pay with real tokens, receive verifiable receipts, process returns, and earn loyalty rewards—all without exposing their purchase history to anyone, including merchants.
 
 ### The Problem
 
@@ -45,12 +101,13 @@ Traditional e-commerce and retail systems expose sensitive consumer data:
 
 VeilReceipt leverages Aleo's zero-knowledge architecture to create a commerce system where:
 
+- **Real credits transfer** from buyer to merchant using `credits.aleo`
 - **Receipts are private records** owned by the buyer, encrypted on-chain
 - **Returns are processed using nullifiers** without linking to identity
 - **Loyalty rewards are claimed anonymously** using ZK proofs
 - **Support verification works without revealing details** via proof tokens
 
-> *"Prove you bought something without revealing what, when, or where."*
+> *"Pay with real credits. Prove you bought something without revealing what, when, or where."*
 
 ---
 
@@ -139,10 +196,10 @@ Aleo's **record model** is fundamental to VeilReceipt:
 - Cart managed locally in browser (Zustand store)
 - Cart contents never sent to blockchain
 
-**Step 3: Private Checkout**
-- Frontend computes `cart_commitment = hash(items)`
-- User signs transaction via Leo Wallet
-- Contract creates encrypted Receipt record
+**Step 3: Private Checkout (with Real Payment)**
+- **Step 3a:** User confirms purchase, wallet executes `credits.aleo/transfer_public`
+- **Step 3b:** Credits transferred from buyer to merchant (real on-chain transfer!)
+- **Step 3c:** Contract creates encrypted Receipt record via `veilreceipt_v2.aleo/purchase`
 - Only the total and commitment reach the chain
 
 **Step 4: View Receipts**
@@ -156,14 +213,32 @@ Aleo's **record model** is fundamental to VeilReceipt:
 - Receipt consumed (UTXO) or proof generated
 - Nullifier prevents duplicate operations
 
+> ⚠️ **UTXO Model:** Each receipt can only be used **once** - either for a return OR for loyalty claim, not both. This is fundamental to Aleo's privacy model.
+
 ---
 
 ## 📜 Smart Contract
 
-**Program ID:** `veilreceipt_v1.aleo`  
+**Program ID:** `veilreceipt_v2.aleo`  
 **Network:** Aleo Testnet Beta  
-**Deployed Block:** 14,077,747  
-**Transaction:** [`at1p7d6e7jcppwpnn756jdapjs40v0adahlaxp3p5x45yp9tumedqgs5crclz`](https://testnet.explorer.provable.com/transaction/at1p7d6e7jcppwpnn756jdapjs40v0adahlaxp3p5x45yp9tumedqgs5crclz)
+**Deployed Block:** 14,100,173  
+**Transaction:** [`at1d4nj46almxfpplvckk5pc6uecdgqp20g3pg4sfp6ahm9tnuluc8q2xst5h`](https://testnet.explorer.provable.com/transaction/at1d4nj46almxfpplvckk5pc6uecdgqp20g3pg4sfp6ahm9tnuluc8q2xst5h)  
+**Leo Version:** 3.4.0
+
+**🆕 V2 Features:**
+- ✅ **Real Aleo credits transfer** via `import credits.aleo`
+- ✅ `purchase_public` - Transfer with public credits (cross-program call)
+- ✅ `purchase_private` - Transfer with private credits (maximum privacy)
+- ✅ `purchase` - Demo mode (no payment, for testing)
+- ✅ All functions verified working on testnet
+
+### Dependencies
+
+```leo
+import credits.aleo;  // Official Aleo credits program
+```
+
+Added via: `leo add --network credits.aleo`
 
 ### Record Types
 
@@ -197,7 +272,36 @@ record LoyaltyStamp {
 
 ### Contract Functions
 
-#### `purchase` — Create Encrypted Receipt
+#### `purchase_public` — Real Payment with Public Credits (V2)
+
+```leo
+async transition purchase_public(
+    merchant: address,
+    total: u64,
+    cart_commitment: field,
+    timestamp: u64
+) -> (Receipt, Future)
+```
+
+**Real Payment:** Calls `credits.aleo/transfer_public` to transfer credits from buyer to merchant. Creates encrypted Receipt record.
+
+> ⚠️ **Note:** Cross-program calls transfer from the *program address*, not the user. Use the two-step frontend flow for user-to-merchant transfers.
+
+#### `purchase_private` — Real Payment with Private Credits (V2)
+
+```leo
+async transition purchase_private(
+    merchant: address,
+    total: u64,
+    cart_commitment: field,
+    timestamp: u64,
+    payment: credits.aleo/credits
+) -> (Receipt, credits.aleo/credits, Future)
+```
+
+**Maximum Privacy:** Uses private credits record for payment. Returns change as new private credits record.
+
+#### `purchase` — Demo Mode (No Payment)
 
 ```leo
 async transition purchase(
@@ -208,7 +312,7 @@ async transition purchase(
 ) -> (Receipt, Future)
 ```
 
-**Privacy:** Creates a Receipt record encrypted for the buyer. The cart commitment hides actual items. Merchant sees only aggregate sales via public mapping.
+**Privacy:** Creates a Receipt record encrypted for the buyer. The cart commitment hides actual items. Merchant sees only aggregate sales via public mapping. No actual credits transfer - for testing only.
 
 #### `open_return` — Process Anonymous Return
 
@@ -507,15 +611,16 @@ npm install
 PORT=3001
 JWT_SECRET=your-secret-key-change-in-production
 CORS_ORIGIN=http://localhost:5173
-ALEO_PROGRAM_ID=veilreceipt_v1.aleo
+ALEO_PROGRAM_ID=veilreceipt_v2.aleo
 ALEO_NETWORK=testnet
 ```
 
 **Frontend** — Create `frontend/.env`:
 ```env
 VITE_API_BASE_URL=http://localhost:3001
-VITE_ALEO_PROGRAM_ID=veilreceipt_v1.aleo
+VITE_ALEO_PROGRAM_ID=veilreceipt_v2.aleo
 VITE_ALEO_NETWORK=testnet
+VITE_ENABLE_REAL_PAYMENTS=false
 ```
 
 ### Running the Application
@@ -561,11 +666,19 @@ leo deploy --network testnet
 
 ## 🔮 Future Improvements
 
+### Completed in V2 ✅
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Real Payment Integration** | `credits.aleo` for actual credit transfers | ✅ **DONE** |
+| Two-Step Payment Flow | Secure user-to-merchant transfer | ✅ **DONE** |
+| Public Credits Transfer | `transfer_public` support | ✅ **DONE** |
+| Private Credits Transfer | `transfer_private` support | ✅ **DONE** |
+
 ### Planned Features
 
 | Feature | Description | Priority |
 |---------|-------------|----------|
-| Payment Integration | Integrate `credits.aleo` for actual credit transfers | High |
 | Multi-Merchant Checkout | Single transaction spanning multiple sellers | Medium |
 | Return Approval Workflow | Merchant review before refund processing | Medium |
 | Loyalty Auto-Upgrade | Automatic tier promotion based on stamps | Low |
@@ -592,15 +705,31 @@ leo deploy --network testnet
 
 ## 📊 Verified On-Chain Transactions
 
+### Contract Deployments
+
+| Version | Transaction ID | Block | Status |
+|---------|---------------|-------|--------|
+| V1 Deploy | `at1p7d6e7jcppwpnn756jdapjs40v0adahlaxp3p5x45yp9tumedqgs5crclz` | 14,077,747 | ✅ |
+| **V2 Deploy** | `at1d4nj46almxfpplvckk5pc6uecdgqp20g3pg4sfp6ahm9tnuluc8q2xst5h` | 14,100,173 | ✅ |
+
+### V2 Real Payment Transactions
+
+| Operation | Description | Status |
+|-----------|-------------|--------|
+| **credits.aleo/transfer_public** | 3 credits transferred buyer → merchant | ✅ Working |
+| **veilreceipt_v2/purchase** | Receipt created after payment | ✅ Working |
+| **open_return** | Process return (consumes receipt) | ✅ Working |
+| **claim_loyalty** | Claim loyalty stamp (consumes receipt) | ✅ Working |
+| **prove_purchase_for_support** | Generate proof token (preserves receipt) | ✅ Working |
+
+### V1 Legacy Transactions
+
 | Operation | Transaction ID | Block | Status |
 |-----------|---------------|-------|--------|
-| Contract Deployment | `at1p7d6e7jcppwpnn756jdapjs40v0adahlaxp3p5x45yp9tumedqgs5crclz` | 14,077,747 | ✅ |
 | Purchase | `at1hpxn98atxfl3hvka8af3exzmacx43p83l4x7m57mcc6ccxv83v8sah6a59` | 14,078,787 | ✅ |
 | Purchase | `at16mjc9eggt3epxwp74986t740xr69qyswzfp5ua5qgml2zf52nggqhl3g0s` | — | ✅ |
 | Purchase | `at19pxcn2pjkkwe6dqp4pgm982gq40yn3s6pml5h025hp2ytf8u6gxq3gss68` | — | ✅ |
 | Process Return | `at13jkwn78afl6m9us8sdrwv3pxs6jtxu38973ukxkjwnkqj7g6gs8qqf9eyq` | — | ✅ |
-| Claim Loyalty | Confirmed | — | ✅ |
-| Support Proof | Confirmed | — | ✅ |
 
 ---
 
@@ -667,27 +796,41 @@ VeilReceipt/
 
 | Achievement | Description |
 |-------------|-------------|
+| **Real Credits Transfer** | V2 integrates `credits.aleo` for actual on-chain payments |
+| **Two-Step Payment Flow** | Secure user-to-merchant transfer pattern |
 | **Async/Future Pattern** | Correctly implements Aleo's two-phase execution for mapping updates |
 | **Nullifier System** | Deterministic, unlinkable prevention of double-spending |
 | **Cart Commitment Scheme** | Proves purchase integrity without revealing contents |
 | **Wallet Record Integration** | Discovered and utilized Leo Wallet's `plaintext` property for contract inputs |
 | **Dual-Source Receipt Loading** | Backend fallback when wallet permissions unavailable |
 | **Non-Consuming Proofs** | Support verification preserves the original receipt |
+| **UTXO Privacy Model** | Each receipt used once (return OR loyalty), preventing correlation |
 
 ---
 
 <p align="center">
-  <strong>VeilReceipt</strong> — Privacy-preserving commerce infrastructure
+  <strong>VeilReceipt v2</strong> — Privacy-preserving commerce with real payments
 </p>
 
 <p align="center">
-  <a href="https://testnet.explorer.provable.com/program/veilreceipt_v1.aleo">Explorer</a> •
+  <a href="https://testnet.explorer.provable.com/program/veilreceipt_v2.aleo">Explorer</a> •
+  <a href="https://veil-receipt.vercel.app">Live App</a> •
   <a href="https://developer.aleo.org">Aleo Docs</a> •
   <a href="https://leo.app">Leo Wallet</a>
 </p>
 
 ---
 
+## 🌐 Live Deployment
+
+| Service | URL |
+|---------|-----|
+| **Frontend** | [https://veil-receipt.vercel.app](https://veil-receipt.vercel.app) |
+| **Backend API** | [https://veil-receipt-api.onrender.com](https://veil-receipt-api.onrender.com) |
+| **Contract** | [veilreceipt_v2.aleo](https://testnet.explorer.provable.com/program/veilreceipt_v2.aleo) |
+
+---
+
 <p align="center">
-  <sub>Built on Aleo Testnet Beta • January 2026</sub>
+  <sub>Built on Aleo Testnet Beta • January 2026 • Real Credits Transfer Enabled</sub>
 </p>

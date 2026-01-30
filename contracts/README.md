@@ -34,15 +34,35 @@ Privacy-first commerce smart contract on Aleo supporting:
 ## How to Deploy in Leo Playground
 
 1. Go to https://play.leo-lang.org/
-2. Create a new project named `veilreceipt_v1`
+2. Create a new project named `veilreceipt_v2`
 3. Copy the contents of `src/main.leo` into the editor
-4. Click "Build" to compile
-5. Click "Deploy" to deploy to testnet
-6. Copy the deployed program ID (will be `veilreceipt_v1.aleo`)
+4. Run `leo add --network credits.aleo` to add the credits dependency
+5. Click "Build" to compile
+6. Click "Deploy" to deploy to testnet
+7. Copy the deployed program ID (will be `veilreceipt_v2.aleo`)
+
+## Deployed Contract
+
+**Program ID:** `veilreceipt_v2.aleo`  
+**Transaction:** `at1d4nj46almxfpplvckk5pc6uecdgqp20g3pg4sfp6ahm9tnuluc8q2xst5h`  
+**Block:** 14,100,173
 
 ## Function Input Formats (for Wallet Adapters)
 
-### purchase
+### purchase_public (REAL PAYMENT)
+```
+Inputs (ordered):
+1. merchant: address    - e.g., "aleo1xyz..."
+2. total: u64           - e.g., "1000000u64" (1 credit = 1,000,000 microcredits)
+3. cart_commitment: field - e.g., "123456789field"
+4. timestamp: u64       - e.g., "1706540000u64" (Unix timestamp)
+
+Outputs:
+- Receipt record (owned by caller)
+- Future (transfers credits + executes finalize)
+```
+
+### purchase (DEMO - no payment)
 ```
 Inputs (ordered):
 1. merchant: address    - e.g., "aleo1xyz..."

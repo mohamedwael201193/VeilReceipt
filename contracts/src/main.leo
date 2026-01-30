@@ -1,8 +1,12 @@
 // VeilReceipt - Privacy-first commerce kit for Aleo
 // Supports: Checkout, Receipts, Returns, Loyalty, Audit Support Tokens
 // Uses async/Future/finalize pattern for public mapping updates
+// NOW WITH REAL CREDITS TRANSFER!
 
-program veilreceipt_v1.aleo {
+// Import the credits.aleo program for real payments
+import credits.aleo;
+
+program veilreceipt_v2.aleo {
 
     // ========== Program lifecycle ==========
     @noupgrade
@@ -68,8 +72,124 @@ program veilreceipt_v1.aleo {
 
     // ========== Core Transitions ==========
 
-    // Purchase: Create a receipt for the buyer and update merchant sales
-    // Uses async/Future pattern for public mapping update
+    // ========================================
+    // PURCHASE WITH REAL PUBLIC CREDITS TRANSFER
+    // ========================================
+    // Buyer pays merchant using PUBLIC credits (visible on-chain)
+    // Creates a private receipt for the buyer
+    async transition purchase_public(
+        merchant: address,
+        total: u64,
+        cart_commitment: field,
+        timestamp: u64
+    ) -> (Receipt, Future) {
+        // Validate inputs
+        assert(total > 0u64);
+        assert(merchant != self.signer); // Can't buy from yourself
+        
+        // Transfer credits from buyer to merchant (PUBLIC)
+        // This calls credits.aleo::transfer_public
+        let transfer_future: Future = credits.aleo/transfer_public(merchant, total);
+        
+        // Generate unique nonce seed for this receipt
+        let nonce_seed: field = BHP256::hash_to_field(CartData {
+            merchant: merchant,
+            total: total,
+            cart_commitment: cart_commitment,
+            timestamp: timestamp
+        });
+
+        // Create receipt record owned by the buyer (signer)
+        let receipt: Receipt = Receipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: total,
+            cart_commitment: cart_commitment,
+            timestamp: timestamp,
+            nonce_seed: nonce_seed
+        };
+
+        // Return receipt and combined future
+        return (receipt, finalize_purchase_public(transfer_future, merchant, total));
+    }
+
+    // Finalize: Wait for transfer and update merchant sales
+    async function finalize_purchase_public(
+        transfer_future: Future,
+        merchant: address,
+        total: u64
+    ) {
+        // Await the credits transfer to complete
+        transfer_future.await();
+        
+        // Get current sales total (default 0 if not exists)
+        let current_total: u64 = merchant_sales_total.get_or_use(merchant, 0u64);
+        
+        // Update with new sale amount
+        merchant_sales_total.set(merchant, current_total + total);
+    }
+
+    // ========================================
+    // PURCHASE WITH PRIVATE CREDITS TRANSFER
+    // ========================================
+    // Buyer pays merchant using PRIVATE credits (hidden on-chain)
+    // Creates a private receipt - MAXIMUM PRIVACY
+    async transition purchase_private(
+        payment: credits.aleo/credits,  // Private credits record
+        merchant: address,
+        total: u64,
+        cart_commitment: field,
+        timestamp: u64
+    ) -> (Receipt, credits.aleo/credits, Future) {
+        // Validate inputs
+        assert(total > 0u64);
+        assert(merchant != self.signer); // Can't buy from yourself
+        
+        // Transfer private credits from buyer's record to merchant
+        // Returns: (merchant_credits, buyer_change_credits)
+        let (merchant_payment, change): (credits.aleo/credits, credits.aleo/credits) = 
+            credits.aleo/transfer_private(payment, merchant, total);
+        
+        // Generate unique nonce seed for this receipt
+        let nonce_seed: field = BHP256::hash_to_field(CartData {
+            merchant: merchant,
+            total: total,
+            cart_commitment: cart_commitment,
+            timestamp: timestamp
+        });
+
+        // Create receipt record owned by the buyer (signer)
+        let receipt: Receipt = Receipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: total,
+            cart_commitment: cart_commitment,
+            timestamp: timestamp,
+            nonce_seed: nonce_seed
+        };
+
+        // Return receipt, change back to buyer, and finalize future
+        // Note: merchant_payment is automatically sent to merchant
+        return (receipt, change, finalize_purchase_private(merchant, total));
+    }
+
+    // Finalize: Update merchant sales total
+    async function finalize_purchase_private(
+        merchant: address,
+        total: u64
+    ) {
+        // Get current sales total (default 0 if not exists)
+        let current_total: u64 = merchant_sales_total.get_or_use(merchant, 0u64);
+        
+        // Update with new sale amount (only aggregate is public, not details)
+        merchant_sales_total.set(merchant, current_total + total);
+    }
+
+    // ========================================
+    // LEGACY PURCHASE (NO CREDITS TRANSFER - Demo Mode)
+    // ========================================
+    // Original purchase function - creates receipt without payment
+    // Keep for backwards compatibility and testing
     async transition purchase(
         merchant: address,
         total: u64,

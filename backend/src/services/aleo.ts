@@ -4,7 +4,7 @@
 import { AleoAddress, AleoField } from '../types';
 
 const ALEO_RPC_URL = process.env.ALEO_RPC_URL || 'https://api.explorer.provable.com/v1';
-const PROGRAM_ID = process.env.ALEO_PROGRAM_ID || 'veilreceipt_v1.aleo';
+const PROGRAM_ID = process.env.ALEO_PROGRAM_ID || 'veilreceipt_v2.aleo';
 
 interface AleoRpcError {
   error: string;

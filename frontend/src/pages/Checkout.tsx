@@ -7,6 +7,7 @@ import { useCartStore } from '@/stores/cartStore';
 import { api } from '@/lib/api';
 import { formatCredits, computeCartCommitment, getCurrentTimestamp, truncateAddress } from '@/lib/utils';
 import { Product, TransactionStatus } from '@/lib/types';
+import { ALEO_CONFIG } from '@/lib/aleo';
 import {
   CartIcon,
   PackageIcon,
@@ -33,6 +34,7 @@ const CheckoutPage: FC = () => {
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
   const [txId, setTxId] = useState<string | null>(null);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [useRealPayment, setUseRealPayment] = useState(ALEO_CONFIG.enableRealPayments);
 
   // Load products
   useEffect(() => {
@@ -94,12 +96,13 @@ const CheckoutPage: FC = () => {
         timestamp,
       });
 
-      // Execute purchase transaction
+      // Execute purchase transaction (with real payment if enabled)
       const transactionId = await executePurchase(
         merchantAddress,
         total,
         commitment,
-        timestamp
+        timestamp,
+        useRealPayment
       );
 
       if (!transactionId) {
@@ -334,6 +337,46 @@ const CheckoutPage: FC = () => {
                           {formatCredits(total)} ₳
                         </span>
                       </div>
+                      {/* Transaction fee notice */}
+                      <div className="flex justify-between items-center text-sm mt-1">
+                        <span className="text-slate-400">Network Fee</span>
+                        <span className="text-slate-400">{useRealPayment ? '~2 ₳ (2 txns)' : '~1 ₳'}</span>
+                      </div>
+                      {useRealPayment && (
+                        <div className="flex justify-between items-center text-sm mt-1 font-semibold">
+                          <span className="text-green-400">You Pay</span>
+                          <span className="text-green-400">{formatCredits(total + 2_000_000)} ₳</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Payment Mode Toggle */}
+                    <div className="mb-4 p-3 bg-slate-700/30 rounded-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-300">
+                            {useRealPayment ? '💰 Real Payment' : '🎮 Demo Mode'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setUseRealPayment(!useRealPayment)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            useRealPayment ? 'bg-green-500' : 'bg-slate-600'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              useRealPayment ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-2">
+                        {useRealPayment 
+                          ? `⚠️ 2-step process: 1) Transfer ${formatCredits(total)} ₳ to merchant 2) Create receipt`
+                          : 'Demo mode creates receipt without transferring credits'
+                        }
+                      </p>
                     </div>
 
                     {/* Privacy notice */}
@@ -352,7 +395,12 @@ const CheckoutPage: FC = () => {
                       className="w-full"
                       size="lg"
                     >
-                      {!connected ? 'Connect Wallet' : 'Complete Purchase'}
+                      {!connected 
+                        ? 'Connect Wallet' 
+                        : useRealPayment 
+                          ? `💰 Pay ${formatCredits(total)} ₳` 
+                          : 'Complete Purchase (Demo)'
+                      }
                     </Button>
 
                     {/* Clear cart */}

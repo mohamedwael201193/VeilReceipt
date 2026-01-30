@@ -4,9 +4,14 @@
 export type AleoNetwork = 'mainnet' | 'testnet';
 
 export const ALEO_CONFIG = {
-  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v1.aleo',
+  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v2.aleo',
   network: (import.meta.env.VITE_ALEO_NETWORK || 'testnet') as AleoNetwork,
   rpcUrl: import.meta.env.VITE_ALEO_RPC_URL || 'https://api.explorer.provable.com/v1',
+  // Enable real payments - V2 supports real credits transfer!
+  enableRealPayments: import.meta.env.VITE_ENABLE_REAL_PAYMENTS === 'true',
+  // Deployment info
+  deploymentTx: 'at1d4nj46almxfpplvckk5pc6uecdgqp20g3pg4sfp6ahm9tnuluc8q2xst5h',
+  deploymentBlock: 14100173,
 };
 
 /**
@@ -39,9 +44,23 @@ export function getChainId(): string {
  * Program functions with their expected inputs
  */
 export const PROGRAM_FUNCTIONS = {
+  // NEW: Purchase with real PUBLIC credits transfer
+  purchase_public: {
+    name: 'purchase_public',
+    inputs: ['address', 'u64', 'field', 'u64'], // merchant, total, cart_commitment, timestamp
+    description: 'Purchase with public credits transfer (visible on-chain)',
+  },
+  // NEW: Purchase with PRIVATE credits transfer (maximum privacy)
+  purchase_private: {
+    name: 'purchase_private',
+    inputs: ['credits.aleo/credits', 'address', 'u64', 'field', 'u64'], // payment record, merchant, total, cart_commitment, timestamp
+    description: 'Purchase with private credits transfer (hidden on-chain)',
+  },
+  // Legacy: No real payment (demo mode)
   purchase: {
     name: 'purchase',
     inputs: ['address', 'u64', 'field', 'u64'], // merchant, total, cart_commitment, timestamp
+    description: 'Demo purchase - creates receipt without payment',
   },
   open_return: {
     name: 'open_return',

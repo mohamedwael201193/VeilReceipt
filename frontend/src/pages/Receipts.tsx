@@ -422,6 +422,16 @@ const ReceiptsPage: FC = () => {
                             </div>
                           </div>
 
+                          {/* UTXO Warning */}
+                          {receipt._fromWallet && (
+                            <div className="p-2 bg-amber-900/20 border border-amber-700/50 rounded-lg mb-3">
+                              <p className="text-xs text-amber-400">
+                                ⚠️ <strong>Note:</strong> Each receipt can only be used ONCE for either Return OR Loyalty claim (UTXO model). 
+                                Support Proof can be generated multiple times without consuming the receipt.
+                              </p>
+                            </div>
+                          )}
+
                           {/* Actions - only enabled for wallet records */}
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -430,6 +440,7 @@ const ReceiptsPage: FC = () => {
                               onClick={() => handleOpenReturn(receipt)}
                               icon={<ReturnIcon size={16} />}
                               disabled={!receipt._fromWallet}
+                              title={receipt._fromWallet ? "Process a return (consumes receipt)" : "Wallet record required"}
                             >
                               Process Return
                             </Button>
@@ -439,6 +450,7 @@ const ReceiptsPage: FC = () => {
                               onClick={() => handleOpenLoyalty(receipt)}
                               icon={<AwardIcon size={16} />}
                               disabled={!receipt._fromWallet}
+                              title={receipt._fromWallet ? "Claim loyalty points (consumes receipt)" : "Wallet record required"}
                             >
                               Claim Loyalty
                             </Button>
@@ -448,6 +460,7 @@ const ReceiptsPage: FC = () => {
                               onClick={() => handleOpenProof(receipt)}
                               icon={<FileIcon size={16} />}
                               disabled={!receipt._fromWallet}
+                              title={receipt._fromWallet ? "Generate proof (does NOT consume receipt)" : "Wallet record required"}
                             >
                               Support Proof
                             </Button>
@@ -483,9 +496,13 @@ const ReceiptsPage: FC = () => {
               ]}
             />
 
-            <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-xl">
-              <p className="text-sm text-amber-300">
-                ⚠️ This action cannot be undone. The receipt will be consumed.
+            <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-xl space-y-2">
+              <p className="text-sm text-amber-300 font-medium">
+                ⚠️ Important: UTXO Model
+              </p>
+              <p className="text-xs text-amber-300/80">
+                This action <strong>consumes</strong> the receipt permanently. After processing a return, 
+                you cannot use this receipt for loyalty claims. Each receipt can only be used ONCE.
               </p>
             </div>
 
@@ -510,6 +527,13 @@ const ReceiptsPage: FC = () => {
             <p className="text-slate-300">
               Select your loyalty tier. Each receipt can only be used for one loyalty claim.
             </p>
+
+            <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-xl space-y-2">
+              <p className="text-xs text-amber-300/80">
+                ⚠️ This action <strong>consumes</strong> the receipt. After claiming loyalty, 
+                you cannot use this receipt for returns.
+              </p>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(LOYALTY_TIERS).map(([tier, info]) => (

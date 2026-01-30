@@ -7,7 +7,7 @@ import { ALEO_CONFIG } from './aleo';
 const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
 
 // Contract deployment block - search from here
-const DEPLOYMENT_BLOCK = 14077747;
+const DEPLOYMENT_BLOCK = 14100173; // V2 deployment block
 
 /**
  * Fetch transactions for a specific address from the network

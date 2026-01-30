@@ -1,6 +1,10 @@
 {
-  "program": "veilreceipt_v1.aleo",
+  "program": "veilreceipt_v2.aleo",
   "version": "0.1.0",
-  "description": "Privacy-first commerce kit: checkout, receipts, returns, loyalty, audit support",
-  "license": "MIT"
+  "description": "Privacy-first commerce kit with REAL credits transfer: checkout, receipts, returns, loyalty, audit support",
+  "license": "MIT",
+  "leo": "3.4.0",
+  "dependencies": {
+    "credits.aleo": "network"
+  }
 }

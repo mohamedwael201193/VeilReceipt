@@ -39,4 +39,4 @@ services:
       - key: VITE_ALEO_NETWORK
         value: testnet
       - key: VITE_ALEO_PROGRAM_ID
-        value: veilreceipt_v1.aleo
+        value: veilreceipt_v2.aleo

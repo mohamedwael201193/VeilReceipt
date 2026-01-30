@@ -374,19 +374,22 @@ export function useVeilWallet() {
   }, [wallet, walletAddress, receipts]);
 
   /**
-   * Execute a purchase transaction
-   * Calls the veilreceipt_v1.aleo::purchase function
-   * Uses the @provablehq executeTransaction API
+   * Execute a REAL purchase with credits transfer
+   * Two-transaction flow:
+   * 1. Transfer credits to merchant via credits.aleo/transfer_public
+   * 2. Create receipt via veilreceipt_v2.aleo/purchase
+   * 
+   * This is the correct approach because cross-program calls use caller (program) not signer (user)
    */
   const executePurchase = useCallback(async (
     merchantAddress: string,
     totalMicrocredits: number,
     cartCommitment: string,
-    timestamp: number
+    timestamp: number,
+    useRealPayment: boolean = ALEO_CONFIG.enableRealPayments
   ): Promise<string | null> => {
     const walletAny = wallet as any;
     
-    // Check for executeTransaction (provablehq API)
     if (!walletAny.executeTransaction) {
       log('executeTransaction not available on wallet:', Object.keys(walletAny));
       toast.error('Wallet does not support transactions');
@@ -398,52 +401,98 @@ export function useVeilWallet() {
       return null;
     }
 
-    // Format inputs for Aleo - @provablehq TransactionOptions format
-    const txOptions = {
-      program: ALEO_CONFIG.programId,
-      function: 'purchase',
-      inputs: [
-        merchantAddress, // address
-        `${totalMicrocredits}u64`, // u64
-        cartCommitment, // field
-        `${timestamp}u64`, // u64
-      ],
-      fee: DEFAULT_FEE, // Fee in microcredits
-      privateFee: false, // Use public credits for fee
-    };
-
-    // Check if buyer is same as merchant (contract will reject this)
     if (merchantAddress === walletAddress) {
       toast.error('Cannot buy from yourself! Use a different wallet for testing.');
       return null;
     }
 
-    log('Submitting purchase transaction:', txOptions);
-    log('Inputs detail:', {
-      merchant: merchantAddress,
-      buyer: walletAddress,
-      total: `${totalMicrocredits}u64`,
-      commitment: cartCommitment,
-      timestamp: `${timestamp}u64`,
-    });
-    toast.loading('Waiting for wallet confirmation...', { id: 'tx-wallet' });
+    log(`Starting ${useRealPayment ? '💰 REAL PAYMENT' : '🎮 Demo'} purchase flow`);
+
+    // ========== STEP 1: Transfer credits to merchant (if real payment) ==========
+    if (useRealPayment) {
+      toast.loading(`💰 Step 1/2: Transferring ${totalMicrocredits / 1_000_000} credits to merchant...`, { id: 'tx-transfer' });
+      
+      const transferTx = {
+        program: 'credits.aleo',
+        function: 'transfer_public',
+        inputs: [
+          merchantAddress,
+          `${totalMicrocredits}u64`,
+        ],
+        fee: DEFAULT_FEE,
+        privateFee: false,
+      };
+
+      log('Executing credits transfer:', transferTx);
+
+      try {
+        const transferResponse = await walletAny.executeTransaction(transferTx);
+        toast.dismiss('tx-transfer');
+
+        if (!transferResponse?.transactionId) {
+          toast.error('Credit transfer failed - no transaction ID');
+          return null;
+        }
+
+        log('Credits transfer successful:', transferResponse.transactionId);
+        toast.success(`💰 ${totalMicrocredits / 1_000_000} credits transferred!`);
+        
+        // Small delay to let the network process
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error: any) {
+        toast.dismiss('tx-transfer');
+        console.error('Credits transfer failed:', error);
+        
+        if (error.message?.includes('reject') || error.message?.includes('denied') || error.message?.includes('cancel')) {
+          toast.error('Transfer cancelled');
+        } else if (error.message?.includes('insufficient') || error.message?.includes('balance')) {
+          toast.error(`Insufficient balance! Need ${totalMicrocredits / 1_000_000} credits + fee`);
+        } else {
+          toast.error(error.message || 'Transfer failed');
+        }
+        return null;
+      }
+    }
+
+    // ========== STEP 2: Create receipt ==========
+    const stepLabel = useRealPayment ? 'Step 2/2: Creating receipt...' : 'Creating receipt...';
+    toast.loading(stepLabel, { id: 'tx-receipt' });
+
+    const receiptTx = {
+      program: ALEO_CONFIG.programId,
+      function: 'purchase', // Always use 'purchase' for receipt creation
+      inputs: [
+        merchantAddress,
+        `${totalMicrocredits}u64`,
+        cartCommitment,
+        `${timestamp}u64`,
+      ],
+      fee: DEFAULT_FEE,
+      privateFee: false,
+    };
+
+    log('Creating receipt:', receiptTx);
 
     try {
-      const response = await walletAny.executeTransaction(txOptions);
-      toast.dismiss('tx-wallet');
+      const response = await walletAny.executeTransaction(receiptTx);
+      toast.dismiss('tx-receipt');
 
-      log('Purchase transaction response:', response);
+      log('Receipt creation response:', response);
       
       if (response?.transactionId) {
-        toast.success('Transaction submitted!');
+        const successMsg = useRealPayment
+          ? '🎉 Purchase complete! Payment sent & receipt created!'
+          : '✅ Receipt created!';
+        toast.success(successMsg);
         return response.transactionId;
       } else {
-        toast.error('Transaction failed - no transaction ID');
+        toast.error('Receipt creation failed - no transaction ID');
         return null;
       }
     } catch (error: any) {
-      toast.dismiss('tx-wallet');
-      console.error('Purchase transaction failed:', error);
+      toast.dismiss('tx-receipt');
+      console.error('Receipt creation failed:', error);
       
       if (error.message?.includes('reject') || error.message?.includes('denied') || error.message?.includes('cancel')) {
         toast.error('Transaction cancelled');
@@ -456,7 +505,7 @@ export function useVeilWallet() {
 
   /**
    * Execute a return transaction
-   * Calls veilreceipt_v1.aleo::open_return (consumes receipt)
+   * Calls veilreceipt_v2.aleo::open_return (consumes receipt)
    */
   const executeReturn = useCallback(async (
     receiptRecord: any, // Raw record from wallet
@@ -486,60 +535,81 @@ export function useVeilWallet() {
     log('Raw record for return:', rawRecord);
     log('Raw record ALL KEYS:', Object.keys(rawRecord || {}));
     log('Raw record plaintext property:', rawRecord?.plaintext);
+    log('Raw record ciphertext property:', rawRecord?.ciphertext);
     
-    // FIRST: Try using the plaintext property directly if available
-    // Leo Wallet provides this in the correct format
-    if (rawRecord?.plaintext) {
-      log('Using wallet plaintext directly:', rawRecord.plaintext);
-      
-      const txOptions = {
-        program: ALEO_CONFIG.programId,
-        function: 'open_return',
-        inputs: [
-          rawRecord.plaintext,
-          returnReasonHash,
-        ],
-        fee: DEFAULT_FEE,
-      };
-      
-      log('Submitting return with plaintext:', txOptions);
-      toast.loading('Waiting for wallet confirmation...', { id: 'tx-wallet' });
-      
-      try {
-        const response = await walletAny.executeTransaction(txOptions);
-        toast.dismiss('tx-wallet');
-        log('Return transaction response:', response);
-        if (response?.transactionId) {
-          toast.success('Return submitted!');
-          return response.transactionId;
-        } else {
-          toast.error('Return failed - no transaction ID');
-          return null;
-        }
-      } catch (plaintextError: any) {
-        toast.dismiss('tx-wallet');
-        log('Plaintext approach failed:', plaintextError);
-        console.error('Return with plaintext failed:', plaintextError);
-        
-        if (plaintextError.message?.includes('nullifier') || plaintextError.message?.includes('already')) {
-          toast.error('This receipt has already been used for a return');
-        } else if (plaintextError.message?.includes('reject') || plaintextError.message?.includes('cancel')) {
-          toast.error('Transaction cancelled');
-        } else {
-          toast.error(plaintextError.message || 'Return failed');
-        }
-        return null;
-      }
+    // The plaintext from wallet is a string representation of the record
+    if (!rawRecord?.plaintext) {
+      toast.error('Record plaintext not available. Please try again.');
+      return null;
+    }
+
+    // Try using ciphertext if available (some wallets prefer this)
+    // Otherwise use the plaintext
+    let recordInput: string;
+    
+    if (rawRecord.ciphertext) {
+      // Use ciphertext format - wallet will decrypt and use
+      recordInput = rawRecord.ciphertext;
+      log('Using ciphertext for record input:', recordInput);
+    } else {
+      // Use plaintext - ensure proper formatting
+      recordInput = rawRecord.plaintext;
+      log('Using plaintext for record input:', recordInput);
     }
     
-    // No plaintext available - cannot proceed
-    toast.error('Record plaintext not available. Please reconnect wallet.');
-    return null;
+    const txOptions = {
+      program: ALEO_CONFIG.programId,
+      function: 'open_return',
+      inputs: [
+        recordInput,
+        returnReasonHash,
+      ],
+      fee: DEFAULT_FEE,
+    };
+    
+    log('Submitting return transaction:', txOptions);
+    toast.loading('Processing return...', { id: 'tx-wallet' });
+    
+    try {
+      const response = await walletAny.executeTransaction(txOptions);
+      toast.dismiss('tx-wallet');
+      log('Return transaction response:', response);
+      if (response?.transactionId) {
+        toast.success('Return submitted!');
+        return response.transactionId;
+      } else {
+        toast.error('Return failed - no transaction ID');
+        return null;
+      }
+    } catch (error: any) {
+      toast.dismiss('tx-wallet');
+      log('Return transaction failed:', error);
+      console.error('Return failed:', error);
+      
+      // Provide better error messages based on error type
+      const errMsg = error.message || '';
+      
+      if (errMsg.includes('nullifier') || errMsg.includes('already')) {
+        toast.error('This receipt has already been used for a return');
+      } else if (errMsg.includes('reject') || errMsg.includes('cancel') || errMsg.includes('denied')) {
+        toast.error('Transaction cancelled');
+      } else if (errMsg.includes('INVALID_PARAMS') || errMsg.includes('not a valid record')) {
+        // This could mean:
+        // 1. Record was already spent (consumed by another transaction)
+        // 2. Record format doesn't match what the contract expects
+        toast.error('This may occur if the nullifier was already used');
+      } else if (errMsg.includes('Unspent record not found') || errMsg.includes('spent')) {
+        toast.error('Receipt already spent. It may have been used for a return or loyalty claim.');
+      } else {
+        toast.error(error.message || 'Return failed');
+      }
+      return null;
+    }
   }, [wallet, walletAddress]);
 
   /**
    * Execute a loyalty claim transaction
-   * Calls veilreceipt_v1.aleo::claim_loyalty (consumes receipt)
+   * Calls veilreceipt_v2.aleo::claim_loyalty (consumes receipt)
    */
   const executeLoyaltyClaim = useCallback(async (
     receiptRecord: any,
@@ -620,7 +690,7 @@ export function useVeilWallet() {
 
   /**
    * Generate support proof token (non-consuming)
-   * Calls veilreceipt_v1.aleo::prove_purchase_for_support
+   * Calls veilreceipt_v2.aleo::prove_purchase_for_support
    */
   const generateSupportProof = useCallback(async (
     receiptRecord: any,

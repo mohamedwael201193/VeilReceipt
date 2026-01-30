@@ -78,6 +78,48 @@
       "totalAmount": 3000000,
       "itemCount": 1,
       "createdAt": "2026-01-29T03:01:38.664Z"
+    },
+    {
+      "id": "8257f9e4-000e-407e-a06f-ada813e97eea",
+      "txId": "4b105e54-7d89-4316-8441-11f7d7bbdc0a",
+      "onChainTxId": null,
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "cartCommitment": "552993962field",
+      "timestamp": 1769744485,
+      "blockHeight": null,
+      "items": [
+        {
+          "sku": "rte",
+          "quantity": 1,
+          "price": 3000000
+        }
+      ],
+      "status": "confirmed",
+      "createdAt": "2026-01-30T03:41:45.677Z"
+    },
+    {
+      "id": "87140dde-e769-4b4a-b126-8eba0f1061fa",
+      "txId": "53c8736d-8d20-433b-ad59-a5dfab8b8611",
+      "onChainTxId": null,
+      "merchantAddress": "aleo17l9wv5nw3tg3gly7d006z75nmxptqw0teutvrx2m53qmyhpsxg9spc5n7a",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "totalAmount": 3000000,
+      "itemCount": 1,
+      "cartCommitment": "552993962field",
+      "timestamp": 1769745036,
+      "blockHeight": null,
+      "items": [
+        {
+          "sku": "rte",
+          "quantity": 1,
+          "price": 3000000
+        }
+      ],
+      "status": "confirmed",
+      "createdAt": "2026-01-30T03:51:04.386Z"
     }
   ],
   "returnRequests": [
@@ -102,6 +144,14 @@
       "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
       "tier": 1,
       "createdAt": "2026-01-29T05:33:30.883Z"
+    },
+    {
+      "id": "100a3ba6-4cf5-4730-aa96-01089d094902",
+      "txId": "922cdaee-b1a0-4afe-87a7-e4804ee0325f",
+      "nullifier": "5199367162871095352966185501278168858202302327472697569278833702960948765520field",
+      "buyerAddress": "aleo1df39wcnlmn5n3vfdtd0sfup5m0zhfz2r47qanz37567tg90nxcys374y9n",
+      "tier": 1,
+      "createdAt": "2026-01-30T03:52:31.840Z"
     }
   ],
   "authNonces": []
