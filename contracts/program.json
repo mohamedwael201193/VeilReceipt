@@ -1,10 +1,19 @@
 {
-  "program": "veilreceipt_v2.aleo",
+  "program": "veilreceipt_v3.aleo",
   "version": "0.1.0",
-  "description": "Privacy-first commerce kit with REAL credits transfer: checkout, receipts, returns, loyalty, audit support",
+  "description": "Privacy-first commerce protocol: atomic private payments (Credits + USDCx), escrow with refund, ZK loyalty proofs",
   "license": "MIT",
   "leo": "3.4.0",
-  "dependencies": {
-    "credits.aleo": "network"
-  }
+  "dependencies": [
+    {
+      "name": "credits.aleo",
+      "location": "network",
+      "network": "testnet"
+    },
+    {
+      "name": "test_usdcx_stablecoin.aleo",
+      "location": "network",
+      "network": "testnet"
+    }
+  ]
 }

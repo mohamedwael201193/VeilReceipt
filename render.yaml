@@ -1,4 +1,4 @@
-# Render deployment configuration for VeilReceipt
+# Render deployment configuration for VeilReceipt v3
 
 services:
   # Backend API
@@ -19,8 +19,10 @@ services:
         value: https://api.explorer.provable.com/v1
       - key: ALEO_NETWORK
         value: testnet
+      - key: DATABASE_URL
+        sync: false
       - key: FRONTEND_URL
-        sync: false # Set manually after frontend is deployed
+        sync: false
     healthCheckPath: /health
 
   # Frontend (Static Site)
@@ -34,9 +36,9 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_API_URL
-        sync: false # Set to backend URL after deployment
+      - key: VITE_API_BASE_URL
+        sync: false
       - key: VITE_ALEO_NETWORK
         value: testnet
       - key: VITE_ALEO_PROGRAM_ID
-        value: veilreceipt_v2.aleo
+        value: veilreceipt_v3.aleo

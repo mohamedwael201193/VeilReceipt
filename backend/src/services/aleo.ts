@@ -1,136 +1,74 @@
-// Aleo RPC Service
-// Interacts with Aleo network to read public mapping values
+// Aleo Network Service — RPC queries and transaction status
 
-import { AleoAddress, AleoField } from '../types';
+const ALEO_RPC = process.env.ALEO_RPC_URL || 'https://api.explorer.provable.com/v1';
+const NETWORK = process.env.ALEO_NETWORK || 'testnet';
+const PROGRAM_ID = process.env.ALEO_PROGRAM_ID || 'veilreceipt_v3.aleo';
 
-const ALEO_RPC_URL = process.env.ALEO_RPC_URL || 'https://api.explorer.provable.com/v1';
-const PROGRAM_ID = process.env.ALEO_PROGRAM_ID || 'veilreceipt_v2.aleo';
+/**
+ * Check transaction status on-chain
+ */
+export async function getTransactionStatus(txId: string): Promise<{
+  status: 'confirmed' | 'pending' | 'failed' | 'not_found';
+  blockHeight?: number;
+}> {
+  try {
+    // Handle Shield Wallet TX IDs (shield_...)
+    let lookupId = txId;
+    if (txId.startsWith('shield_')) {
+      // Lookup real TX ID from transition ID
+      const transitionId = txId.replace('shield_', '');
+      const lookupRes = await fetch(
+        `${ALEO_RPC}/${NETWORK}/find/transactionID/from_transition/${transitionId}`
+      );
+      if (lookupRes.ok) {
+        lookupId = await lookupRes.json() as string;
+      } else {
+        return { status: 'pending' };
+      }
+    }
 
-interface AleoRpcError {
-  error: string;
+    const res = await fetch(`${ALEO_RPC}/${NETWORK}/transaction/${lookupId}`);
+    if (!res.ok) {
+      if (res.status === 404) return { status: 'pending' };
+      return { status: 'not_found' };
+    }
+    const data: any = await res.json();
+    if (data && data.status === 'accepted') {
+      return { status: 'confirmed', blockHeight: data.block?.height };
+    }
+    return { status: 'confirmed' };
+  } catch {
+    return { status: 'pending' };
+  }
 }
 
 /**
- * Get public mapping value from Aleo network
+ * Get mapping value from on-chain program
  */
-export async function getMappingValue(
-  mappingName: string,
-  key: string
-): Promise<string | null> {
+export async function getMappingValue(mappingName: string, key: string): Promise<string | null> {
   try {
-    const url = `${ALEO_RPC_URL}/testnet/program/${PROGRAM_ID}/mapping/${mappingName}/${key}`;
-    console.log(`🔍 Fetching mapping value: ${url}`);
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        // Key doesn't exist in mapping
-        return null;
-      }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.text();
-    // Remove quotes if present
-    return data.replace(/^"|"$/g, '');
-  } catch (error) {
-    console.error(`Error fetching mapping ${mappingName}[${key}]:`, error);
+    const res = await fetch(
+      `${ALEO_RPC}/${NETWORK}/program/${PROGRAM_ID}/mapping/${mappingName}/${key}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data !== null ? String(data) : null;
+  } catch {
     return null;
   }
 }
 
 /**
- * Get merchant's total sales from on-chain mapping
- */
-export async function getMerchantSalesTotal(merchantAddress: AleoAddress): Promise<number> {
-  const value = await getMappingValue('merchant_sales_total', merchantAddress);
-  if (!value) return 0;
-  
-  // Parse "12345u64" format
-  const match = value.match(/(\d+)u64/);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
-/**
- * Check if a nullifier has been used
- */
-export async function isNullifierUsed(nullifier: AleoField): Promise<boolean> {
-  const value = await getMappingValue('used_nullifiers', nullifier);
-  return value === 'true';
-}
-
-/**
- * Get transaction details from explorer API
- */
-export async function getTransaction(txId: string): Promise<any | null> {
-  try {
-    const url = `${ALEO_RPC_URL}/testnet/transaction/${txId}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error(`Error fetching transaction ${txId}:`, error);
-    return null;
-  }
-}
-
-/**
- * Get latest block height
+ * Fetch latest block height
  */
 export async function getLatestBlockHeight(): Promise<number> {
   try {
-    const url = `${ALEO_RPC_URL}/testnet/latest/height`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const height = await response.text();
-    return parseInt(height, 10);
-  } catch (error) {
-    console.error('Error fetching latest block height:', error);
+    const res = await fetch(`${ALEO_RPC}/${NETWORK}/latest/height`);
+    if (!res.ok) return 0;
+    return (await res.json()) as number;
+  } catch {
     return 0;
   }
 }
 
-/**
- * Check if a transaction has been confirmed
- */
-export async function isTransactionConfirmed(txId: string): Promise<boolean> {
-  const tx = await getTransaction(txId);
-  return tx !== null;
-}
-
-/**
- * Poll for transaction confirmation with timeout
- */
-export async function waitForTransactionConfirmation(
-  txId: string,
-  timeoutMs: number = 120000,
-  pollIntervalMs: number = 5000
-): Promise<boolean> {
-  const startTime = Date.now();
-  
-  while (Date.now() - startTime < timeoutMs) {
-    const confirmed = await isTransactionConfirmed(txId);
-    if (confirmed) {
-      console.log(`✅ Transaction ${txId} confirmed`);
-      return true;
-    }
-    
-    console.log(`⏳ Waiting for transaction ${txId} confirmation...`);
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-  }
-  
-  console.log(`⚠️ Transaction ${txId} confirmation timeout`);
-  return false;
-}
+export { ALEO_RPC, NETWORK, PROGRAM_ID };

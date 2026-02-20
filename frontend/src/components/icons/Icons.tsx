@@ -116,7 +116,7 @@ export const LoadingSpinner: FC<IconProps> = ({ className = '', size = 24 }) => 
     animate={{ rotate: 360 }}
     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
   >
-    <Loader2 size={size} className="text-veil-400" />
+    <Loader2 size={size} className="text-sky-400" />
   </motion.div>
 );
 
@@ -151,6 +151,59 @@ export const PulseIndicator: FC<{ color?: string }> = ({ color = 'bg-yellow-400'
     <span className={`relative inline-flex rounded-full h-3 w-3 ${color}`} />
   </span>
 );
+
+// ── Token Icon ────────────────────────────────────────────────────────────────
+// Shows the real USDCx or Aleo brand icon as a round badge
+export const TokenIcon: FC<{ type: 'credits' | 'usdcx' | 0 | 1; size?: number; className?: string }> = ({
+  type,
+  size = 18,
+  className = '',
+}) => {
+  const isUsdcx = type === 'usdcx' || type === 1;
+  return isUsdcx ? (
+    <img
+      src="/usdcx.svg"
+      alt="USDCx"
+      width={size}
+      height={size}
+      className={`rounded-full object-cover flex-shrink-0 ${className}`}
+    />
+  ) : (
+    <img
+      src="/aleoicon.png"
+      alt="ALEO"
+      width={size}
+      height={size}
+      className={`rounded-full object-cover flex-shrink-0 ${className}`}
+    />
+  );
+};
+
+// ── Token Amount ──────────────────────────────────────────────────────────────
+// Inline icon + formatted amount with colour
+export const TokenAmount: FC<{
+  amount: string;
+  type: 'credits' | 'usdcx' | 0 | 1;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  className?: string;
+}> = ({ amount, type, size = 'md', className = '' }) => {
+  const isUsdcx = type === 'usdcx' || type === 1;
+  const sizeMap = { sm: 14, md: 17, lg: 20, xl: 24 };
+  const textMap = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-lg font-bold',
+    xl: 'text-2xl font-extrabold',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${className}`}>
+      <TokenIcon type={type} size={sizeMap[size]} />
+      <span className={`${textMap[size]} ${isUsdcx ? 'text-emerald-300' : 'text-sky-300'} leading-none`}>
+        {amount}
+      </span>
+    </span>
+  );
+};
 
 // Export all Lucide icons with consistent naming
 export {

@@ -98,7 +98,7 @@ class ApiClient {
     return this.request<{ product: any }>(`/products/${id}`);
   }
 
-  async createProduct(data: { name: string; description: string; price: number; sku: string; imageUrl?: string; category?: string }) {
+  async createProduct(data: { name: string; description: string; price: number; price_type: 'credits' | 'usdcx'; sku: string; imageUrl?: string; category?: string }) {
     return this.request<{ product: any }>('/products', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -202,6 +202,9 @@ class ApiClient {
     merchantAddress: string;
     buyerAddress: string;
     total: number;
+    tokenType?: 'credits' | 'usdcx';
+    purchaseType?: 'private' | 'public' | 'escrow';
+    status?: 'confirmed' | 'escrowed';
     cartCommitment?: string;
     timestamp?: number;
     blockHeight?: number;
@@ -223,6 +226,52 @@ class ApiClient {
 
   async getReceiptByTxId(txId: string) {
     return this.request<{ receipt: any }>(`/receipts/tx/${txId}`);
+  }
+
+  // Escrow endpoints
+  async createEscrow(data: {
+    purchaseCommitment: string;
+    buyerAddress: string;
+    merchantAddress: string;
+    total: number;
+    txId: string;
+  }) {
+    return this.request<{ escrow: any }>('/escrow', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async resolveEscrow(id: string, data: { action: 'complete' | 'refund'; txId: string }) {
+    return this.request<{ escrow: any }>(`/escrow/${id}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMyEscrows() {
+    return this.request<{ escrows: any[] }>('/escrow/my');
+  }
+
+  // Loyalty endpoints
+  async claimLoyalty(data: { purchaseCommitment: string; txId: string }) {
+    return this.request<{ loyalty: any }>('/loyalty/claim', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMyLoyaltyClaims() {
+    return this.request<{ claims: any[] }>('/loyalty/my');
+  }
+
+  // Transaction status (chain check)
+  async getChainTxStatus(txId: string) {
+    return this.request<{ txId: string; status: string; blockHeight?: number }>(`/tx/${txId}/status`);
+  }
+
+  async getChainHeight() {
+    return this.request<{ height: number }>('/chain/height');
   }
 
   // Health check

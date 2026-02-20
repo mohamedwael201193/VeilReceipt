@@ -1,665 +1,756 @@
-// Receipts page - View receipts, process returns, claim loyalty, generate support tokens
+// Receipts Page — Cosmic glassmorphism receipts, escrow, loyalty, support proofs
 
-import { FC, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { FC, useEffect, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
-import { api } from '@/lib/api';
-import { formatCredits, formatDate, truncateAddress, computeReasonHash, copyToClipboard } from '@/lib/utils';
-import { TransactionStatus, LOYALTY_TIERS, RETURN_REASONS } from '@/lib/types';
+import { Button, Card, Badge, EmptyState, Input, Modal, PillNav, SectionHeader } from '@/components/ui/Components';
+import { LoadingSpinner, PulseIndicator, TokenAmount, TokenIcon } from '@/components/icons/Icons';
 import {
   ReceiptIcon,
-  ReturnIcon,
-  LoyaltyIcon,
   ShieldIcon,
-  LoadingSpinner,
-  SuccessCheck,
-  ErrorX,
+  ClockIcon,
+  LoyaltyIcon,
   RefreshIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  CopyIcon,
-  AwardIcon,
-  FileIcon,
+  CheckIcon,
+  AlertIcon,
+  ExternalLinkIcon,
 } from '@/components/icons/Icons';
-import { Button, Card, Badge, EmptyState, Modal, Select } from '@/components/ui/Components';
-import toast from 'react-hot-toast';
+import { FloatingParticles, GridBackground, GlowOrb } from '@/components/effects/CosmicBackground';
+import { truncateAddress, formatDate, computeReasonHash } from '@/lib/utils';
+import { formatCredits, formatUsdcx } from '@/lib/stablecoin';
+import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
+import { usePendingTxStore } from '@/stores/txStore';
+import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, LoyaltyStampRecord } from '@/lib/types';
 
-const ReceiptsPage: FC = () => {
-  const { 
-    connected, 
-    address, 
-    isAuthenticated, 
-    authenticate, 
-    isAuthenticating,
-    receipts,
-    isLoadingReceipts,
-    fetchReceipts,
-    executeReturn,
-    executeLoyaltyClaim,
-    generateSupportProof,
+type TabId = 'receipts' | 'sales' | 'escrow' | 'loyalty';
+
+const Receipts: FC = () => {
+  const {
+    connected, address,
+    getBuyerReceipts, getMerchantReceipts, getEscrowReceipts, getLoyaltyStamps,
+    completeEscrow, refundEscrow,
+    claimLoyalty, mergeLoyalty, proveLoyaltyTier,
+    provePurchaseSupport,
   } = useVeilWallet();
 
-  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
-  const [expandedReceipt, setExpandedReceipt] = useState<string | null>(null);
-  const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
-  
-  // Modal states
-  const [showReturnModal, setShowReturnModal] = useState(false);
-  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
-  const [showProofModal, setShowProofModal] = useState(false);
-  const [showTxModal, setShowTxModal] = useState(false);
-  
-  // Form states
-  const [returnReason, setReturnReason] = useState('');
-  const [loyaltyTier, setLoyaltyTier] = useState(1);
-  const [proofToken, setProofToken] = useState<string | null>(null);
-  
-  // Track if we've already fetched receipts this session
-  const [hasFetched, setHasFetched] = useState(false);
+  const [tab, setTab] = useState<TabId>('receipts');
+  const [receipts, setReceipts] = useState<BuyerReceiptRecord[]>([]);
+  const [merchantReceipts, setMerchantReceipts] = useState<MerchantReceiptRecord[]>([]);
+  const [escrows, setEscrows] = useState<EscrowReceiptRecord[]>([]);
+  const [stamps, setStamps] = useState<LoyaltyStampRecord[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Only fetch receipts once when authenticated (not on every render)
+  // Loyalty prove modal
+  const [proveModalOpen, setProveModalOpen] = useState(false);
+  const [proveThreshold, setProveThreshold] = useState('3');
+  const [proveVerifier, setProveVerifier] = useState('');
+  const [selectedStamp, setSelectedStamp] = useState<LoyaltyStampRecord | null>(null);
+
+  // Refund modal
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [selectedEscrow, setSelectedEscrow] = useState<EscrowReceiptRecord | null>(null);
+
+  const pendingTxs = usePendingTxStore((s) => s.transactions);
+  // Only show real on-chain at1 entries — hide shield_temp artifacts
+  const displayedTxs = pendingTxs.filter(tx => tx.txId.startsWith('at1'));
+
+  // On mount: any at1 still marked pending might have already confirmed (poll ended early).
+  // Re-check them against RPC and auto-confirm if found.
   useEffect(() => {
-    // Only auto-fetch if authenticated AND haven't fetched yet
-    if (connected && isAuthenticated && !hasFetched && !isLoadingReceipts) {
-      setHasFetched(true);
-      // Use a small delay to prevent race conditions
-      const timer = setTimeout(() => {
-        fetchReceipts(true); // Force fetch
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [connected, isAuthenticated, hasFetched, isLoadingReceipts, fetchReceipts]);
-
-  // Reset hasFetched when disconnected
-  useEffect(() => {
-    if (!connected || !isAuthenticated) {
-      setHasFetched(false);
-    }
-  }, [connected, isAuthenticated]);
-
-  const handleAuth = async () => {
-    await authenticate('buyer');
-    // After auth, set hasFetched to false so useEffect will trigger fetch
-    setHasFetched(false);
-  };
-
-  // Manual refresh - force fetch
-  const handleRefresh = () => {
-    fetchReceipts(true); // Force fetch with true parameter
-  };
-
-  // Open Return
-  const handleOpenReturn = (receipt: any) => {
-    setSelectedReceipt(receipt);
-    setReturnReason('');
-    setShowReturnModal(true);
-  };
-
-  const handleSubmitReturn = async () => {
-    if (!selectedReceipt || !returnReason) {
-      toast.error('Please select a return reason');
-      return;
-    }
-
-    setShowReturnModal(false);
-    setShowTxModal(true);
-    setTxStatus('signing');
-
-    try {
-      const reasonHash = computeReasonHash(returnReason);
-      // Pass the full receipt object (not just _raw) so the hook can check _fromWallet
-      const txId = await executeReturn(selectedReceipt, reasonHash);
-
-      if (!txId) {
-        setTxStatus('failed');
-        return;
-      }
-
-      setTxStatus('pending');
-
-      // Record in backend
+    const network = import.meta.env.VITE_ALEO_NETWORK || 'testnet';
+    const rpc = import.meta.env.VITE_ALEO_RPC_URL || 'https://api.explorer.provable.com/v1';
+    const store = usePendingTxStore.getState();
+    const stuckPending = store.transactions.filter(
+      tx => tx.txId.startsWith('at1') && tx.status === 'pending'
+    );
+    if (stuckPending.length === 0) return;
+    stuckPending.forEach(async (tx) => {
       try {
-        await api.recordTransaction({
-          txId: txId as any,
-          type: 'return',
-          merchantAddress: selectedReceipt.merchant as any,
-          buyerAddress: address as any,
-          nullifier: reasonHash as any, // Simplified - real nullifier comes from contract
-          reason: returnReason,
-          totalAmount: Number(selectedReceipt.total),
-        });
-      } catch (e) {
-        console.warn('Failed to record return metadata:', e);
-      }
+        const res = await fetch(`${rpc}/${network}/transaction/${tx.txId}`);
+        if (res.ok) {
+          usePendingTxStore.getState().confirmTransaction(tx.txId);
+        }
+      } catch { /* not yet on-chain, leave pending */ }
+    });
+  }, []);
 
-      // Simulate confirmation
-      setTimeout(() => {
-        setTxStatus('confirmed');
-        toast.success('Return processed!');
-        fetchReceipts(); // Refresh to show consumed receipt
-      }, 3000);
-
-    } catch (error: any) {
-      setTxStatus('failed');
-      if (error.message?.includes('nullifier')) {
-        toast.error('This receipt has already been returned');
-      } else {
-        toast.error(error.message || 'Return failed');
-      }
-    }
-  };
-
-  // Claim Loyalty
-  const handleOpenLoyalty = (receipt: any) => {
-    setSelectedReceipt(receipt);
-    setLoyaltyTier(1);
-    setShowLoyaltyModal(true);
-  };
-
-  const handleSubmitLoyalty = async () => {
-    if (!selectedReceipt) return;
-
-    setShowLoyaltyModal(false);
-    setShowTxModal(true);
-    setTxStatus('signing');
-
+  const loadRecords = useCallback(async () => {
+    if (!connected) return;
+    setLoadingRecords(true);
     try {
-      // Pass the full receipt object (not just _raw) so the hook can check _fromWallet
-      const txId = await executeLoyaltyClaim(selectedReceipt, loyaltyTier);
-
-      if (!txId) {
-        setTxStatus('failed');
-        return;
-      }
-
-      setTxStatus('pending');
-
-      // Record in backend
-      try {
-        await api.recordTransaction({
-          txId: txId as any,
-          type: 'loyalty',
-          merchantAddress: selectedReceipt.merchant as any,
-          buyerAddress: address as any,
-          nullifier: selectedReceipt.nonce_seed as any, // Simplified
-          tier: loyaltyTier,
-        });
-      } catch (e) {
-        console.warn('Failed to record loyalty metadata:', e);
-      }
-
-      setTimeout(() => {
-        setTxStatus('confirmed');
-        toast.success(`${LOYALTY_TIERS[loyaltyTier as keyof typeof LOYALTY_TIERS].name} tier claimed!`);
-        fetchReceipts();
-      }, 3000);
-
-    } catch (error: any) {
-      setTxStatus('failed');
-      if (error.message?.includes('nullifier')) {
-        toast.error('Loyalty already claimed for this receipt');
-      } else {
-        toast.error(error.message || 'Claim failed');
-      }
-    }
-  };
-
-  // Support Proof
-  const handleOpenProof = (receipt: any) => {
-    setSelectedReceipt(receipt);
-    setProofToken(null);
-    setShowProofModal(true);
-  };
-
-  const handleGenerateProof = async () => {
-    if (!selectedReceipt) return;
-
-    setTxStatus('signing');
-
-    try {
-      // Generate random salt
-      const salt = `${Math.floor(Math.random() * 1000000000)}field`;
-      const productHash = selectedReceipt.cart_commitment;
-
-      // Pass the full receipt object (not just _raw) so the hook can check _fromWallet
-      const txId = await generateSupportProof(selectedReceipt, productHash, salt);
-
-      if (txId) {
-        // In real implementation, parse the output from transaction
-        // For now, simulate a proof token
-        setProofToken(`proof_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-        setTxStatus('idle');
-        toast.success('Proof token generated!');
-      } else {
-        toast.error('Failed to generate proof');
-      }
-
-    } catch (error: any) {
-      toast.error(error.message || 'Proof generation failed');
+      const [r, mr, e, s] = await Promise.all([
+        getBuyerReceipts(),
+        getMerchantReceipts(),
+        getEscrowReceipts(),
+        getLoyaltyStamps(),
+      ]);
+      setReceipts(r);
+      setMerchantReceipts(mr);
+      setEscrows(e);
+      setStamps(s);
+    } catch (err) {
+      console.error('Failed to load records:', err);
+      toast.error('Failed to load on-chain records');
     } finally {
-      setTxStatus('idle');
+      setLoadingRecords(false);
+    }
+  }, [connected, getBuyerReceipts, getMerchantReceipts, getEscrowReceipts, getLoyaltyStamps]);
+
+  useEffect(() => {
+    if (connected) loadRecords();
+  }, [connected, loadRecords]);
+
+  // Escrow actions
+  const handleCompleteEscrow = async (escrow: EscrowReceiptRecord) => {
+    setActionLoading(escrow.purchase_commitment);
+    try {
+      await completeEscrow(escrow);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to release escrow');
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const copyProofToken = async () => {
-    if (proofToken) {
-      const success = await copyToClipboard(proofToken);
-      if (success) {
-        toast.success('Copied to clipboard!');
+  const handleRefundEscrow = async () => {
+    if (!selectedEscrow) return;
+    setActionLoading(selectedEscrow.purchase_commitment);
+    try {
+      const reasonHash = computeReasonHash(refundReason || 'General return');
+      await refundEscrow(selectedEscrow, reasonHash);
+      setRefundModalOpen(false);
+      setRefundReason('');
+      setSelectedEscrow(null);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to request refund');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Loyalty actions
+  const handleClaimLoyalty = async (receipt: BuyerReceiptRecord) => {
+    setActionLoading(receipt.purchase_commitment);
+    try {
+      if (stamps.length === 0) {
+        await claimLoyalty(receipt);
+      } else {
+        await mergeLoyalty(receipt, stamps[0]);
       }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to claim loyalty');
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  // Not connected
+  const handleProveTier = async () => {
+    if (!selectedStamp) return;
+    setActionLoading('prove');
+    try {
+      const threshold = parseInt(proveThreshold);
+      const verifier = proveVerifier || address || '';
+      await proveLoyaltyTier(selectedStamp, threshold, verifier);
+      setProveModalOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to prove tier');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
+    setActionLoading(`support_${receipt.purchase_commitment}`);
+    try {
+      const productHash = receipt.cart_commitment;
+      await provePurchaseSupport(receipt, productHash);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to generate proof');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const formatAmount = (amount: number, tokenType: number) => {
+    return tokenType === 1 ? formatUsdcx(amount) : formatCredits(amount);
+  };
+
+  const tabItems: { id: TabId; label: string; icon: any; count: number }[] = [
+    { id: 'receipts', label: 'Receipts', icon: <ReceiptIcon size={15} />, count: receipts.length },
+    { id: 'sales', label: 'Sales', icon: <ShieldIcon size={15} />, count: merchantReceipts.length },
+    { id: 'escrow', label: 'Escrow', icon: <ClockIcon size={15} />, count: escrows.length },
+    { id: 'loyalty', label: 'Loyalty', icon: <LoyaltyIcon size={15} />, count: stamps.length },
+  ];
+
+  // Not connected state
   if (!connected) {
     return (
-      <div className="min-h-screen pt-24 px-4">
-        <div className="max-w-2xl mx-auto">
+      <div className="relative min-h-screen pt-24 flex items-center justify-center">
+        <GridBackground className="opacity-20" />
+        <GlowOrb color="sky" size={300} className="top-1/3 left-1/2 -translate-x-1/2" />
+        <div className="relative z-10">
           <EmptyState
-            icon={<ReceiptIcon size={48} />}
-            title="Connect Your Wallet"
-            description="Connect your wallet to view your private receipts"
+            icon={<ShieldIcon size={52} className="text-white/20" />}
+            title="Connect Wallet"
+            description="Connect your Aleo wallet to view your private receipts and manage escrow."
           />
         </div>
       </div>
     );
   }
 
-  // Not authenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen pt-24 px-4">
-        <div className="max-w-2xl mx-auto text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <ReceiptIcon size={64} className="text-veil-400 mx-auto mb-6" />
-            <h1 className="text-3xl font-bold text-white mb-4">Your Receipts</h1>
-            <p className="text-slate-400 mb-8">
-              Authenticate to view and manage your private receipts
-            </p>
-            <Button onClick={handleAuth} loading={isAuthenticating} size="lg">
-              Authenticate
-            </Button>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="relative min-h-screen pt-24 pb-16">
+      {/* Background effects */}
+      <GridBackground className="opacity-20" />
+      <FloatingParticles count={25} />
+      <div className="absolute top-20 right-0 w-[500px] h-[400px] bg-purple-500/[0.03] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[300px] bg-sky-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <ReceiptIcon size={32} className="text-veil-400" />
-              My Receipts
-            </h1>
-            <p className="text-slate-400 mt-1">
-              View receipts, process returns, and claim loyalty rewards
-            </p>
-          </div>
-          <Button variant="ghost" onClick={handleRefresh} disabled={isLoadingReceipts}>
-            <RefreshIcon size={18} className={isLoadingReceipts ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-        </div>
-
-        {/* Privacy Notice */}
-        <Card className="mb-8 bg-veil-900/30 border-veil-700/50">
-          <div className="flex items-start gap-3">
-            <ShieldIcon size={24} className="text-veil-400 flex-shrink-0 mt-1" />
-            <div>
-              <h3 className="font-semibold text-white mb-1">Privacy Protected</h3>
-              <p className="text-sm text-slate-300">
-                Your receipts are encrypted on-chain. Only you can view the details.
-                Returns and loyalty use nullifiers to prevent double-claims without revealing your identity.
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Receipts List */}
-        {isLoadingReceipts ? (
-          <div className="flex justify-center py-12">
-            <LoadingSpinner size={32} />
-          </div>
-        ) : receipts.length === 0 ? (
-          <div className="text-center py-12">
-            <EmptyState
-              icon={<ReceiptIcon size={48} />}
-              title="No Receipts Yet"
-              description="Complete a purchase to receive your first private receipt"
-            />
-            <div className="mt-6 space-y-3">
-              <Button onClick={handleRefresh} variant="secondary">
-                <RefreshIcon size={18} className="mr-2" />
-                Refresh Receipts
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <SectionHeader
+            title="My Receipts"
+            subtitle="On-chain receipts, escrow protection, and loyalty stamps"
+            action={
+              <Button
+                variant="secondary"
+                icon={<RefreshIcon size={16} />}
+                loading={loadingRecords}
+                onClick={loadRecords}
+              >
+                Refresh
               </Button>
-              <p className="text-xs text-slate-500 mt-4">
-                If you just made a purchase, wait 30 seconds then refresh.<br/>
-                If you see "NOT_GRANTED" error: disconnect wallet, refresh page, and reconnect.
-              </p>
-            </div>
+            }
+          />
+        </motion.div>
+
+        {/* Transaction Activity */}
+        {displayedTxs.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <Card className={displayedTxs.some(t => t.status === 'pending') ? 'border-amber-500/20' : 'border-white/[0.08]'}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  {displayedTxs.some(t => t.status === 'pending')
+                    ? <PulseIndicator color="bg-amber-400" />
+                    : <span className="w-3 h-3 rounded-full bg-emerald-400 flex-shrink-0" />
+                  }
+                  <span className={`font-medium text-sm ${displayedTxs.some(t => t.status === 'pending') ? 'text-amber-300' : 'text-emerald-300'}`}>
+                    {displayedTxs.some(t => t.status === 'pending') ? 'Pending Transactions' : 'Recent Transactions'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => usePendingTxStore.getState().clearCompleted()}
+                  className="text-[11px] text-white/20 hover:text-white/50 transition-colors"
+                >
+                  Clear done
+                </button>
+              </div>
+              <div className="space-y-2">
+                {displayedTxs.map((tx) => {
+                  const network = import.meta.env.VITE_ALEO_NETWORK || 'testnet';
+                  const explorerUrl = `https://${network}.explorer.provable.com/transaction/${tx.txId}`;
+                  const shortId = `${tx.txId.slice(0, 14)}...${tx.txId.slice(-8)}`;
+                  return (
+                    <div key={tx.txId} className={`flex items-center justify-between text-sm rounded-lg p-3 border transition-all ${
+                      tx.status === 'confirmed'
+                        ? 'bg-emerald-500/[0.04] border-emerald-500/10'
+                        : tx.status === 'failed'
+                        ? 'bg-red-500/[0.04] border-red-500/10'
+                        : 'bg-amber-500/[0.04] border-amber-500/10'
+                    }`}>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            tx.status === 'confirmed' ? 'bg-emerald-400' :
+                            tx.status === 'failed' ? 'bg-red-400' : 'bg-amber-400 animate-pulse'
+                          }`} />
+                          <span className="text-white/60 font-mono text-[11px] truncate">{shortId}</span>
+                          <a
+                            href={explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-shrink-0 text-sky-400/70 hover:text-sky-400 transition-colors"
+                            title={`View on explorer: ${tx.txId}`}
+                          >
+                            <ExternalLinkIcon size={11} />
+                          </a>
+                        </div>
+                        {tx.status === 'confirmed' && tx.confirmedAt && (
+                          <span className="text-[10px] text-emerald-400/50 pl-3.5">
+                            Confirmed {new Date(tx.confirmedAt).toLocaleTimeString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <Badge variant={
+                          tx.status === 'confirmed' ? 'success' :
+                          tx.status === 'failed' ? 'error' : 'warning'
+                        }>
+                          {tx.type}
+                        </Badge>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                          tx.status === 'confirmed' ? 'text-emerald-400' :
+                          tx.status === 'failed' ? 'text-red-400' : 'text-amber-400'
+                        }`}>
+                          {tx.status === 'confirmed' ? '✓ Done' : tx.status === 'failed' ? '✗ Failed' : '⟳ Pending'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="mb-8"
+        >
+          <PillNav tabs={tabItems} active={tab} onChange={setTab} />
+        </motion.div>
+
+        {loadingRecords ? (
+          <div className="flex justify-center py-24">
+            <LoadingSpinner size={40} />
           </div>
         ) : (
-          <div className="space-y-4">
-            {receipts.map((receipt, index) => (
-              <motion.div
-                key={receipt._nonce || `receipt-${index}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card className="overflow-hidden">
-                  {/* Receipt Header */}
-                  <button
-                    onClick={() => {
-                      const receiptId = receipt._nonce || `receipt-${index}`;
-                      console.log('Clicking receipt:', receiptId, 'current expanded:', expandedReceipt);
-                      setExpandedReceipt(expandedReceipt === receiptId ? null : receiptId);
-                    }}
-                    className="w-full flex items-center justify-between text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-gradient-to-r from-veil-500/20 to-receipt-500/20 rounded-xl">
-                        <ReceiptIcon size={24} className="text-veil-400" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-white">
-                          {formatCredits(receipt.total)} ₳
-                        </p>
-                        <p className="text-sm text-slate-400">
-                          Merchant: {truncateAddress(receipt.merchant, 6)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {receipt._fromWallet ? (
-                        <Badge variant="success">Active</Badge>
-                      ) : (
-                        <Badge variant="warning">Display Only</Badge>
-                      )}
-                      {expandedReceipt === (receipt._nonce || `receipt-${index}`) ? (
-                        <ChevronDownIcon size={20} className="text-slate-400" />
-                      ) : (
-                        <ChevronRightIcon size={20} className="text-slate-400" />
-                      )}
-                    </div>
-                  </button>
+          <>
+            {/* ========== RECEIPTS TAB ========== */}
+            {tab === 'receipts' && (
+              <div className="space-y-4">
+                {receipts.length === 0 ? (
+                  <EmptyState
+                    icon={<ReceiptIcon size={52} className="text-white/15" />}
+                    title="No Receipts Yet"
+                    description="Your private purchase receipts will appear here after shopping."
+                  />
+                ) : (
+                  receipts.map((r, idx) => (
+                    <motion.div
+                      key={`${r.purchase_commitment}_${idx}`}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.06, duration: 0.4 }}
+                    >
+                      <Card hover>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2.5 mb-3">
+                              <div className="p-1.5 bg-sky-500/10 rounded-lg">
+                                <ReceiptIcon size={14} className="text-sky-400" />
+                              </div>
+                              <span className="text-white font-medium text-sm">Purchase Receipt</span>
+                              <Badge variant={r.token_type === 1 ? 'info' : 'purple'} dot>
+                                <TokenIcon type={r.token_type as 0|1} size={11} className="inline mr-0.5" />
+                                {r.token_type === 1 ? 'USDCx' : 'Credits'}
+                              </Badge>
+                            </div>
 
-                  {/* Expanded Details */}
-                  <AnimatePresence>
-                    {expandedReceipt === (receipt._nonce || `receipt-${index}`) && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="pt-4 mt-4 border-t border-slate-700">
-                          {/* Warning if not from wallet */}
-                          {!receipt._fromWallet && (
-                            <div className="mb-4 p-3 bg-amber-900/30 border border-amber-700/50 rounded-xl">
-                              <p className="text-sm text-amber-300">
-                                ⚠️ This receipt is from backend storage. To use returns, loyalty, or support proof features, 
-                                please disconnect and reconnect your wallet to grant record access permissions.
-                              </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mt-4">
+                              <div>
+                                <span className="text-xs text-white/30 uppercase tracking-wider">Amount</span>
+                                <div className="mt-1"><TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1} size="lg" /></div>
+                              </div>
+                              <div>
+                                <span className="text-xs text-white/30 uppercase tracking-wider">Merchant</span>
+                                <p className="text-white/60 font-mono text-xs mt-1">{truncateAddress(r.merchant)}</p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-white/30 uppercase tracking-wider">Date</span>
+                                <p className="text-white/60 text-sm mt-1">{r.timestamp ? formatDate(r.timestamp) : 'N/A'}</p>
+                              </div>
                             </div>
-                          )}
-                          
-                          {/* Receipt Details */}
-                          <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                            <div>
-                              <p className="text-slate-400">Timestamp</p>
-                              <p className="text-white">{formatDate(receipt.timestamp)}</p>
-                            </div>
-                            <div>
-                              <p className="text-slate-400">Cart Commitment</p>
-                              <p className="text-white font-mono text-xs truncate">
-                                {receipt.cart_commitment}
-                              </p>
+
+                            <div className="mt-4 text-xs text-white/15 font-mono">
+                              {r.purchase_commitment.slice(0, 24)}...
                             </div>
                           </div>
 
-                          {/* UTXO Warning */}
-                          {receipt._fromWallet && (
-                            <div className="p-2 bg-amber-900/20 border border-amber-700/50 rounded-lg mb-3">
-                              <p className="text-xs text-amber-400">
-                                ⚠️ <strong>Note:</strong> Each receipt can only be used ONCE for either Return OR Loyalty claim (UTXO model). 
-                                Support Proof can be generated multiple times without consuming the receipt.
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Actions - only enabled for wallet records */}
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-col gap-2">
                             <Button
                               variant="secondary"
                               size="sm"
-                              onClick={() => handleOpenReturn(receipt)}
-                              icon={<ReturnIcon size={16} />}
-                              disabled={!receipt._fromWallet}
-                              title={receipt._fromWallet ? "Process a return (consumes receipt)" : "Wallet record required"}
+                              onClick={() => handleClaimLoyalty(r)}
+                              loading={actionLoading === r.purchase_commitment}
+                              icon={<LoyaltyIcon size={13} />}
                             >
-                              Process Return
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleOpenLoyalty(receipt)}
-                              icon={<AwardIcon size={16} />}
-                              disabled={!receipt._fromWallet}
-                              title={receipt._fromWallet ? "Claim loyalty points (consumes receipt)" : "Wallet record required"}
-                            >
-                              Claim Loyalty
+                              {stamps.length > 0 ? 'Add Stamp' : 'Claim'}
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleOpenProof(receipt)}
-                              icon={<FileIcon size={16} />}
-                              disabled={!receipt._fromWallet}
-                              title={receipt._fromWallet ? "Generate proof (does NOT consume receipt)" : "Wallet record required"}
+                              onClick={() => handleSupportProof(r)}
+                              loading={actionLoading === `support_${r.purchase_commitment}`}
+                              icon={<ShieldIcon size={13} />}
                             >
-                              Support Proof
+                              Support
                             </Button>
                           </div>
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        {/* Return Modal */}
-        <Modal
-          isOpen={showReturnModal}
-          onClose={() => setShowReturnModal(false)}
-          title="Process Return"
-        >
-          <div className="space-y-4">
-            <p className="text-slate-300">
-              Select a reason for your return. This will consume the receipt and generate a return claim.
-            </p>
-            
-            <Select
-              label="Return Reason"
-              value={returnReason}
-              onChange={(e) => setReturnReason(e.target.value)}
-              options={[
-                { value: '', label: 'Select a reason...' },
-                ...RETURN_REASONS.map(r => ({ value: r.id, label: r.label }))
-              ]}
-            />
-
-            <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-xl space-y-2">
-              <p className="text-sm text-amber-300 font-medium">
-                ⚠️ Important: UTXO Model
-              </p>
-              <p className="text-xs text-amber-300/80">
-                This action <strong>consumes</strong> the receipt permanently. After processing a return, 
-                you cannot use this receipt for loyalty claims. Each receipt can only be used ONCE.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button variant="secondary" onClick={() => setShowReturnModal(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={handleSubmitReturn} disabled={!returnReason} className="flex-1">
-                Submit Return
-              </Button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* Loyalty Modal */}
-        <Modal
-          isOpen={showLoyaltyModal}
-          onClose={() => setShowLoyaltyModal(false)}
-          title="Claim Loyalty Stamp"
-        >
-          <div className="space-y-4">
-            <p className="text-slate-300">
-              Select your loyalty tier. Each receipt can only be used for one loyalty claim.
-            </p>
-
-            <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-xl space-y-2">
-              <p className="text-xs text-amber-300/80">
-                ⚠️ This action <strong>consumes</strong> the receipt. After claiming loyalty, 
-                you cannot use this receipt for returns.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(LOYALTY_TIERS).map(([tier, info]) => (
-                <button
-                  key={tier}
-                  onClick={() => setLoyaltyTier(Number(tier))}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    loyaltyTier === Number(tier)
-                      ? 'border-veil-500 bg-veil-900/30'
-                      : 'border-slate-700 hover:border-slate-600'
-                  }`}
-                >
-                  <LoyaltyIcon
-                    size={24}
-                    style={{ color: info.color }}
-                    className="mx-auto mb-2"
-                  />
-                  <p className="font-semibold text-white">{info.name}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button variant="secondary" onClick={() => setShowLoyaltyModal(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={handleSubmitLoyalty} className="flex-1">
-                Claim {LOYALTY_TIERS[loyaltyTier as keyof typeof LOYALTY_TIERS].name}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* Support Proof Modal */}
-        <Modal
-          isOpen={showProofModal}
-          onClose={() => setShowProofModal(false)}
-          title="Generate Support Proof"
-        >
-          <div className="space-y-4">
-            <p className="text-slate-300">
-              Generate a proof token to verify your purchase without revealing all receipt details.
-              This does NOT consume the receipt.
-            </p>
-
-            {proofToken ? (
-              <div className="p-4 bg-slate-700/50 rounded-xl">
-                <p className="text-sm text-slate-400 mb-2">Your Proof Token:</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-sm text-veil-400 font-mono break-all">
-                    {proofToken}
-                  </code>
-                  <Button variant="ghost" size="sm" onClick={copyProofToken}>
-                    <CopyIcon size={16} />
-                  </Button>
-                </div>
+                      </Card>
+                    </motion.div>
+                  ))
+                )}
               </div>
-            ) : (
-              <Button
-                onClick={handleGenerateProof}
-                loading={txStatus === 'signing'}
-                className="w-full"
-              >
-                Generate Proof Token
-              </Button>
             )}
 
+            {/* ========== SALES TAB (Merchant Receipts) ========== */}
+            {tab === 'sales' && (
+              <div className="space-y-4">
+                {merchantReceipts.length === 0 ? (
+                  <EmptyState
+                    icon={<ShieldIcon size={52} className="text-white/15" />}
+                    title="No Sales Yet"
+                    description="When customers buy from you, your private sale receipts will appear here."
+                  />
+                ) : (
+                  <>
+                    {/* Sales summary */}
+                    <Card glow className="border-emerald-500/15">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-emerald-500/10 rounded-xl">
+                          <ShieldIcon size={20} className="text-emerald-400" />
+                        </div>
+                        <span className="text-white font-bold text-lg">Sales Summary</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
+                        <div>
+                          <span className="text-xs text-white/30 uppercase tracking-wider">Total Sales</span>
+                          <p className="text-3xl font-bold text-emerald-400 mt-1">{merchantReceipts.length}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs text-white/30 uppercase tracking-wider">Credits Revenue</span>
+                          <div className="mt-1"><TokenAmount amount={formatCredits(merchantReceipts.filter(r => r.token_type === 0).reduce((sum, r) => sum + r.total, 0))} type="credits" size="lg" /></div>
+                        </div>
+                        <div>
+                          <span className="text-xs text-white/30 uppercase tracking-wider">USDCx Revenue</span>
+                          <div className="mt-1"><TokenAmount amount={formatUsdcx(merchantReceipts.filter(r => r.token_type === 1).reduce((sum, r) => sum + r.total, 0))} type="usdcx" size="lg" /></div>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {merchantReceipts.map((r, idx) => (
+                      <motion.div
+                        key={`merchant_${r.purchase_commitment}_${idx}`}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.06, duration: 0.4 }}
+                      >
+                        <Card hover>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2.5 mb-3">
+                                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                                  <ReceiptIcon size={14} className="text-emerald-400" />
+                                </div>
+                                <span className="text-white font-medium text-sm">Sale Receipt</span>
+                                <Badge variant={r.token_type === 1 ? 'info' : 'purple'} dot>
+                                  <TokenIcon type={r.token_type as 0|1} size={11} className="inline mr-0.5" />
+                                  {r.token_type === 1 ? 'USDCx' : 'Credits'}
+                                </Badge>
+                                <Badge variant="success" dot>Received</Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-5 mt-4">
+                                <div>
+                                  <span className="text-xs text-white/30 uppercase tracking-wider">Amount</span>
+                                  <div className="mt-1"><TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1} size="lg" /></div>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-white/30 uppercase tracking-wider">Type</span>
+                                  <p className="text-white/60 text-sm mt-1">{r.token_type === 1 ? 'USDCx Stablecoin' : 'Aleo Credits'}</p>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 text-xs text-white/15 font-mono">
+                                {r.purchase_commitment.slice(0, 24)}...
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ========== ESCROW TAB ========== */}
+            {tab === 'escrow' && (
+              <div className="space-y-4">
+                {escrows.length === 0 ? (
+                  <EmptyState
+                    icon={<ClockIcon size={52} className="text-white/15" />}
+                    title="No Active Escrows"
+                    description="Your escrow purchases with refund protection will appear here."
+                  />
+                ) : (
+                  escrows.map((e, idx) => (
+                    <motion.div
+                      key={`${e.purchase_commitment}_${idx}`}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.06, duration: 0.4 }}
+                    >
+                      <Card hover className="border-amber-500/10">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2.5 mb-3">
+                              <div className="p-1.5 bg-amber-500/10 rounded-lg">
+                                <ClockIcon size={14} className="text-amber-400" />
+                              </div>
+                              <span className="text-white font-medium text-sm">Escrow Purchase</span>
+                              <Badge variant="warning" dot>Active</Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mt-4">
+                              <div>
+                                <span className="text-xs text-white/30 uppercase tracking-wider">Locked</span>
+                              <div className="mt-1"><TokenAmount amount={formatCredits(e.total)} type="credits" size="lg" /></div>
+                              </div>
+                              <div>
+                                <span className="text-xs text-white/30 uppercase tracking-wider">Merchant</span>
+                                <p className="text-white/60 font-mono text-xs mt-1">{truncateAddress(e.merchant)}</p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-white/30 uppercase tracking-wider">Window</span>
+                                <p className="text-amber-400 font-medium text-sm mt-1">{ESCROW_RETURN_WINDOW} blocks</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 p-3.5 bg-amber-500/[0.04] border border-amber-500/10 rounded-xl">
+                              <p className="text-xs text-amber-300/60 leading-relaxed">
+                                Funds are locked on-chain. Release to pay the merchant, or request a refund within the return window ({ESCROW_RETURN_WINDOW} blocks ≈ 8 hours).
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              variant="glow"
+                              size="sm"
+                              onClick={() => handleCompleteEscrow(e)}
+                              loading={actionLoading === e.purchase_commitment}
+                              icon={<CheckIcon size={13} />}
+                            >
+                              Release
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedEscrow(e);
+                                setRefundModalOpen(true);
+                              }}
+                              icon={<AlertIcon size={13} />}
+                            >
+                              Refund
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* ========== LOYALTY TAB ========== */}
+            {tab === 'loyalty' && (
+              <div className="space-y-6">
+                {stamps.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <Card glow className="border-purple-500/15">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                        <div>
+                          <div className="flex items-center gap-2.5 mb-3">
+                            <div className="p-2 bg-purple-500/10 rounded-xl">
+                              <LoyaltyIcon size={20} className="text-purple-400" />
+                            </div>
+                            <span className="text-white font-bold text-lg">Loyalty Score</span>
+                          </div>
+
+                          <div className="flex items-baseline gap-6 mt-3">
+                            <div>
+                              <span className="text-5xl font-bold bg-gradient-to-r from-purple-400 to-fuchsia-400 bg-clip-text text-transparent">
+                                {stamps[0].score}
+                              </span>
+                              <span className="text-white/30 ml-2 text-sm">stamps</span>
+                            </div>
+                            <div>
+                              <TokenAmount amount={formatCredits(stamps[0].total_spent)} type="credits" size="lg" />
+                              <span className="text-white/30 ml-2 text-sm">total spent</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 flex items-center gap-2">
+                            {[3, 5, 10].map((tier) => (
+                              <Badge
+                                key={tier}
+                                variant={stamps[0].score >= tier ? 'success' : 'default'}
+                                dot
+                              >
+                                Tier {tier}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setSelectedStamp(stamps[0]);
+                            setProveModalOpen(true);
+                          }}
+                          icon={<ShieldIcon size={16} />}
+                        >
+                          Send Loyalty Badge
+                        </Button>
+                      </div>
+
+                      <div className="mt-5 p-3.5 bg-purple-500/[0.04] border border-purple-500/10 rounded-xl">
+                        <p className="text-xs text-purple-300/50 leading-relaxed">
+                          <strong className="text-purple-300/70">What are stamps for?</strong> Each purchase earns you a stamp. Send your loyalty badge to a merchant to unlock rewards — they only see you qualify (≥ N stamps), never your purchase history or spending amounts.
+                        </p>
+                      </div>
+                    </Card>
+                  </motion.div>
+                )}
+
+                {stamps.length === 0 && (
+                  <EmptyState
+                    icon={<LoyaltyIcon size={52} className="text-white/15" />}
+                    title="No Loyalty Stamps"
+                    description="Claim loyalty stamps from your purchase receipts to build your score."
+                    action={
+                      receipts.length > 0 ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => setTab('receipts')}
+                        >
+                          Go to Receipts to Claim
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ========== REFUND MODAL ========== */}
+      <Modal
+        isOpen={refundModalOpen}
+        onClose={() => { setRefundModalOpen(false); setSelectedEscrow(null); }}
+        title="Request Refund"
+      >
+        <div className="space-y-5">
+          <p className="text-white/40 text-sm leading-relaxed">
+            Enter a reason for your refund. The reason will be hashed on-chain — the actual text stays private.
+          </p>
+          {selectedEscrow && (
+            <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+              <p className="text-sm text-white/50">
+                Amount: <TokenAmount amount={formatCredits(selectedEscrow.total)} type="credits" size="sm" />
+              </p>
+            </div>
+          )}
+          <Input
+            label="Return Reason"
+            value={refundReason}
+            onChange={(e) => setRefundReason(e.target.value)}
+            placeholder="e.g. Changed my mind, item not as described..."
+          />
+          <div className="flex gap-3 justify-end pt-1">
+            <Button variant="ghost" onClick={() => setRefundModalOpen(false)}>Cancel</Button>
             <Button
-              variant="secondary"
-              onClick={() => setShowProofModal(false)}
-              className="w-full"
+              variant="danger"
+              onClick={handleRefundEscrow}
+              loading={!!actionLoading}
             >
-              Close
+              Confirm Refund
             </Button>
           </div>
-        </Modal>
+        </div>
+      </Modal>
 
-        {/* Transaction Status Modal */}
-        <Modal
-          isOpen={showTxModal}
-          onClose={() => txStatus !== 'pending' && setShowTxModal(false)}
-          title="Processing Transaction"
-        >
-          <div className="text-center py-8">
-            {txStatus === 'signing' && (
-              <>
-                <LoadingSpinner size={48} className="mx-auto mb-4" />
-                <p className="text-slate-300">Waiting for wallet signature...</p>
-              </>
-            )}
-
-            {txStatus === 'pending' && (
-              <>
-                <LoadingSpinner size={48} className="mx-auto mb-4" />
-                <p className="text-slate-300">Transaction submitted</p>
-                <p className="text-sm text-slate-400 mt-2">Waiting for confirmation...</p>
-              </>
-            )}
-
-            {txStatus === 'confirmed' && (
-              <>
-                <SuccessCheck size={48} className="mx-auto mb-4" />
-                <p className="text-green-400 font-semibold">Success!</p>
-                <Button onClick={() => setShowTxModal(false)} className="mt-6">
-                  Close
-                </Button>
-              </>
-            )}
-
-            {txStatus === 'failed' && (
-              <>
-                <ErrorX size={48} className="mx-auto mb-4" />
-                <p className="text-red-400 font-semibold">Transaction Failed</p>
-                <p className="text-sm text-slate-400 mt-2">
-                  This may occur if the nullifier was already used
-                </p>
-                <Button variant="secondary" onClick={() => setShowTxModal(false)} className="mt-6">
-                  Close
-                </Button>
-              </>
-            )}
+      {/* ========== PROVE TIER MODAL ========== */}
+      <Modal
+        isOpen={proveModalOpen}
+        onClose={() => { setProveModalOpen(false); setSelectedStamp(null); }}
+        title="Send Loyalty Badge"
+      >
+        <div className="space-y-5">
+          {/* What is a loyalty badge — VeilReceipt-specific explanation */}
+          <div className="p-3.5 bg-purple-500/[0.06] border border-purple-500/15 rounded-xl space-y-2">
+            <p className="text-xs font-semibold text-purple-300/80 uppercase tracking-wider">How it works</p>
+            <ul className="text-xs text-white/45 space-y-1 leading-relaxed list-none">
+              <li>🛍 Every private purchase at a VeilReceipt merchant earns you a stamp</li>
+              <li>🔒 Send your badge to a merchant — they confirm you qualify, nothing more</li>
+              <li>🎁 Merchants can offer discounts, early drops, or VIP access to badge holders</li>
+              <li>👁 Your purchase history and exact stamp count stay completely private</li>
+            </ul>
           </div>
-        </Modal>
-      </div>
+
+          {selectedStamp && (
+            <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+              <p className="text-sm text-white/50">
+                Your stamps: <strong className="text-purple-400 font-semibold">{selectedStamp.score}</strong>
+                <span className="text-white/25 ml-2 text-xs">The recipient only sees whether you meet the minimum — not this number</span>
+              </p>
+            </div>
+          )}
+          <Input
+            label="Minimum stamps required (badge threshold)"
+            type="number"
+            value={proveThreshold}
+            onChange={(e) => setProveThreshold(e.target.value)}
+            placeholder="e.g. 3"
+          />
+          <Input
+            label="Merchant or recipient address"
+            value={proveVerifier}
+            onChange={(e) => setProveVerifier(e.target.value)}
+            placeholder="aleo1... (the merchant who will verify your badge)"
+          />
+          <div className="flex gap-3 justify-end pt-1">
+            <Button variant="ghost" onClick={() => setProveModalOpen(false)}>Cancel</Button>
+            <Button
+              variant="glow"
+              onClick={handleProveTier}
+              loading={actionLoading === 'prove'}
+              icon={<ShieldIcon size={16} />}
+            >
+              Send Badge
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
 
-export default ReceiptsPage;
+export default Receipts;

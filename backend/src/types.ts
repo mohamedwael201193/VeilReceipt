@@ -1,79 +1,94 @@
-// Type definitions for VeilReceipt backend
+// Type definitions for VeilReceipt v3 backend
 
-export type AleoAddress = `aleo1${string}`;
-export type AleoField = `${string}field`;
-export type AleoTransactionId = `at1${string}`;
+import { z } from 'zod';
 
-// Merchant stored in JSON
+// ========== Aleo Primitives ==========
+export type AleoAddress = string;
+export type AleoField = string;
+export type AleoTransactionId = string;
+
+// ========== Database Models ==========
+
 export interface Merchant {
   id: string;
-  walletAddress: AleoAddress;
-  businessName: string;
-  createdAt: string;
+  address_hash: string; // SHA-256 of wallet address (privacy)
+  name: string;
+  category: string;
+  created_at: string;
 }
 
-// Product stored in JSON
 export interface Product {
   id: string;
-  merchantId: string;
-  merchantAddress: AleoAddress;
+  merchant_id: string;
+  merchant_address: AleoAddress;
   name: string;
   description: string;
-  price: number; // in microcredits
+  price: number; // microcredits
+  price_type: 'credits' | 'usdcx'; // credits = Aleo Credits, usdcx = USDCx Stablecoin
   sku: string;
-  imageUrl?: string;
-  category?: string;
-  inStock: boolean;
-  createdAt: string;
-  updatedAt: string;
+  image_url: string;
+  category: string;
+  in_stock: boolean;
+  created_at: string;
 }
 
-// Receipt metadata (not the actual receipt - that's on chain)
 export interface ReceiptMeta {
   id: string;
-  txId: AleoTransactionId;
-  merchantAddress: AleoAddress;
-  buyerAddress: AleoAddress;
-  cartCommitment: AleoField;
-  totalAmount: number;
-  itemCount: number;
-  createdAt: string;
+  purchase_commitment: string;
+  buyer_address_hash: string;
+  merchant_address_hash: string;
+  total: number;
+  token_type: number; // 0 = Credits, 1 = USDCx
+  cart_commitment: string;
+  tx_id: string;
+  status: 'confirmed' | 'escrowed' | 'refunded' | 'completed';
+  purchase_type?: 'private' | 'public' | 'escrow'; // how payment was made
+  created_at: string;
 }
 
-// Return request metadata
-export interface ReturnRequest {
+export interface EscrowRecord {
   id: string;
-  txId: AleoTransactionId;
-  nullifier: AleoField;
-  originalReceiptTxId: AleoTransactionId;
-  buyerAddress: AleoAddress;
-  merchantAddress: AleoAddress;
-  reason: string; // plaintext reason (hash stored on-chain)
-  status: 'pending' | 'processed' | 'rejected';
-  refundAmount: number;
-  createdAt: string;
-  processedAt?: string;
+  purchase_commitment: string;
+  buyer_address_hash: string;
+  merchant_address_hash: string;
+  total: number;
+  status: 'active' | 'completed' | 'refunded';
+  escrow_tx_id: string;
+  resolve_tx_id: string;
+  created_block: number;
+  created_at: string;
 }
 
-// Loyalty claim metadata
-export interface LoyaltyClaim {
+export interface LoyaltyRecord {
   id: string;
-  txId: AleoTransactionId;
-  nullifier: AleoField;
-  buyerAddress: AleoAddress;
-  tier: number;
-  createdAt: string;
+  address_hash: string;
+  purchase_commitment: string;
+  score: number;
+  total_spent: number;
+  tx_id: string;
+  created_at: string;
 }
 
-// Auth nonce for wallet signature verification
 export interface AuthNonce {
   nonce: string;
   address: AleoAddress;
-  createdAt: number;
-  expiresAt: number;
+  created_at: number;
+  expires_at: number;
+  used: boolean;
 }
 
-// JWT payload
+export interface PendingTransaction {
+  id: string;
+  tx_id: string;
+  address_hash: string;
+  type: 'purchase' | 'escrow' | 'complete' | 'refund' | 'loyalty' | 'loyalty_merge';
+  status: 'pending' | 'confirmed' | 'failed';
+  metadata: Record<string, any>;
+  created_at: string;
+  confirmed_at: string | null;
+}
+
+// ========== JWT ==========
 export interface JWTPayload {
   address: AleoAddress;
   role: 'merchant' | 'buyer';
@@ -81,35 +96,67 @@ export interface JWTPayload {
   exp: number;
 }
 
-// API request/response types
-export interface CreateProductRequest {
-  name: string;
-  description: string;
-  price: number;
-  sku: string;
-  imageUrl?: string;
-  category?: string;
-}
-
-export interface RecordTxEventRequest {
-  txId: AleoTransactionId;
-  type: 'purchase' | 'return' | 'loyalty';
-  merchantAddress: AleoAddress;
-  buyerAddress: AleoAddress;
-  cartCommitment?: AleoField;
-  totalAmount?: number;
-  itemCount?: number;
-  nullifier?: AleoField;
-  tier?: number;
-  reason?: string;
-}
-
-// Database structure (JSON files)
-export interface Database {
+// ========== JSON Database Structure ==========
+export interface JsonDatabase {
   merchants: Merchant[];
   products: Product[];
-  receiptMetas: ReceiptMeta[];
-  returnRequests: ReturnRequest[];
-  loyaltyClaims: LoyaltyClaim[];
-  authNonces: AuthNonce[];
+  receipts: ReceiptMeta[];
+  escrows: EscrowRecord[];
+  loyalty: LoyaltyRecord[];
+  auth_nonces: AuthNonce[];
+  pending_txs: PendingTransaction[];
 }
+
+// ========== Zod Schemas ==========
+
+export const CreateReceiptSchema = z.object({
+  purchase_commitment: z.string(),
+  buyer_address_hash: z.string(),
+  merchant_address_hash: z.string(),
+  total: z.number(),
+  token_type: z.number().min(0).max(1),
+  cart_commitment: z.string(),
+  tx_id: z.string(),
+  status: z.enum(['confirmed', 'escrowed']).default('confirmed'),
+  purchase_type: z.enum(['private', 'public', 'escrow']).optional(),
+});
+
+export const CreateEscrowSchema = z.object({
+  purchase_commitment: z.string(),
+  buyer_address_hash: z.string(),
+  merchant_address_hash: z.string(),
+  total: z.number(),
+  escrow_tx_id: z.string(),
+  created_block: z.number().optional().default(0),
+});
+
+export const ResolveEscrowSchema = z.object({
+  purchase_commitment: z.string(),
+  resolve_tx_id: z.string(),
+  status: z.enum(['completed', 'refunded']),
+});
+
+export const CreateLoyaltySchema = z.object({
+  address_hash: z.string(),
+  purchase_commitment: z.string(),
+  score: z.number().default(1),
+  total_spent: z.number().default(0),
+  tx_id: z.string(),
+});
+
+export const CreatePendingTxSchema = z.object({
+  tx_id: z.string(),
+  address_hash: z.string(),
+  type: z.enum(['purchase', 'escrow', 'complete', 'refund', 'loyalty', 'loyalty_merge']),
+  metadata: z.record(z.any()).optional().default({}),
+});
+
+export const CreateProductSchema = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  price: z.number().positive(),
+  price_type: z.enum(['credits', 'usdcx']).default('credits'),
+  sku: z.string(),
+  image_url: z.string().optional().default(''),
+  category: z.string().optional().default('general'),
+});

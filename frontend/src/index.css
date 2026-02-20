@@ -2,86 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Aleo Wallet Adapter UI Overrides */
+@layer base {
+  * {
+    @apply border-white/[0.08];
+  }
+
+  body {
+    @apply bg-[#030014] text-white antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::selection {
+    @apply bg-sky-500/30 text-white;
+  }
+}
+
+/* Wallet Adapter UI — Dark theme overrides */
 .wallet-adapter-button {
-  @apply bg-gradient-to-r from-veil-500 to-receipt-500 hover:from-veil-600 hover:to-receipt-600 
-         text-white font-semibold py-2.5 px-5 rounded-xl transition-all duration-300 
-         shadow-lg hover:shadow-xl hover:shadow-veil-500/25 border-0;
+  @apply !bg-white/[0.08] hover:!bg-white/[0.12] !backdrop-blur-xl
+         !text-white !font-medium !py-2.5 !px-5 !rounded-xl !transition-all !duration-300
+         !border !border-white/[0.08] hover:!border-white/[0.15] !shadow-none;
 }
 
 .wallet-adapter-button:hover {
-  @apply transform scale-[1.02];
+  @apply !transform !scale-[1.02];
 }
 
 .wallet-adapter-button-trigger {
-  @apply bg-gradient-to-r from-veil-500 to-receipt-500;
+  @apply !bg-gradient-to-r !from-sky-500/20 !to-purple-500/20 !border-sky-500/20;
 }
 
 .wallet-adapter-modal-wrapper {
-  @apply bg-slate-900/95 backdrop-blur-xl;
+  @apply !bg-black/80 !backdrop-blur-2xl;
 }
 
 .wallet-adapter-modal-container {
-  @apply bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl;
+  @apply !bg-[#0a0a1a] !border !border-white/[0.08] !rounded-2xl !shadow-2xl !shadow-sky-500/5;
 }
 
 .wallet-adapter-modal-title {
-  @apply text-white font-bold text-xl;
+  @apply !text-white !font-bold !text-xl;
 }
 
 .wallet-adapter-modal-list {
-  @apply space-y-2;
+  @apply !space-y-2;
 }
 
 .wallet-adapter-modal-list li {
-  @apply bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors;
+  @apply !bg-white/[0.04] hover:!bg-white/[0.08] !rounded-xl !transition-all !duration-200;
 }
 
 .wallet-adapter-modal-list-more {
-  @apply text-veil-400 hover:text-veil-300;
+  @apply !text-sky-400 hover:!text-sky-300;
 }
 
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  @apply bg-slate-800 rounded-full;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-600 rounded-full hover:bg-slate-500;
+  @apply bg-white/10 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-white/20;
 }
 
-/* Selection */
-::selection {
-  @apply bg-veil-500/30 text-white;
-}
-
-/* Focus styles */
+/* Focus */
 *:focus-visible {
-  @apply outline-none ring-2 ring-veil-400 ring-offset-2 ring-offset-slate-900;
+  @apply outline-none ring-2 ring-sky-500/50 ring-offset-2 ring-offset-[#030014];
 }
 
-/* Page transitions */
+/* Glow text utility */
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 20px rgba(56, 189, 248, 0.3), 0 0 60px rgba(56, 189, 248, 0.1);
+  }
+  .text-glow-purple {
+    text-shadow: 0 0 20px rgba(168, 85, 247, 0.3), 0 0 60px rgba(168, 85, 247, 0.1);
+  }
+  .glow-border {
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.1), inset 0 0 15px rgba(56, 189, 248, 0.05);
+  }
+}
+
+/* Smooth page transitions */
 .page-enter {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(8px);
 }
-
 .page-enter-active {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 300ms, transform 300ms;
-}
-
-.page-exit {
-  opacity: 1;
-}
-
-.page-exit-active {
-  opacity: 0;
-  transition: opacity 200ms;
+  transition: opacity 400ms cubic-bezier(0.16, 1, 0.3, 1), transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }

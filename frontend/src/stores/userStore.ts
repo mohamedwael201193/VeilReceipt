@@ -1,60 +1,34 @@
-// User Store - Authentication and wallet state
+// User Store — Authentication and wallet state
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AleoAddress } from '@/lib/types';
 
 interface UserState {
-  // Wallet state
   address: AleoAddress | null;
-  connected: boolean;
-  
-  // Auth state
   token: string | null;
-  role: 'merchant' | 'buyer' | null;
-  
-  // Balances
-  publicBalance: bigint;
-  privateBalance: bigint;
-  
-  // Actions
-  setAccount: (address: AleoAddress | null, connected: boolean) => void;
-  setAuth: (token: string | null, role: 'merchant' | 'buyer' | null) => void;
-  updateBalances: (publicBalance: bigint, privateBalance: bigint) => void;
-  clearUser: () => void;
+  isMerchant: boolean;
+  merchantName: string | null;
+
+  setAddress: (address: AleoAddress | null) => void;
+  setToken: (token: string | null) => void;
+  setMerchant: (name: string | null) => void;
+  logout: () => void;
 }
 
 export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
       address: null,
-      connected: false,
       token: null,
-      role: null,
-      publicBalance: BigInt(0),
-      privateBalance: BigInt(0),
+      isMerchant: false,
+      merchantName: null,
 
-      setAccount: (address, connected) => set({ address, connected }),
-      
-      setAuth: (token, role) => set({ token, role }),
-      
-      updateBalances: (publicBalance, privateBalance) => set({ publicBalance, privateBalance }),
-      
-      clearUser: () => set({
-        address: null,
-        connected: false,
-        token: null,
-        role: null,
-        publicBalance: BigInt(0),
-        privateBalance: BigInt(0),
-      }),
+      setAddress: (address) => set({ address }),
+      setToken: (token) => set({ token }),
+      setMerchant: (name) => set({ isMerchant: !!name, merchantName: name }),
+      logout: () => set({ address: null, token: null, isMerchant: false, merchantName: null }),
     }),
-    {
-      name: 'veilreceipt-user',
-      partialize: (state) => ({
-        token: state.token,
-        role: state.role,
-      }),
-    }
+    { name: 'veilreceipt-user' }
   )
 );

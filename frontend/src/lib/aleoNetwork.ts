@@ -1,13 +1,13 @@
 // Aleo Network Client - Fetch records directly from the network
 // This bypasses wallet permission issues by using the SDK directly
 
-import { ALEO_CONFIG } from './aleo';
+import { ALEO_CONFIG } from './chain';
 
 // API endpoint for Aleo network
 const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
 
 // Contract deployment block - search from here
-const DEPLOYMENT_BLOCK = 14100173; // V2 deployment block
+const DEPLOYMENT_BLOCK = 15000000; // V3 deployment block (approximate)
 
 /**
  * Fetch transactions for a specific address from the network

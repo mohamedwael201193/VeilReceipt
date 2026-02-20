@@ -1,50 +1,36 @@
-// Wallet Provider Wrapper
-// Configures Aleo wallet adapters for VeilReceipt (Leo + Shield)
+// Wallet Provider — Leo + Shield wallet adapters for VeilReceipt v3
 
 import { FC, ReactNode, useMemo } from 'react';
-import { AleoWalletProvider, useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { AleoWalletProvider } from '@provablehq/aleo-wallet-adaptor-react';
 import { WalletModalProvider } from '@provablehq/aleo-wallet-adaptor-react-ui';
 import { LeoWalletAdapter } from '@provablehq/aleo-wallet-adaptor-leo';
 import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield';
-import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard';
-import { ALEO_CONFIG, getWalletAdapterNetwork } from '@/lib/aleo';
-
-// Import wallet adapter styles
+import { DecryptPermission } from '@provablehq/aleo-wallet-adaptor-core';
+import { Network } from '@provablehq/aleo-types';
 import '@provablehq/aleo-wallet-adaptor-react-ui/dist/styles.css';
+import { ALEO_CONFIG } from '@/lib/chain';
 
-interface WalletProviderWrapperProps {
-  children: ReactNode;
-}
+const PROGRAM_PERMISSIONS = [
+  ALEO_CONFIG.programId,
+  ALEO_CONFIG.creditsProgramId,
+  ALEO_CONFIG.usdcxProgramId,
+];
 
-export const WalletProviderWrapper: FC<WalletProviderWrapperProps> = ({ children }) => {
-  // Initialize wallet adapters - Leo and Shield
-  // Configure with program permissions for record access
-  // IMPORTANT: Include credits.aleo for private payment support!
-  const wallets = useMemo(() => {
-    return [
-      new LeoWalletAdapter({
-        appName: 'VeilReceipt',
-        programIdPermissions: {
-          testnet: [ALEO_CONFIG.programId, 'credits.aleo'],
-          mainnet: [ALEO_CONFIG.programId, 'credits.aleo'],
-        },
-      }),
-      new ShieldWalletAdapter({
-        appName: 'VeilReceipt',
-      }),
-    ];
-  }, []);
+const NETWORK: Network = ALEO_CONFIG.network === 'mainnet' ? Network.MAINNET : Network.TESTNET;
 
-  // Get the network to use (testnet for now)
-  const network = getWalletAdapterNetwork();
+export const WalletProviderWrapper: FC<{ children: ReactNode }> = ({ children }) => {
+  const wallets = useMemo(() => [
+    new LeoWalletAdapter({ appName: 'VeilReceipt' }),
+    new ShieldWalletAdapter({ appName: 'VeilReceipt' }),
+  ], []);
 
   return (
-    <AleoWalletProvider 
-      wallets={wallets} 
-      network={network as any}
-      autoConnect={true}
-      programs={[ALEO_CONFIG.programId, 'credits.aleo']}
-      decryptPermission={WalletDecryptPermission.OnChainHistory}
+    <AleoWalletProvider
+      wallets={wallets}
+      decryptPermission={DecryptPermission.AutoDecrypt}
+      network={NETWORK}
+      programs={PROGRAM_PERMISSIONS}
+      autoConnect
     >
       <WalletModalProvider>
         {children}
@@ -53,5 +39,4 @@ export const WalletProviderWrapper: FC<WalletProviderWrapperProps> = ({ children
   );
 };
 
-// Re-export useWallet for convenience
-export { useWallet };
+export default WalletProviderWrapper;

@@ -1,982 +1,1335 @@
-// Custom hook for wallet interactions
-// Wraps the Aleo wallet adapter with VeilReceipt-specific logic
+// useVeilWallet — Core wallet hook for VeilReceipt v3
+// Full Shield Wallet integration: decrypt records via wallet.decrypt(),
+// proper record plaintext extraction, private-first payment architecture.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useWallet } from '@/components/providers/WalletProvider';
-import { useUserStore } from '@/stores/userStore';
-import { api } from '@/lib/api';
-import { ALEO_CONFIG, DEFAULT_FEE, PaymentPrivacy } from '@/lib/aleo';
-import { AleoAddress, ReceiptRecord } from '@/lib/types';
+import { useCallback, useState, useEffect, useRef } from 'react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import type { TransactionOptions } from '@provablehq/aleo-types';
 import toast from 'react-hot-toast';
+import { ALEO_CONFIG, TRANSITIONS, DEFAULT_FEE, type PaymentPrivacy, type TokenType } from '@/lib/chain';
+import { buildUsdcxMerkleProofs } from '@/lib/stablecoin';
+import { computeCartCommitment, getCurrentTimestamp, sleep, toAleoU64, toAleoField } from '@/lib/utils';
+import { useUserStore } from '@/stores/userStore';
+import { usePendingTxStore } from '@/stores/txStore';
+import { api } from '@/lib/api';
+import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, LoyaltyStampRecord } from '@/lib/types';
 
-// Extend wallet type for Aleo-specific methods (provablehq adapter)
-interface AleoWalletExtended {
-  publicKey?: string | null;
-  address?: string | null;
-  connected?: boolean;
-  connecting?: boolean;
-  signMessage?: (message: Uint8Array | string) => Promise<Uint8Array | undefined>;
-  executeTransaction?: (options: any) => Promise<{ transactionId: string } | undefined>;
-  requestRecords?: (program: string, includePlaintext?: boolean) => Promise<unknown[]>;
-  disconnect?: () => Promise<void>;
-  connect?: (network: string) => Promise<void>;
-  adapter?: any;
-  network?: string | null;
+// Program IDs
+const PROGRAM_ID = ALEO_CONFIG.programId;
+const CREDITS_PROGRAM = ALEO_CONFIG.creditsProgramId;
+const USDCX_PROGRAM = ALEO_CONFIG.usdcxProgramId;
+const RPC = ALEO_CONFIG.rpcUrl;
+
+/**
+ * Parse Leo record plaintext string into key-value pairs.
+ * Handles format: { owner: aleo1xxx.private, microcredits: 123456u64.private, _nonce: ... }
+ */
+function parseRecordPlaintext(plaintext: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const inner = plaintext.replace(/^\s*\{/, '').replace(/\}\s*$/, '');
+  const lines = inner.split(',');
+  for (const line of lines) {
+    const match = line.trim().match(/^(\w+)\s*:\s*(.+)$/);
+    if (match) {
+      result[match[1].trim()] = match[2].trim().replace(/\.private$|\.public$/, '');
+    }
+  }
+  return result;
 }
 
-// Debug logging - enable for debugging
-const DEBUG = true;
-const log = (...args: any[]) => DEBUG && console.log('[VeilWallet]', ...args);
+/**
+ * Strip Aleo type suffixes (u64, u128, field, etc.) from values
+ */
+function stripSuffix(val: string): string {
+  return val.replace(/(u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|field|scalar|group|boolean)$/, '');
+}
+
+/**
+ * Parse microcredits from various record formats.
+ * Handles: plaintext string, structured data object, direct properties.
+ */
+function parseMicrocredits(record: unknown): number {
+  if (typeof record === 'string') {
+    const match = record.match(/microcredits\s*:\s*([\d_]+)u64/);
+    return match ? parseInt(match[1].replace(/_/g, ''), 10) : 0;
+  }
+  if (!record || typeof record !== 'object') return 0;
+  const rec = record as Record<string, unknown>;
+  const data = rec.data as Record<string, unknown> | undefined;
+  if (data?.microcredits) {
+    return parseInt(String(data.microcredits).replace(/u64|\.private/g, ''), 10) || 0;
+  }
+  if (rec.microcredits !== undefined) {
+    if (typeof rec.microcredits === 'number') return rec.microcredits;
+    return parseInt(String(rec.microcredits).replace(/u64|\.private/g, ''), 10) || 0;
+  }
+  const pt = (rec.plaintext || rec._plaintext) as string | undefined;
+  if (pt && typeof pt === 'string') {
+    const match = pt.match(/microcredits\s*:\s*([\d_]+)u64/);
+    if (match) return parseInt(match[1].replace(/_/g, ''), 10);
+  }
+  return 0;
+}
+
+/**
+ * Parse USDCx token amount from various record formats
+ */
+function parseTokenAmount(record: unknown): bigint {
+  if (typeof record === 'string') {
+    const match = record.match(/amount\s*:\s*([\d_]+)u128/);
+    return match ? BigInt(match[1].replace(/_/g, '')) : BigInt(0);
+  }
+  if (!record || typeof record !== 'object') return BigInt(0);
+  const rec = record as Record<string, unknown>;
+  const data = rec.data as Record<string, string> | undefined;
+  if (data?.amount) {
+    return BigInt(String(data.amount).replace(/u128|\.private/g, ''));
+  }
+  if (rec.amount !== undefined) {
+    return BigInt(String(rec.amount).replace(/u128|\.private/g, ''));
+  }
+  const pt = (rec.plaintext || rec._plaintext) as string | undefined;
+  if (pt && typeof pt === 'string') {
+    const match = pt.match(/amount\s*:\s*([\d_]+)u128/);
+    if (match) return BigInt(match[1].replace(/_/g, ''));
+  }
+  return BigInt(0);
+}
 
 export function useVeilWallet() {
-  const walletBase = useWallet();
-  // Cast to extended type to access Aleo-specific methods
-  const wallet = walletBase as unknown as AleoWalletExtended;
-  const { setAccount, setAuth, clearUser, address: storeAddress, role, token } = useUserStore();
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
-  const [isLoadingReceipts, setIsLoadingReceipts] = useState(false);
+  const {
+    address,
+    wallet,
+    connected,
+    connecting,
+    disconnect: walletDisconnect,
+    requestRecords,
+    executeTransaction: walletExecute,
+    transactionStatus,
+    signMessage,
+    decrypt,
+  } = useWallet();
 
-  // Use refs to prevent multiple calls
-  const fetchingRef = useRef(false);
-  const authenticatingRef = useRef(false);
+  const userStore = useUserStore();
+  const pendingTxStore = usePendingTxStore();
+  const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState<'buyer' | 'merchant'>('buyer');
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Restore API token from persisted state on mount
+  // Sync address to user store
   useEffect(() => {
-    if (token) {
-      log('Restoring persisted API token');
-      api.setToken(token);
+    if (address) {
+      userStore.setAddress(address);
     }
-  }, []); // Run once on mount
+  }, [address]);
 
-  // Get the actual public key/address from wallet
-  // Note: @provablehq adapter uses 'address' not 'publicKey'
-  const walletAddress = useMemo(() => {
-    const walletAny = wallet as any;
-    
-    // The @provablehq adapter uses 'address' property
-    let addr = walletAny.address;
-    
-    // Fallback to publicKey if available
-    if (!addr) {
-      addr = wallet.publicKey || walletAny.adapter?.publicKey;
-    }
-    
-    // Try from connected wallet adapter
-    if (!addr && walletAny.wallet?.adapter?.publicKey) {
-      addr = walletAny.wallet.adapter.publicKey;
-    }
-    
-    log('Address resolution:', { 
-      address: walletAny.address,
-      publicKey: wallet.publicKey, 
-      resolved: addr 
-    });
-    
-    return addr as string | null;
-  }, [wallet, (wallet as any).address, wallet.publicKey]);
-
-  // Get connection status
-  const isConnected = useMemo(() => {
-    const walletAny = wallet as any;
-    const connected = wallet.connected || walletAny.wallet?.adapter?.connected || !!walletAddress;
-    log('Connection check:', { 
-      walletConnected: wallet.connected, 
-      hasAddress: !!walletAddress, 
-      result: connected 
-    });
-    return connected;
-  }, [wallet.connected, wallet, walletAddress]);
-
-  // Track if wallet is still initializing
-  const [walletInitialized, setWalletInitialized] = useState(false);
-
-  // Mark wallet as initialized after a delay (allow auto-connect to complete)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setWalletInitialized(true);
-    }, 2000); // Give wallet 2 seconds to auto-connect
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Sync wallet state to user store
-  useEffect(() => {
-    const addr = walletAddress as AleoAddress | null;
-    
-    log('Syncing wallet state:', { walletAddress: addr, isConnected });
-    setAccount(addr, isConnected);
-
-    // Only clear auth when wallet explicitly disconnects (after initialization period)
-    // Don't clear during initial page load when wallet is still connecting
-    if (walletInitialized && !isConnected && token) {
-      log('Wallet disconnected, clearing auth');
-      clearUser();
-      api.setToken(null);
-    }
-  }, [walletAddress, isConnected, setAccount, clearUser, token, walletInitialized]);
-
-  /**
-   * Authenticate with backend using wallet signature
-   */
-  const authenticate = useCallback(async (authRole: 'merchant' | 'buyer') => {
-    // Prevent multiple simultaneous authentication attempts using ref
-    if (authenticatingRef.current) {
-      log('Already authenticating, skipping');
-      return false;
-    }
-
-    log('Authenticate called with role:', authRole);
-
-    // Check wallet connection - use our computed walletAddress
-    if (!walletAddress) {
-      toast.error('Please connect your wallet first');
-      return false;
-    }
-
-    authenticatingRef.current = true;
-    setIsAuthenticating(true);
-
-    // Check if signMessage is available
-    if (!wallet.signMessage) {
-      // Try to authenticate without signature for demo purposes
-      log('signMessage not available, using mock authentication');
-      
-      try {
-        // For demo: create a mock auth token
-        const mockToken = `demo_${authRole}_${Date.now()}`;
-        setAuth(mockToken, authRole);
-        toast.success(`Authenticated as ${authRole} (demo mode)`);
-        return true;
-      } catch (error: any) {
-        console.error('Demo auth failed:', error);
-        toast.error('Authentication failed');
-        return false;
-      } finally {
-        authenticatingRef.current = false;
-        setIsAuthenticating(false);
-      }
-    }
-
-    try {
-      // Step 1: Get nonce from backend
-      const { nonce, message } = await api.getNonce(walletAddress);
-
-      // Step 2: Sign the message with wallet
-      const encoder = new TextEncoder();
-      const messageBytes = encoder.encode(message);
-      const signatureBytes = await wallet.signMessage(messageBytes);
-      const decoder = new TextDecoder();
-      const signature = decoder.decode(signatureBytes);
-
-      // Step 3: Verify signature and get JWT
-      const result = await api.verifySignature(
-        walletAddress,
-        nonce,
-        signature,
-        authRole
-      );
-
-      setAuth(result.token, authRole);
-      toast.success(`Authenticated as ${authRole}`);
-      return true;
-    } catch (error: any) {
-      console.error('Authentication failed:', error);
-      toast.error(error.message || 'Authentication failed');
-      return false;
-    } finally {
-      authenticatingRef.current = false;
-      setIsAuthenticating(false);
-    }
-  }, [walletAddress, wallet.signMessage, setAuth]);
-
-  /**
-   * Disconnect wallet and clear state
-   */
+  // Disconnect handler
   const disconnect = useCallback(async () => {
-    // Reset refs on disconnect
-    fetchingRef.current = false;
-    authenticatingRef.current = false;
-    
     try {
-      if (wallet.disconnect) {
-        await wallet.disconnect();
-      }
-      clearUser();
-      api.setToken(null);
-      toast.success('Disconnected');
-    } catch (error) {
-      console.error('Disconnect error:', error);
+      await walletDisconnect();
+      userStore.logout();
+    } catch (e) {
+      console.error('Disconnect error:', e);
     }
-  }, [wallet, clearUser]);
+  }, [walletDisconnect]);
 
-  /**
-   * Fetch receipts from wallet (actual on-chain records)
-   * These are needed for contract operations like returns, loyalty claims, and support proofs
-   */
-  const fetchReceipts = useCallback(async (force = false) => {
-    // Prevent multiple simultaneous fetches using ref
-    if (fetchingRef.current && !force) {
-      log('Already fetching receipts, skipping');
-      return receipts;
-    }
-
-    if (!walletAddress) {
-      log('No wallet address, cannot fetch receipts');
-      return [];
-    }
-
-    fetchingRef.current = true;
-    setIsLoadingReceipts(true);
-
+  // ============================
+  // AUTH — Nonce-based wallet authentication
+  // ============================
+  const authenticate = useCallback(async (asRole: 'buyer' | 'merchant' = 'buyer') => {
+    if (!address || !wallet) throw new Error('Wallet not connected');
     try {
-      const walletAny = wallet as any;
-      
-      // Strategy 1: Try wallet requestRecords FIRST (needed for contract operations)
-      // This gives us actual on-chain records that can be used for returns, loyalty, etc.
-      if (wallet.requestRecords || walletAny.requestRecords) {
-        log('Fetching records from wallet for program:', ALEO_CONFIG.programId);
-        
+      const { nonce, message } = await api.getNonce(address);
+      let signature: string;
+      if (signMessage) {
         try {
-          const requestRecordsFn = wallet.requestRecords || walletAny.requestRecords;
-          // Request with plaintext = true to get full record data
-          const response = await requestRecordsFn(ALEO_CONFIG.programId, true);
-          
-          log('Wallet records response:', response);
-          
-          // Handle different response formats
-          let records: any[] = [];
-          if (Array.isArray(response)) {
-            records = response;
-          } else if (response?.records) {
-            records = response.records;
-          } else if (response?.data) {
-            records = response.data;
-          }
-          
-          log('Raw records from wallet:', records);
-          
-          // Log the structure of the first record to understand the format
-          if (records.length > 0) {
-            log('First record FULL STRUCTURE:', JSON.stringify(records[0], null, 2));
-            log('First record ALL KEYS:', Object.keys(records[0]));
-            log('First record plaintext property:', records[0].plaintext);
-            log('First record nonce property:', records[0].nonce);
-            log('First record _nonce property:', records[0]._nonce);
-          }
-          
-          if (records.length > 0) {
-            // Filter for Receipt records (non-spent)
-            const receiptRecords = records
-              .filter((r: any) => {
-                const isSpent = r.spent === true;
-                // Check if this looks like a Receipt record
-                const data = r.data || r.plaintext || r;
-                const hasRequiredFields = data?.merchant || data?.total;
-                log('Record filter check:', { isSpent, hasRequiredFields, data });
-                return !isSpent && hasRequiredFields;
-              })
-              .map((r: any) => {
-                const data = r.data || r.plaintext || r;
-                log('Processing record:', r);
-                log('Record data field:', r.data);
-                log('Record full structure:', JSON.stringify(r, null, 2));
-                
-                // Store the original record/plaintext for contract calls
-                // The wallet needs this exact format when executing transactions
-                return {
-                  owner: data.owner?.replace(/\.private$/, '') || walletAddress,
-                  merchant: data.merchant?.replace(/\.private$/, '').replace(/\.public$/, ''),
-                  total: BigInt(String(data.total || '0').replace(/u64(\.private|\.public)?$/, '')),
-                  cart_commitment: data.cart_commitment?.replace(/\.private$/, '') || '0field',
-                  timestamp: BigInt(String(data.timestamp || '0').replace(/u64(\.private|\.public)?$/, '')),
-                  nonce_seed: data.nonce_seed?.replace(/\.private$/, ''),
-                  // Use record id as unique identifier for UI
-                  _nonce: r.id || r._nonce || r.nonce || `${Date.now()}_${Math.random()}`,
-                  // Store the RAW record - this is what we pass to contract calls
-                  _raw: r,
-                  // Store plaintext string if available (for contract input)
-                  _plaintext: r.plaintext || null,
-                  // Store ciphertext if available
-                  _ciphertext: r.ciphertext || null,
-                  // Mark as wallet record (can be used for contract calls)
-                  _fromWallet: true,
-                };
-              });
-
-            if (receiptRecords.length > 0) {
-              log('Parsed wallet receipts:', receiptRecords);
-              setReceipts(receiptRecords as any);
-              toast.success(`Found ${receiptRecords.length} receipt(s) from wallet`);
-              return receiptRecords;
-            }
-          }
-        } catch (walletError: any) {
-          // Log the specific error
-          if (walletError.message?.includes('NOT_GRANTED')) {
-            log('Wallet NOT_GRANTED - need to reconnect wallet with record permissions');
-            toast.error('Please disconnect and reconnect wallet to grant record access');
-          } else {
-            console.error('Wallet requestRecords failed:', walletError);
-          }
+          const sig = await signMessage(message);
+          signature = sig ? btoa(String.fromCharCode(...new Uint8Array(sig))) : `sig_${address}_${nonce}`;
+        } catch {
+          signature = `sig_${address}_${nonce}`;
         }
+      } else {
+        signature = `sig_${address}_${nonce}`;
       }
-
-      // Strategy 2: Fetch from backend (for display only - cannot use for contract calls)
-      log('Fetching receipts from backend for display:', walletAddress);
-      
-      try {
-        const backendReceipts = await api.getReceiptsByBuyer(walletAddress);
-        log('Backend receipts response:', backendReceipts);
-        
-        if (backendReceipts.receipts && backendReceipts.receipts.length > 0) {
-          // Convert backend format to our ReceiptRecord format
-          // Mark as NOT from wallet (cannot use for contract calls)
-          const receiptRecords = backendReceipts.receipts.map((r: any) => ({
-            owner: r.buyerAddress || walletAddress,
-            merchant: r.merchantAddress,
-            total: BigInt(r.total || 0),
-            cart_commitment: r.cartCommitment || `${r.total}field`,
-            timestamp: BigInt(r.timestamp || Date.now()),
-            nonce_seed: r.txId,
-            _nonce: r.txId,
-            _raw: r,
-            // Extra fields from backend
-            txId: r.txId,
-            onChainTxId: r.onChainTxId,
-            blockHeight: r.blockHeight,
-            items: r.items,
-            status: r.status,
-            // Mark as NOT from wallet - cannot be used for contract calls
-            _fromWallet: false,
-          }));
-
-          log('Parsed backend receipts (display only):', receiptRecords);
-          setReceipts(receiptRecords as any);
-          toast.success(`Found ${receiptRecords.length} receipt(s)`);
-          return receiptRecords;
-        }
-      } catch (backendError) {
-        log('Backend fetch failed:', backendError);
+      const result = await api.verifySignature(address, nonce, signature, asRole);
+      userStore.setToken(result.token);
+      api.setToken(result.token);
+      setRole(asRole);
+      if (asRole === 'merchant') {
+        userStore.setMerchant(address);
       }
-
-      // No receipts found from either source
-      log('No receipts found');
-      setReceipts([]);
-      return [];
-    } catch (error) {
-      console.error('Error fetching receipts:', error);
-      toast.error('Failed to fetch receipts');
-      return [];
-    } finally {
-      fetchingRef.current = false;
-      setIsLoadingReceipts(false);
+      return result;
+    } catch (e: any) {
+      console.error('Auth error:', e);
+      throw e;
     }
-  }, [wallet, walletAddress, receipts]);
+  }, [address, wallet, signMessage]);
+
+  // ============================
+  // RECORD DECRYPTION — Shield Wallet Native
+  // ============================
 
   /**
-   * Fetch private credits records from wallet
-   * These are needed for private payments
+   * Fetch records from wallet and return raw record objects.
+   * Shield wallet returns metadata objects with recordCiphertext field.
+   * We pass includePlaintext=true to request decrypted data when available.
    */
-  const fetchPrivateCredits = useCallback(async (): Promise<any[]> => {
-    const walletAny = wallet as any;
-    
-    if (!wallet.requestRecords && !walletAny.requestRecords) {
-      log('Wallet does not support requestRecords');
-      return [];
-    }
+  const fetchRawRecords = useCallback(async (programId: string): Promise<any[]> => {
+    if (!connected || !address) return [];
 
     try {
-      const requestRecordsFn = wallet.requestRecords || walletAny.requestRecords;
-      log('Requesting credits.aleo records from wallet...');
-      const response = await requestRecordsFn('credits.aleo', true);
-      
-      log('Raw credits.aleo response:', response);
-      
-      let records: any[] = [];
-      if (Array.isArray(response)) {
-        records = response;
-      } else if (response?.records) {
-        records = response.records;
-      } else if (response?.data) {
-        records = response.data;
+      if (requestRecords) {
+        const records = await requestRecords(programId, true);
+        console.log(`[VeilWallet] requestRecords(${programId}):`, records?.length ?? 0, 'records');
+        if (Array.isArray(records) && records.length > 0) {
+          return records;
+        }
       }
-
-      log('Total credits records found:', records.length);
-      
-      // Filter for non-spent credits records
-      const creditRecords = records.filter((r: any) => {
-        const isSpent = r.spent === true;
-        log(`Credit record spent=${isSpent}:`, r);
-        return !isSpent;
-      });
-      
-      log('Unspent private credits records:', creditRecords.length);
-      
-      if (creditRecords.length > 0) {
-        log('First credit record FULL:', JSON.stringify(creditRecords[0], null, 2));
-        log('First credit record keys:', Object.keys(creditRecords[0]));
-        
-        // Log different possible balance locations
-        const r = creditRecords[0];
-        log('Checking balance locations:');
-        log('  r.data?.microcredits:', r.data?.microcredits);
-        log('  r.microcredits:', r.microcredits);
-        log('  r.data?.amount:', r.data?.amount);
-        log('  r.amount:', r.amount);
-        log('  r.plaintext:', r.plaintext);
-      }
-      
-      return creditRecords;
-    } catch (error: any) {
-      log('Failed to fetch private credits:', error);
-      // Check if it's a permission error
-      if (error.message?.includes('NOT_GRANTED')) {
-        toast.error('Please reconnect wallet and grant access to credits.aleo records');
-      }
-      return [];
+    } catch (e) {
+      console.warn(`[VeilWallet] requestRecords(${programId}) failed:`, e);
     }
-  }, [wallet]);
+
+    return [];
+  }, [connected, address, requestRecords]);
 
   /**
-   * Execute a purchase with configurable privacy level
-   * 
-   * Privacy Levels:
-   * - 'private': Maximum privacy - uses private credits record directly
-   * - 'public': Real payment but visible on-chain  
-   * - 'demo': No actual payment (testing only)
+   * Decrypt a single record's ciphertext via wallet.decrypt().
+   * Shield wallet returns records with recordCiphertext field (starts with 'record1').
+   * wallet.decrypt() converts this to Leo plaintext like:
+   * "{ owner: aleo1xxx.private, microcredits: 123456u64.private, _nonce: ... }"
    */
-  const executePurchase = useCallback(async (
+  const decryptRecord = useCallback(async (record: any): Promise<string | null> => {
+    if (!record || typeof record !== 'object') return null;
+
+    // Priority 1: plaintext already provided by wallet
+    if (typeof record.plaintext === 'string' && record.plaintext.includes('{')) {
+      return record.plaintext;
+    }
+
+    // Priority 2: Decrypt recordCiphertext via wallet.decrypt()
+    if (typeof record.recordCiphertext === 'string' && record.recordCiphertext.startsWith('record1')) {
+      if (decrypt) {
+        try {
+          const plaintext = await decrypt(record.recordCiphertext);
+          if (plaintext && typeof plaintext === 'string') {
+            console.log('[VeilWallet] Decrypted record:', plaintext.slice(0, 200));
+            return plaintext;
+          }
+        } catch (err) {
+          console.warn('[VeilWallet] wallet.decrypt() failed:', err);
+        }
+      }
+    }
+
+    // Priority 3: ciphertext field (some wallets use this name)
+    if (typeof record.ciphertext === 'string' && record.ciphertext.startsWith('record1')) {
+      if (decrypt) {
+        try {
+          const plaintext = await decrypt(record.ciphertext);
+          if (plaintext && typeof plaintext === 'string') return plaintext;
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    return null;
+  }, [decrypt]);
+
+  /**
+   * Find a credits.aleo record with sufficient microcredits balance.
+   * Decrypts each record via wallet.decrypt() and parses the plaintext.
+   * Returns the plaintext string ready to pass as transaction input.
+   */
+  const findCreditsRecord = useCallback(async (minAmount: number): Promise<string | null> => {
+    const records = await fetchRawRecords(CREDITS_PROGRAM);
+    console.log(`[findCreditsRecord] Found ${records.length} raw records, need ${minAmount} microcredits`);
+
+    let fallbackRecord: string | null = null;
+    let anyKnownBalance = false;
+
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+
+      let mc = parseMicrocredits(record);
+      let plaintext: string | null = null;
+
+      // Try plaintext if already available
+      if (typeof record.plaintext === 'string' && record.plaintext.includes('{')) {
+        plaintext = record.plaintext;
+        if (mc === 0) mc = parseMicrocredits(plaintext);
+      }
+
+      // Decrypt ciphertext via wallet.decrypt()
+      if (!plaintext) {
+        plaintext = await decryptRecord(record);
+        if (plaintext && mc === 0) {
+          mc = parseMicrocredits(plaintext);
+          console.log(`[findCreditsRecord] Decrypted → microcredits: ${mc}`);
+        }
+      }
+
+      if (!plaintext) continue;
+
+      if (mc > 0) anyKnownBalance = true;
+      if (!fallbackRecord) fallbackRecord = plaintext;
+
+      if (mc >= minAmount) {
+        console.log(`[findCreditsRecord] ✓ Found record with ${mc} microcredits (need ${minAmount})`);
+        return plaintext;
+      }
+    }
+
+    // If no balance could be parsed but we have records, use first as fallback
+    if (fallbackRecord && !anyKnownBalance) {
+      console.warn('[findCreditsRecord] No balance could be parsed — using fallback record');
+      return fallbackRecord;
+    }
+
+    if (anyKnownBalance) {
+      console.warn('[findCreditsRecord] All records have insufficient balance');
+    }
+    return null;
+  }, [fetchRawRecords, decryptRecord]);
+
+  /**
+   * Find a USDCx Token record with sufficient balance.
+   * Token records have { owner: address, amount: u128 }.
+   * Returns plaintext string.
+   */
+  const findTokenRecord = useCallback(async (minAmount: bigint): Promise<string | null> => {
+    const records = await fetchRawRecords(USDCX_PROGRAM);
+    console.log(`[findTokenRecord] Found ${records.length} USDCx records, need ${minAmount}`);
+
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+
+      let plaintext: string | null = null;
+      let amount = BigInt(0);
+
+      if (typeof record.plaintext === 'string' && record.plaintext.includes('{')) {
+        plaintext = record.plaintext;
+      }
+
+      if (!plaintext) {
+        plaintext = await decryptRecord(record);
+      }
+
+      if (!plaintext) continue;
+
+      const amountMatch = plaintext.match(/amount\s*:\s*([\d_]+)u128/);
+      if (amountMatch) {
+        amount = BigInt(amountMatch[1].replace(/_/g, ''));
+      }
+
+      if (amount === BigInt(0)) {
+        amount = parseTokenAmount(record);
+      }
+
+      if (amount >= minAmount) {
+        console.log(`[findTokenRecord] ✓ Found USDCx record with ${amount} (need ${minAmount})`);
+        return plaintext;
+      }
+    }
+
+    console.warn('[findTokenRecord] No USDCx record with sufficient balance');
+    return null;
+  }, [fetchRawRecords, decryptRecord]);
+
+  /**
+   * Find a record from the main program by metadata criteria.
+   * Used for BuyerReceipt, EscrowReceipt, LoyaltyStamp etc.
+   */
+  const findRecord = useCallback(async (
+    criteria: { functionName?: string; programName?: string },
+    programId?: string,
+    contentFilter?: (plaintext: string) => boolean,
+  ): Promise<string | null> => {
+    const pid = programId || PROGRAM_ID;
+    const records = await fetchRawRecords(pid);
+    console.log(`[findRecord] Found ${records.length} records for ${pid}`);
+
+    const reversed = [...records].reverse();
+
+    for (const record of reversed) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+      if (criteria.functionName && record.functionName !== criteria.functionName) continue;
+      if (criteria.programName && record.programName !== criteria.programName) continue;
+
+      let plaintext: string | null = null;
+
+      if (typeof record.plaintext === 'string' && record.plaintext.includes('{')) {
+        plaintext = record.plaintext;
+      }
+
+      if (!plaintext) {
+        plaintext = await decryptRecord(record);
+      }
+
+      if (!plaintext) continue;
+      if (contentFilter && !contentFilter(plaintext)) continue;
+
+      console.log('[findRecord] ✓ Matched record:', plaintext.slice(0, 300));
+      return plaintext;
+    }
+
+    console.warn('[findRecord] No matching record found');
+    return null;
+  }, [fetchRawRecords, decryptRecord]);
+
+  /**
+   * Find all matching records (for listing buyer receipts, etc.)
+   */
+  const findAllRecords = useCallback(async (
+    criteria: { functionName?: string; programName?: string },
+    programId?: string,
+    contentFilter?: (plaintext: string) => boolean,
+  ): Promise<string[]> => {
+    const pid = programId || PROGRAM_ID;
+    const records = await fetchRawRecords(pid);
+    const reversed = [...records].reverse();
+    const results: string[] = [];
+
+    for (const record of reversed) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+      if (criteria.functionName && record.functionName !== criteria.functionName) continue;
+      if (criteria.programName && record.programName !== criteria.programName) continue;
+
+      let plaintext: string | null = null;
+      if (typeof record.plaintext === 'string' && record.plaintext.includes('{')) {
+        plaintext = record.plaintext;
+      }
+      if (!plaintext) {
+        plaintext = await decryptRecord(record);
+      }
+      if (!plaintext) continue;
+      if (contentFilter && !contentFilter(plaintext)) continue;
+      results.push(plaintext);
+    }
+    return results;
+  }, [fetchRawRecords, decryptRecord]);
+
+  /**
+   * Find a record with retry — waits for Shield wallet to sync new records after TX.
+   */
+  const findRecordWithRetry = useCallback(async (
+    criteria: { functionName?: string; programName?: string },
+    programId?: string,
+    contentFilter?: (plaintext: string) => boolean,
+    maxRetries = 5,
+    delayMs = 4000,
+  ): Promise<string | null> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt > 0) {
+        console.log(`[findRecordWithRetry] Attempt ${attempt + 1}/${maxRetries + 1}, waiting ${delayMs}ms...`);
+        await sleep(delayMs);
+      }
+      const result = await findRecord(criteria, programId, contentFilter);
+      if (result) return result;
+    }
+    return null;
+  }, [findRecord]);
+
+  // ============================
+  // TYPED RECORD ACCESSORS
+  // ============================
+
+  const getBuyerReceipts = useCallback(async (): Promise<BuyerReceiptRecord[]> => {
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('token_type') && pt.includes('cart_commitment') && pt.includes('merchant'),
+    );
+
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address!,
+        merchant: parsed.merchant || '',
+        total: parseInt(stripSuffix(parsed.total || '0')),
+        cart_commitment: parsed.cart_commitment || '0field',
+        timestamp: parseInt(stripSuffix(parsed.timestamp || '0')),
+        purchase_commitment: parsed.purchase_commitment || '0field',
+        token_type: parseInt(stripSuffix(parsed.token_type || '0')),
+        nonce_seed: parsed.nonce_seed || '0field',
+        _plaintext: pt,
+        _fromWallet: true,
+      } as BuyerReceiptRecord;
+    });
+  }, [findAllRecords, address]);
+
+  const getEscrowReceipts = useCallback(async (): Promise<EscrowReceiptRecord[]> => {
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('purchase_commitment') && pt.includes('merchant') && !pt.includes('token_type'),
+    );
+
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address!,
+        merchant: parsed.merchant || '',
+        total: parseInt(stripSuffix(parsed.total || '0')),
+        cart_commitment: parsed.cart_commitment || '0field',
+        purchase_commitment: parsed.purchase_commitment || '0field',
+        nonce_seed: parsed.nonce_seed || '0field',
+        _plaintext: pt,
+        _fromWallet: true,
+      } as EscrowReceiptRecord;
+    });
+  }, [findAllRecords, address]);
+
+  const getLoyaltyStamps = useCallback(async (): Promise<LoyaltyStampRecord[]> => {
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('score') && pt.includes('total_spent') && pt.includes('stamp_commitment'),
+    );
+
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address!,
+        score: parseInt(stripSuffix(parsed.score || '0')),
+        total_spent: parseInt(stripSuffix(parsed.total_spent || '0')),
+        stamp_commitment: parsed.stamp_commitment || '0field',
+        nonce_seed: parsed.nonce_seed || '0field',
+        _plaintext: pt,
+        _fromWallet: true,
+      } as LoyaltyStampRecord;
+    });
+  }, [findAllRecords, address]);
+
+  /**
+   * Get MerchantReceipt records — these go to the merchant's wallet.
+   * Simpler than BuyerReceipt: only has purchase_commitment, total, token_type.
+   */
+  const getMerchantReceipts = useCallback(async (): Promise<MerchantReceiptRecord[]> => {
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('purchase_commitment') && pt.includes('token_type') && !pt.includes('merchant') && !pt.includes('cart_commitment'),
+    );
+
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address!,
+        purchase_commitment: parsed.purchase_commitment || '0field',
+        total: parseInt(stripSuffix(parsed.total || '0')),
+        token_type: parseInt(stripSuffix(parsed.token_type || '0')),
+        nonce_seed: parsed.nonce_seed || '0field',
+        _plaintext: pt,
+        _fromWallet: true,
+      } as MerchantReceiptRecord;
+    });
+  }, [findAllRecords, address]);
+
+  /**
+   * Get credit records with parsed balances.
+   * Uses wallet.decrypt() to decode recordCiphertext.
+   */
+  const getCreditRecords = useCallback(async () => {
+    const records = await fetchRawRecords(CREDITS_PROGRAM);
+    console.log('[VeilWallet] Raw credit records:', records.length);
+
+    const results: any[] = [];
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+
+      const plaintext = await decryptRecord(record);
+      let mc = BigInt(0);
+
+      if (plaintext) {
+        const match = plaintext.match(/microcredits\s*:\s*([\d_]+)u64/);
+        if (match) mc = BigInt(match[1].replace(/_/g, ''));
+      }
+
+      if (mc === BigInt(0)) {
+        mc = BigInt(parseMicrocredits(record));
+      }
+
+      console.log(`[VeilWallet] Credit record: ${mc} microcredits`);
+      results.push({
+        ...record,
+        microcredits: mc,
+        _plaintext: plaintext || '',
+        owner: record.owner || address,
+      });
+    }
+    return results;
+  }, [fetchRawRecords, decryptRecord, address]);
+
+  /**
+   * Get USDCx token records with parsed amounts.
+   */
+  const getUsdcxTokens = useCallback(async () => {
+    const records = await fetchRawRecords(USDCX_PROGRAM);
+    console.log('[VeilWallet] Raw USDCx records:', records.length);
+
+    const results: any[] = [];
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+
+      const plaintext = await decryptRecord(record);
+      let amt = BigInt(0);
+
+      if (plaintext) {
+        const match = plaintext.match(/amount\s*:\s*([\d_]+)u128/);
+        if (match) amt = BigInt(match[1].replace(/_/g, ''));
+      }
+
+      if (amt === BigInt(0)) {
+        amt = parseTokenAmount(record);
+      }
+
+      console.log(`[VeilWallet] USDCx record: ${amt} micro`);
+      results.push({
+        ...record,
+        amount: amt,
+        _plaintext: plaintext || '',
+        owner: record.owner || address,
+      });
+    }
+    return results;
+  }, [fetchRawRecords, decryptRecord, address]);
+
+  // ============================
+  // TRANSACTION EXECUTION
+  // ============================
+
+  /**
+   * Execute an Aleo transition and return the transaction ID.
+   * Always uses privateFee: false for Shield wallet compatibility.
+   */
+  const executeTransaction = useCallback(async (
+    programId: string,
+    functionName: string,
+    inputs: string[],
+    fee: number = DEFAULT_FEE,
+  ): Promise<string> => {
+    if (!walletExecute) throw new Error('Wallet does not support transactions');
+
+    console.log(`[VeilWallet] Executing ${programId}/${functionName} with ${inputs.length} inputs, fee: ${fee}`);
+
+    const options: TransactionOptions = {
+      program: programId,
+      function: functionName,
+      inputs,
+      fee,
+      privateFee: false,
+    };
+
+    const result = await walletExecute(options);
+    if (!result?.transactionId) throw new Error('No transaction ID returned');
+
+    console.log(`[VeilWallet] Transaction submitted: ${result.transactionId}`);
+    return result.transactionId;
+  }, [walletExecute]);
+
+  // ============================
+  // TRANSACTION POLLING
+  // ============================
+
+  /**
+   * Poll transaction status until terminal state.
+   * Handles Shield's temporary IDs by checking for real on-chain txId.
+   */
+  const pollTransaction = useCallback(async (txId: string, maxAttempts: number = 120): Promise<boolean> => {
+    let currentId = txId;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        if (transactionStatus) {
+          const response = await transactionStatus(currentId);
+          const status = (typeof response === 'string'
+            ? response
+            : (response as any)?.status ?? ''
+          ).toLowerCase();
+
+          // Shield wallet returns real on-chain ID — replace in-place instead of adding new entry
+          const realTxId = (response as any)?.transactionId;
+          if (realTxId && realTxId !== currentId && realTxId.startsWith('at1')) {
+            console.log(`[Poll] Real TX ID: ${realTxId}`);
+            pendingTxStore.updateTransactionId(currentId, realTxId);
+            currentId = realTxId;
+          }
+
+          if (status === 'finalized' || status === 'completed' || status === 'accepted') {
+            pendingTxStore.confirmTransaction(currentId);
+            return true;
+          }
+          if (status === 'failed' || status === 'rejected') {
+            pendingTxStore.failTransaction(currentId);
+            return false;
+          }
+        }
+
+        // Fallback: check via RPC if we have a real on-chain ID
+        if (currentId.startsWith('at1')) {
+          try {
+            const urls = [
+              `${RPC}/${ALEO_CONFIG.network}/transaction/${currentId}`,
+              `https://api.explorer.provable.com/v1/${ALEO_CONFIG.network}/transaction/${currentId}`,
+            ];
+            for (const url of urls) {
+              try {
+                const resp = await fetch(url);
+                if (resp.ok) {
+                  console.log(`[Poll] Confirmed via RPC: ${currentId}`);
+                  pendingTxStore.confirmTransaction(currentId);
+                  return true;
+                }
+              } catch { /* try next */ }
+            }
+          } catch {
+            // Not yet confirmed, keep polling
+          }
+        }
+      } catch {
+        // Status check failed, keep trying
+      }
+      await sleep(5000);
+    }
+    return false;
+  }, [transactionStatus]);
+
+  // ============================
+  // PURCHASE OPERATIONS — ALL PRIVATE FIRST
+  // ============================
+
+  /**
+   * Private purchase with Aleo Credits.
+   * Uses wallet.decrypt() to find a record with sufficient balance,
+   * then passes the plaintext record directly as transaction input.
+   */
+  const purchasePrivateCredits = useCallback(async (
     merchantAddress: string,
     totalMicrocredits: number,
-    cartCommitment: string,
-    timestamp: number,
-    privacyLevel: PaymentPrivacy = ALEO_CONFIG.defaultPaymentPrivacy
-  ): Promise<string | null> => {
-    const walletAny = wallet as any;
-    
-    if (!walletAny.executeTransaction) {
-      log('executeTransaction not available on wallet:', Object.keys(walletAny));
-      toast.error('Wallet does not support transactions');
-      return null;
-    }
+    cartItems: { sku: string; quantity: number }[],
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
 
-    if (!walletAddress) {
-      toast.error('Wallet not connected');
-      return null;
-    }
+    try {
+      const creditRecord = await findCreditsRecord(totalMicrocredits);
 
-    if (merchantAddress === walletAddress) {
-      toast.error('Cannot buy from yourself! Use a different wallet for testing.');
-      return null;
-    }
+      if (!creditRecord) {
+        const rawRecords = await fetchRawRecords(CREDITS_PROGRAM);
+        const unspent = rawRecords.filter((r: any) => r.spent !== true);
 
-    log(`Starting purchase with privacy level: ${privacyLevel}`);
-
-    // ========== PRIVATE PAYMENT MODE (Maximum Privacy) ==========
-    if (privacyLevel === 'private') {
-      toast.loading('🔒 Fetching private credits...', { id: 'tx-check' });
-      
-      // Get private credits records
-      const privateCredits = await fetchPrivateCredits();
-      toast.dismiss('tx-check');
-      
-      if (privateCredits.length === 0) {
-        toast.error('No private credits found! Please convert some credits to private first using your wallet.');
-        return null;
-      }
-
-      // Find a credit record with enough balance
-      let paymentRecord = null;
-      for (const record of privateCredits) {
-        // Try multiple possible locations for the balance
-        let balanceStr = 
-          record.data?.microcredits || 
-          record.microcredits ||
-          record.data?.amount ||
-          record.amount ||
-          '0';
-        
-        // Parse from plaintext if available
-        if (!balanceStr || balanceStr === '0') {
-          const plaintext = record.plaintext || '';
-          const match = plaintext.match(/microcredits:\s*(\d+)u64/);
-          if (match) {
-            balanceStr = match[1];
-          }
-        }
-        
-        const balance = BigInt(String(balanceStr).replace(/u64(\.private|\.public)?$/, ''));
-        log(`Credit record balance: ${balance} microcredits (${Number(balance) / 1_000_000} ALEO)`);
-        
-        if (balance >= BigInt(totalMicrocredits)) {
-          paymentRecord = record;
-          log('Found suitable payment record with balance:', balance.toString());
-          break;
-        }
-      }
-
-      if (!paymentRecord) {
-        toast.error(`No private credit record with enough balance. Need ${totalMicrocredits / 1_000_000} credits.`);
-        return null;
-      }
-
-      log('Using private credits record:', paymentRecord);
-      
-      // Use the plaintext from the record for the transaction
-      if (!paymentRecord.plaintext) {
-        toast.error('Credit record missing plaintext - cannot process. Please reconnect wallet.');
-        return null;
-      }
-
-      toast.loading('🔒 Step 1/2: Transferring PRIVATE credits to merchant...', { id: 'tx-private' });
-
-      // Step 1: Transfer private credits directly using credits.aleo/transfer_private
-      // This keeps the payment amount and addresses hidden on-chain!
-      const privateTransferTx = {
-        program: 'credits.aleo',
-        function: 'transfer_private',
-        inputs: [
-          paymentRecord.plaintext, // Private credits record
-          merchantAddress,         // Recipient
-          `${totalMicrocredits}u64`, // Amount
-        ],
-        fee: DEFAULT_FEE,
-        privateFee: true, // Use private fee for maximum privacy
-      };
-
-      log('Executing private credits transfer:', privateTransferTx);
-
-      try {
-        const transferResponse = await walletAny.executeTransaction(privateTransferTx);
-        toast.dismiss('tx-private');
-
-        if (!transferResponse?.transactionId) {
-          toast.error('Private transfer failed - no transaction ID');
-          return null;
+        if (unspent.length === 0) {
+          throw new Error(
+            'No private credit records found. Please ensure you have Aleo credits in your wallet. ' +
+            'If you only have public balance, convert some credits to private using transfer_public_to_private.'
+          );
         }
 
-        log('Private credits transfer successful:', transferResponse.transactionId);
-        toast.success('🔒 Private credits transferred!');
-        
-        // Small delay to let the network process
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-      } catch (error: any) {
-        toast.dismiss('tx-private');
-        console.error('Private credits transfer failed:', error);
-        
-        if (error.message?.includes('reject') || error.message?.includes('denied') || error.message?.includes('cancel')) {
-          toast.error('Transfer cancelled');
-        } else if (error.message?.includes('insufficient') || error.message?.includes('balance')) {
-          toast.error(`Insufficient private credits! Need ${totalMicrocredits / 1_000_000} credits`);
-        } else {
-          toast.error(error.message || 'Private transfer failed');
-        }
-        return null;
+        throw new Error(
+          `Insufficient private balance. Need ${(totalMicrocredits / 1_000_000).toFixed(2)} ALEO. ` +
+          `Found ${unspent.length} record(s) but none with sufficient balance. ` +
+          'Try converting more public credits to private.'
+        );
       }
-      
-      // Step 2: Create receipt (continue below to common receipt creation)
-    }
 
-    // ========== PUBLIC PAYMENT MODE (Visible on-chain) ==========
-    if (privacyLevel === 'public') {
-      toast.loading('💳 Step 1/2: Transferring credits...', { id: 'tx-transfer' });
-      
-      const transferTx = {
-        program: 'credits.aleo',
-        function: 'transfer_public',
-        inputs: [
-          merchantAddress,
-          `${totalMicrocredits}u64`,
-        ],
-        fee: DEFAULT_FEE,
-        privateFee: false,
-      };
+      const cartCommitment = computeCartCommitment(cartItems);
+      const timestamp = getCurrentTimestamp();
+      const salt = `${Math.floor(Math.random() * 1e15)}field`;
 
-      log('Executing public credits transfer:', transferTx);
-
-      try {
-        const transferResponse = await walletAny.executeTransaction(transferTx);
-        toast.dismiss('tx-transfer');
-
-        if (!transferResponse?.transactionId) {
-          toast.error('Credit transfer failed - no transaction ID');
-          return null;
-        }
-
-        log('Credits transfer successful:', transferResponse.transactionId);
-        toast.success(`💳 ${totalMicrocredits / 1_000_000} credits transferred!`);
-        
-        // Small delay to let the network process
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-      } catch (error: any) {
-        toast.dismiss('tx-transfer');
-        console.error('Credits transfer failed:', error);
-        
-        if (error.message?.includes('reject') || error.message?.includes('denied') || error.message?.includes('cancel')) {
-          toast.error('Transfer cancelled');
-        } else if (error.message?.includes('insufficient') || error.message?.includes('balance')) {
-          toast.error(`Insufficient balance! Need ${totalMicrocredits / 1_000_000} credits + fee`);
-        } else {
-          toast.error(error.message || 'Transfer failed');
-        }
-        return null;
-      }
-    }
-
-    // ========== STEP 2: Create receipt (all payment modes) ==========
-    const isDemoMode = privacyLevel === 'demo';
-    const isPrivateMode = privacyLevel === 'private';
-    const stepLabel = isDemoMode 
-      ? '🎮 Creating demo receipt...' 
-      : isPrivateMode 
-      ? '🔒 Step 2/2: Creating private receipt...'
-      : 'Step 2/2: Creating receipt...';
-    toast.loading(stepLabel, { id: 'tx-receipt' });
-
-    const receiptTx = {
-      program: ALEO_CONFIG.programId,
-      function: 'purchase',
-      inputs: [
+      const inputs = [
+        creditRecord,
         merchantAddress,
-        `${totalMicrocredits}u64`,
-        cartCommitment,
-        `${timestamp}u64`,
-      ],
-      fee: DEFAULT_FEE,
-      privateFee: isPrivateMode, // Use private fee for private mode
-    };
-
-    log('Creating receipt:', receiptTx);
-
-    try {
-      const response = await walletAny.executeTransaction(receiptTx);
-      toast.dismiss('tx-receipt');
-
-      log('Receipt creation response:', response);
-      
-      if (response?.transactionId) {
-        const successMsg = isDemoMode
-          ? '🎮 Demo receipt created!'
-          : isPrivateMode
-          ? '🔒 PRIVATE purchase complete! Payment hidden on-chain!'
-          : '🎉 Purchase complete! Receipt created!';
-        toast.success(successMsg);
-        return response.transactionId;
-      } else {
-        toast.error('Receipt creation failed - no transaction ID');
-        return null;
-      }
-    } catch (error: any) {
-      toast.dismiss('tx-receipt');
-      console.error('Receipt creation failed:', error);
-      
-      if (error.message?.includes('reject') || error.message?.includes('denied') || error.message?.includes('cancel')) {
-        toast.error('Transaction cancelled');
-      } else {
-        toast.error(error.message || 'Transaction failed');
-      }
-      return null;
-    }
-  }, [wallet, walletAddress, fetchPrivateCredits]);
-
-  /**
-   * Execute a return transaction
-   * Calls veilreceipt_v2.aleo::open_return (consumes receipt)
-   */
-  const executeReturn = useCallback(async (
-    receiptRecord: any, // Raw record from wallet
-    returnReasonHash: string
-  ): Promise<string | null> => {
-    const walletAny = wallet as any;
-    
-    if (!walletAny.executeTransaction) {
-      toast.error('Wallet does not support transactions');
-      return null;
-    }
-
-    if (!walletAddress) {
-      toast.error('Wallet not connected');
-      return null;
-    }
-
-    // Check if this is a wallet record (needed for contract calls)
-    if (!receiptRecord._fromWallet) {
-      toast.error('Cannot process return: Receipt not from wallet. Please reconnect wallet to grant record access.');
-      return null;
-    }
-
-    // Get the raw record from wallet
-    const rawRecord = receiptRecord._raw;
-    
-    log('Raw record for return:', rawRecord);
-    log('Raw record ALL KEYS:', Object.keys(rawRecord || {}));
-    log('Raw record plaintext property:', rawRecord?.plaintext);
-    log('Raw record ciphertext property:', rawRecord?.ciphertext);
-    
-    // The plaintext from wallet is a string representation of the record
-    if (!rawRecord?.plaintext) {
-      toast.error('Record plaintext not available. Please try again.');
-      return null;
-    }
-
-    // Try using ciphertext if available (some wallets prefer this)
-    // Otherwise use the plaintext
-    let recordInput: string;
-    
-    if (rawRecord.ciphertext) {
-      // Use ciphertext format - wallet will decrypt and use
-      recordInput = rawRecord.ciphertext;
-      log('Using ciphertext for record input:', recordInput);
-    } else {
-      // Use plaintext - ensure proper formatting
-      recordInput = rawRecord.plaintext;
-      log('Using plaintext for record input:', recordInput);
-    }
-    
-    const txOptions = {
-      program: ALEO_CONFIG.programId,
-      function: 'open_return',
-      inputs: [
-        recordInput,
-        returnReasonHash,
-      ],
-      fee: DEFAULT_FEE,
-    };
-    
-    log('Submitting return transaction:', txOptions);
-    toast.loading('Processing return...', { id: 'tx-wallet' });
-    
-    try {
-      const response = await walletAny.executeTransaction(txOptions);
-      toast.dismiss('tx-wallet');
-      log('Return transaction response:', response);
-      if (response?.transactionId) {
-        toast.success('Return submitted!');
-        return response.transactionId;
-      } else {
-        toast.error('Return failed - no transaction ID');
-        return null;
-      }
-    } catch (error: any) {
-      toast.dismiss('tx-wallet');
-      log('Return transaction failed:', error);
-      console.error('Return failed:', error);
-      
-      // Provide better error messages based on error type
-      const errMsg = error.message || '';
-      
-      if (errMsg.includes('nullifier') || errMsg.includes('already')) {
-        toast.error('This receipt has already been used for a return');
-      } else if (errMsg.includes('reject') || errMsg.includes('cancel') || errMsg.includes('denied')) {
-        toast.error('Transaction cancelled');
-      } else if (errMsg.includes('INVALID_PARAMS') || errMsg.includes('not a valid record')) {
-        // This could mean:
-        // 1. Record was already spent (consumed by another transaction)
-        // 2. Record format doesn't match what the contract expects
-        toast.error('This may occur if the nullifier was already used');
-      } else if (errMsg.includes('Unspent record not found') || errMsg.includes('spent')) {
-        toast.error('Receipt already spent. It may have been used for a return or loyalty claim.');
-      } else {
-        toast.error(error.message || 'Return failed');
-      }
-      return null;
-    }
-  }, [wallet, walletAddress]);
-
-  /**
-   * Execute a loyalty claim transaction
-   * Calls veilreceipt_v2.aleo::claim_loyalty (consumes receipt)
-   */
-  const executeLoyaltyClaim = useCallback(async (
-    receiptRecord: any,
-    tier: number
-  ): Promise<string | null> => {
-    const walletAny = wallet as any;
-    
-    if (!walletAny.executeTransaction) {
-      toast.error('Wallet does not support transactions');
-      return null;
-    }
-
-    if (!walletAddress) {
-      toast.error('Wallet not connected');
-      return null;
-    }
-
-    // Check if this is a wallet record (needed for contract calls)
-    if (!receiptRecord._fromWallet) {
-      toast.error('Cannot claim loyalty: Receipt not from wallet. Please reconnect wallet to grant record access.');
-      return null;
-    }
-
-    // Get the raw record from wallet
-    const rawRecord = receiptRecord._raw;
-    
-    log('Raw record for loyalty:', rawRecord);
-    log('Raw record plaintext:', rawRecord?.plaintext);
-    
-    // Use the plaintext property directly if available
-    if (!rawRecord?.plaintext) {
-      toast.error('Record plaintext not available. Please try again.');
-      return null;
-    }
-
-    const txOptions = {
-      program: ALEO_CONFIG.programId,
-      function: 'claim_loyalty',
-      inputs: [
-        rawRecord.plaintext,
-        `${tier}u8`,
-      ],
-      fee: DEFAULT_FEE,
-    };
-
-    log('Submitting loyalty claim:', txOptions);
-    toast.loading('Waiting for wallet confirmation...', { id: 'tx-wallet' });
-
-    try {
-      const response = await walletAny.executeTransaction(txOptions);
-      toast.dismiss('tx-wallet');
-
-      log('Loyalty claim response:', response);
-      
-      if (response?.transactionId) {
-        toast.success('Loyalty claim submitted!');
-        return response.transactionId;
-      } else {
-        toast.error('Loyalty claim failed - no transaction ID');
-        return null;
-      }
-    } catch (error: any) {
-      toast.dismiss('tx-wallet');
-      console.error('Loyalty claim failed:', error);
-      
-      if (error.message?.includes('Unspent record not found')) {
-        toast.error('Record not found in wallet. Please reconnect wallet and try again.');
-      } else if (error.message?.includes('nullifier') || error.message?.includes('already')) {
-        toast.error('Loyalty already claimed for this receipt');
-      } else if (error.message?.includes('reject') || error.message?.includes('cancel')) {
-        toast.error('Transaction cancelled');
-      } else {
-        toast.error(error.message || 'Claim failed');
-      }
-      return null;
-    }
-  }, [wallet, walletAddress]);
-
-  /**
-   * Generate support proof token (non-consuming)
-   * Calls veilreceipt_v2.aleo::prove_purchase_for_support
-   */
-  const generateSupportProof = useCallback(async (
-    receiptRecord: any,
-    productHash: string,
-    salt: string
-  ): Promise<string | null> => {
-    const walletAny = wallet as any;
-    
-    if (!walletAny.executeTransaction) {
-      toast.error('Wallet does not support transactions');
-      return null;
-    }
-
-    if (!walletAddress) {
-      toast.error('Wallet not connected');
-      return null;
-    }
-
-    // Check if this is a wallet record (needed for contract calls)
-    if (!receiptRecord._fromWallet) {
-      toast.error('Cannot generate proof: Receipt not from wallet. Please reconnect wallet to grant record access.');
-      return null;
-    }
-
-    // Get the raw record from wallet
-    const rawRecord = receiptRecord._raw;
-    
-    log('Raw record for support proof:', rawRecord);
-    log('Raw record plaintext:', rawRecord?.plaintext);
-    
-    // Use the plaintext property directly if available
-    if (!rawRecord?.plaintext) {
-      toast.error('Record plaintext not available. Please try again.');
-      return null;
-    }
-
-    const txOptions = {
-      program: ALEO_CONFIG.programId,
-      function: 'prove_purchase_for_support',
-      inputs: [
-        rawRecord.plaintext,
-        productHash,
+        toAleoU64(totalMicrocredits),
+        toAleoField(cartCommitment),
+        toAleoU64(timestamp),
         salt,
-      ],
-      fee: DEFAULT_FEE,
-    };
+      ];
 
-    log('Generating support proof:', txOptions);
-    toast.loading('Generating proof...', { id: 'tx-wallet' });
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_private_credits,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { merchant: merchantAddress, total: totalMicrocredits, tokenType: 'credits', privacy: 'private' },
+      });
+
+      toast.success('Private credit purchase submitted!');
+
+      pollTransaction(txId).then(async (confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Purchase confirmed on-chain!');
+          try {
+            await api.storeReceipt({
+              txId,
+              merchantAddress,
+              buyerAddress: address,
+              total: totalMicrocredits,
+              tokenType: 'credits',
+              purchaseType: 'private',
+              cartCommitment,
+              timestamp,
+            });
+          } catch { /* non-critical */ }
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Transaction may have failed. Check explorer.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findCreditsRecord, fetchRawRecords, executeTransaction, pollTransaction]);
+
+  /**
+   * Public purchase with Aleo Credits.
+   * No record input needed — uses transfer_public (amounts visible on-chain).
+   */
+  const purchasePublicCredits = useCallback(async (
+    merchantAddress: string,
+    totalMicrocredits: number,
+    cartItems: { sku: string; quantity: number }[],
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
 
     try {
-      const response = await walletAny.executeTransaction(txOptions);
-      toast.dismiss('tx-wallet');
+      const cartCommitment = computeCartCommitment(cartItems);
+      const timestamp = getCurrentTimestamp();
+      const salt = `${Math.floor(Math.random() * 1e15)}field`;
 
-      log('Support proof response:', response);
-      
-      if (response?.transactionId) {
-        toast.success('Proof generated!');
-        return response.transactionId;
-      } else {
-        toast.error('Failed to generate proof - no transaction ID');
-        return null;
-      }
-    } catch (error: any) {
-      toast.dismiss('tx-wallet');
-      console.error('Support proof failed:', error);
-      
-      if (error.message?.includes('Unspent record not found')) {
-        toast.error('Record not found in wallet. Please reconnect wallet and try again.');
-      } else if (error.message?.includes('reject') || error.message?.includes('cancel')) {
-        toast.error('Generation cancelled');
-      } else {
-        toast.error(error.message || 'Failed to generate proof');
-      }
-      return null;
+      const inputs = [
+        merchantAddress,
+        toAleoU64(totalMicrocredits),
+        toAleoField(cartCommitment),
+        toAleoU64(timestamp),
+        salt,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_public_credits,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { merchant: merchantAddress, total: totalMicrocredits, tokenType: 'credits', privacy: 'public' },
+      });
+
+      toast.success('Public credit purchase submitted!');
+
+      pollTransaction(txId).then(async (confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Public purchase confirmed!');
+          try {
+            await api.storeReceipt({
+              txId,
+              merchantAddress,
+              buyerAddress: address,
+              total: totalMicrocredits,
+              tokenType: 'credits',
+              purchaseType: 'public',
+              cartCommitment,
+              timestamp,
+            });
+          } catch { /* non-critical */ }
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Transaction may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
     }
-  }, [wallet, walletAddress]);
+  }, [address, executeTransaction, pollTransaction]);
+
+  /**
+   * Private purchase with USDCx stablecoin.
+   * Finds a USDCx Token record via wallet.decrypt(), builds MerkleProofs,
+   * and executes the private transfer.
+   */
+  const purchasePrivateUsdcx = useCallback(async (
+    merchantAddress: string,
+    amountMicro: number,
+    cartItems: { sku: string; quantity: number }[],
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const tokenRecord = await findTokenRecord(BigInt(amountMicro));
+
+      if (!tokenRecord) {
+        const rawRecords = await fetchRawRecords(USDCX_PROGRAM);
+        const unspent = rawRecords.filter((r: any) => r.spent !== true);
+
+        if (unspent.length === 0) {
+          throw new Error(
+            'No private USDCx token records found. Please ensure you have USDCx tokens in your wallet.'
+          );
+        }
+
+        throw new Error(
+          `Insufficient USDCx balance. Need ${(amountMicro / 1_000_000).toFixed(2)} USDCx. ` +
+          `Found ${unspent.length} record(s) but none with sufficient balance.`
+        );
+      }
+
+      const cartCommitment = computeCartCommitment(cartItems);
+      const timestamp = getCurrentTimestamp();
+      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+      const proofs = buildUsdcxMerkleProofs();
+
+      const inputs = [
+        tokenRecord,
+        merchantAddress,
+        `${amountMicro}u128`,
+        toAleoField(cartCommitment),
+        toAleoU64(timestamp),
+        salt,
+        proofs,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_private_usdcx,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { merchant: merchantAddress, total: amountMicro, tokenType: 'usdcx', privacy: 'private' },
+      });
+
+      toast.success('Private USDCx purchase submitted!');
+
+      pollTransaction(txId).then(async (confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('USDCx purchase confirmed!');
+          try {
+            await api.storeReceipt({
+              txId,
+              merchantAddress,
+              buyerAddress: address,
+              total: amountMicro,
+              tokenType: 'usdcx',
+              purchaseType: 'private',
+              cartCommitment,
+              timestamp,
+            });
+          } catch { /* non-critical */ }
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Transaction may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findTokenRecord, fetchRawRecords, executeTransaction, pollTransaction]);
+
+  /**
+   * Escrow purchase with Aleo Credits.
+   * Locks credits on-chain with a refund window.
+   */
+  const purchaseEscrowCredits = useCallback(async (
+    merchantAddress: string,
+    totalMicrocredits: number,
+    cartItems: { sku: string; quantity: number }[],
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const creditRecord = await findCreditsRecord(totalMicrocredits);
+
+      if (!creditRecord) {
+        const rawRecords = await fetchRawRecords(CREDITS_PROGRAM);
+        const unspent = rawRecords.filter((r: any) => r.spent !== true);
+
+        if (unspent.length === 0) {
+          throw new Error(
+            'No private credit records found for escrow. Convert public credits to private first.'
+          );
+        }
+
+        throw new Error(
+          `Insufficient private balance for escrow. Need ${(totalMicrocredits / 1_000_000).toFixed(2)} ALEO.`
+        );
+      }
+
+      const cartCommitment = computeCartCommitment(cartItems);
+      const timestamp = getCurrentTimestamp();
+      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+
+      const inputs = [
+        creditRecord,
+        merchantAddress,
+        toAleoU64(totalMicrocredits),
+        toAleoField(cartCommitment),
+        toAleoU64(timestamp),
+        salt,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_escrow_credits,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'escrow',
+        data: { merchant: merchantAddress, total: totalMicrocredits, tokenType: 'credits', privacy: 'escrow' },
+      });
+
+      toast.success('Escrow purchase submitted! Funds locked on-chain.');
+
+      pollTransaction(txId).then(async (confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Escrow confirmed! You can release or refund within the return window.');
+          try {
+            await api.storeReceipt({
+              txId,
+              merchantAddress,
+              buyerAddress: address,
+              total: totalMicrocredits,
+              tokenType: 'credits',
+              purchaseType: 'escrow',
+              status: 'escrowed',
+              cartCommitment,
+              timestamp,
+            });
+          } catch { /* non-critical */ }
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Escrow transaction may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findCreditsRecord, fetchRawRecords, executeTransaction, pollTransaction]);
+
+  // ============================
+  // ESCROW OPERATIONS
+  // ============================
+
+  const completeEscrow = useCallback(async (escrowRecord: EscrowReceiptRecord) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!escrowRecord._plaintext) throw new Error('Missing escrow record plaintext');
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.complete_escrow,
+        [escrowRecord._plaintext],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'complete',
+        data: { total: escrowRecord.total, merchant: escrowRecord.merchant },
+      });
+
+      toast.success('Escrow release submitted! Merchant will receive funds.');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Escrow completed — merchant paid!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Escrow release may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  const refundEscrow = useCallback(async (escrowRecord: EscrowReceiptRecord, reasonHash: string) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!escrowRecord._plaintext) throw new Error('Missing escrow record plaintext');
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.refund_escrow,
+        [escrowRecord._plaintext, toAleoField(reasonHash)],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'refund',
+        data: { total: escrowRecord.total, reason: reasonHash },
+      });
+
+      toast.success('Refund requested! Processing on-chain.');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Refund confirmed — credits returned!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Refund may have failed — check return window.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  // ============================
+  // LOYALTY OPERATIONS
+  // ============================
+
+  const claimLoyalty = useCallback(async (receiptRecord: BuyerReceiptRecord) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.claim_loyalty,
+        [receiptRecord._plaintext],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'loyalty',
+        data: { action: 'claim', total: receiptRecord.total },
+      });
+
+      toast.success('Loyalty stamp claim submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Loyalty stamp claimed!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Loyalty claim may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  const mergeLoyalty = useCallback(async (receiptRecord: BuyerReceiptRecord, existingStamp: LoyaltyStampRecord) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!receiptRecord._plaintext || !existingStamp._plaintext) {
+        throw new Error('Missing record plaintext for merge');
+      }
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.merge_loyalty,
+        [receiptRecord._plaintext, existingStamp._plaintext],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'loyalty',
+        data: { action: 'merge', score: existingStamp.score + 1 },
+      });
+
+      toast.success('Loyalty merge submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Loyalty stamps merged!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Loyalty merge may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  const proveLoyaltyTier = useCallback(async (stamp: LoyaltyStampRecord, threshold: number, verifierAddress: string) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!stamp._plaintext) throw new Error('Missing stamp plaintext');
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.prove_loyalty_tier,
+        [stamp._plaintext, toAleoU64(threshold), verifierAddress],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'loyalty',
+        data: { action: 'prove', threshold },
+      });
+
+      toast.success('Loyalty tier proof submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success(`Proved ≥ ${threshold} purchases!`);
+        } else {
+          pendingTxStore.failTransaction(txId);
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  // ============================
+  // PURCHASE SUPPORT PROOF
+  // ============================
+  const provePurchaseSupport = useCallback(async (receiptRecord: BuyerReceiptRecord, productHash: string) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
+      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.prove_purchase_support,
+        [receiptRecord._plaintext, toAleoField(productHash), salt],
+      );
+
+      toast.success('Support proof submitted!');
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction]);
+
+  // ============================
+  // UNIFIED PURCHASE FUNCTION
+  // ============================
+  const purchase = useCallback(async (
+    merchantAddress: string,
+    totalMicro: number,
+    cartItems: { sku: string; quantity: number }[],
+    privacy: PaymentPrivacy,
+    tokenType: TokenType,
+  ) => {
+    if (tokenType === 'usdcx' && privacy === 'private') {
+      return purchasePrivateUsdcx(merchantAddress, totalMicro, cartItems);
+    }
+    if (privacy === 'escrow') {
+      return purchaseEscrowCredits(merchantAddress, totalMicro, cartItems);
+    }
+    if (privacy === 'public') {
+      return purchasePublicCredits(merchantAddress, totalMicro, cartItems);
+    }
+    // Default: private credits
+    return purchasePrivateCredits(merchantAddress, totalMicro, cartItems);
+  }, [purchasePrivateCredits, purchasePrivateUsdcx, purchasePublicCredits, purchaseEscrowCredits]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   return {
-    // Wallet state
-    wallet,
-    address: storeAddress || walletAddress, // Use walletAddress from wallet if store address is empty
-    connected: isConnected,
-    connecting: wallet.connecting,
-    
-    // Auth state
-    role,
-    token,
-    isAuthenticated: !!token,
-    isAuthenticating,
-    
-    // Receipts
-    receipts,
-    isLoadingReceipts,
-    
-    // Actions
-    connect: wallet.connect || (() => {}),
+    // Connection
+    address,
+    connected,
+    connecting,
     disconnect,
+    role,
+
+    // Auth
     authenticate,
-    fetchReceipts,
-    
-    // Transactions
-    executePurchase,
-    executeReturn,
-    executeLoyaltyClaim,
-    generateSupportProof,
-    
-    // Privacy utilities
-    fetchPrivateCredits,
+
+    // Purchase operations
+    purchase,
+    purchasePrivateCredits,
+    purchasePrivateUsdcx,
+    purchasePublicCredits,
+    purchaseEscrowCredits,
+
+    // Escrow operations
+    completeEscrow,
+    refundEscrow,
+
+    // Loyalty operations
+    claimLoyalty,
+    mergeLoyalty,
+    proveLoyaltyTier,
+
+    // Support proof
+    provePurchaseSupport,
+
+    // Record access
+    getBuyerReceipts,
+    getMerchantReceipts,
+    getEscrowReceipts,
+    getLoyaltyStamps,
+    getCreditRecords,
+    getUsdcxTokens,
+
+    // Advanced record access
+    findRecord,
+    findAllRecords,
+    findRecordWithRetry,
+    findCreditsRecord,
+    findTokenRecord,
+
+    // State
+    loading,
   };
 }
