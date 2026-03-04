@@ -1,4 +1,4 @@
-// Receipts Page — Cosmic glassmorphism receipts, escrow, loyalty, support proofs
+// Receipts Page — Clean dark receipts, escrow, and support proofs
 
 import { FC, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -16,21 +16,21 @@ import {
   AlertIcon,
   ExternalLinkIcon,
 } from '@/components/icons/Icons';
-import { FloatingParticles, GridBackground, GlowOrb } from '@/components/effects/CosmicBackground';
+import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, formatDate, computeReasonHash } from '@/lib/utils';
 import { formatCredits, formatUsdcx } from '@/lib/stablecoin';
 import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
 import { usePendingTxStore } from '@/stores/txStore';
 import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, LoyaltyStampRecord } from '@/lib/types';
 
-type TabId = 'receipts' | 'sales' | 'escrow' | 'loyalty';
+type TabId = 'receipts' | 'sales' | 'escrow';
 
 const Receipts: FC = () => {
   const {
-    connected, address,
+    connected,
     getBuyerReceipts, getMerchantReceipts, getEscrowReceipts, getLoyaltyStamps,
     completeEscrow, refundEscrow,
-    claimLoyalty, mergeLoyalty, proveLoyaltyTier,
+    claimLoyalty, mergeLoyalty,
     provePurchaseSupport,
   } = useVeilWallet();
 
@@ -41,12 +41,6 @@ const Receipts: FC = () => {
   const [stamps, setStamps] = useState<LoyaltyStampRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  // Loyalty prove modal
-  const [proveModalOpen, setProveModalOpen] = useState(false);
-  const [proveThreshold, setProveThreshold] = useState('3');
-  const [proveVerifier, setProveVerifier] = useState('');
-  const [selectedStamp, setSelectedStamp] = useState<LoyaltyStampRecord | null>(null);
 
   // Refund modal
   const [refundModalOpen, setRefundModalOpen] = useState(false);
@@ -147,21 +141,6 @@ const Receipts: FC = () => {
     }
   };
 
-  const handleProveTier = async () => {
-    if (!selectedStamp) return;
-    setActionLoading('prove');
-    try {
-      const threshold = parseInt(proveThreshold);
-      const verifier = proveVerifier || address || '';
-      await proveLoyaltyTier(selectedStamp, threshold, verifier);
-      setProveModalOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to prove tier');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
     setActionLoading(`support_${receipt.purchase_commitment}`);
     try {
@@ -182,7 +161,6 @@ const Receipts: FC = () => {
     { id: 'receipts', label: 'Receipts', icon: <ReceiptIcon size={15} />, count: receipts.length },
     { id: 'sales', label: 'Sales', icon: <ShieldIcon size={15} />, count: merchantReceipts.length },
     { id: 'escrow', label: 'Escrow', icon: <ClockIcon size={15} />, count: escrows.length },
-    { id: 'loyalty', label: 'Loyalty', icon: <LoyaltyIcon size={15} />, count: stamps.length },
   ];
 
   // Not connected state
@@ -190,7 +168,6 @@ const Receipts: FC = () => {
     return (
       <div className="relative min-h-screen pt-24 flex items-center justify-center">
         <GridBackground className="opacity-20" />
-        <GlowOrb color="sky" size={300} className="top-1/3 left-1/2 -translate-x-1/2" />
         <div className="relative z-10">
           <EmptyState
             icon={<ShieldIcon size={52} className="text-white/20" />}
@@ -204,11 +181,8 @@ const Receipts: FC = () => {
 
   return (
     <div className="relative min-h-screen pt-24 pb-16">
-      {/* Background effects */}
+      {/* Background */}
       <GridBackground className="opacity-20" />
-      <FloatingParticles count={25} />
-      <div className="absolute top-20 right-0 w-[500px] h-[400px] bg-purple-500/[0.03] rounded-full blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[400px] h-[300px] bg-sky-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
@@ -219,7 +193,7 @@ const Receipts: FC = () => {
         >
           <SectionHeader
             title="My Receipts"
-            subtitle="On-chain receipts, escrow protection, and loyalty stamps"
+            subtitle="On-chain receipts, escrow protection, and purchase history"
             action={
               <Button
                 variant="secondary"
@@ -282,7 +256,7 @@ const Receipts: FC = () => {
                             href={explorerUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-shrink-0 text-sky-400/70 hover:text-sky-400 transition-colors"
+                            className="flex-shrink-0 text-green-400/70 hover:text-green-400 transition-colors"
                             title={`View on explorer: ${tx.txId}`}
                           >
                             <ExternalLinkIcon size={11} />
@@ -353,8 +327,8 @@ const Receipts: FC = () => {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2.5 mb-3">
-                              <div className="p-1.5 bg-sky-500/10 rounded-lg">
-                                <ReceiptIcon size={14} className="text-sky-400" />
+                              <div className="p-1.5 bg-green-500/10 rounded-lg">
+                                <ReceiptIcon size={14} className="text-green-400" />
                               </div>
                               <span className="text-white font-medium text-sm">Purchase Receipt</span>
                               <Badge variant={r.token_type === 1 ? 'info' : 'purple'} dot>
@@ -572,91 +546,6 @@ const Receipts: FC = () => {
               </div>
             )}
 
-            {/* ========== LOYALTY TAB ========== */}
-            {tab === 'loyalty' && (
-              <div className="space-y-6">
-                {stamps.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <Card glow className="border-purple-500/15">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-                        <div>
-                          <div className="flex items-center gap-2.5 mb-3">
-                            <div className="p-2 bg-purple-500/10 rounded-xl">
-                              <LoyaltyIcon size={20} className="text-purple-400" />
-                            </div>
-                            <span className="text-white font-bold text-lg">Loyalty Score</span>
-                          </div>
-
-                          <div className="flex items-baseline gap-6 mt-3">
-                            <div>
-                              <span className="text-5xl font-bold bg-gradient-to-r from-purple-400 to-fuchsia-400 bg-clip-text text-transparent">
-                                {stamps[0].score}
-                              </span>
-                              <span className="text-white/30 ml-2 text-sm">stamps</span>
-                            </div>
-                            <div>
-                              <TokenAmount amount={formatCredits(stamps[0].total_spent)} type="credits" size="lg" />
-                              <span className="text-white/30 ml-2 text-sm">total spent</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-5 flex items-center gap-2">
-                            {[3, 5, 10].map((tier) => (
-                              <Badge
-                                key={tier}
-                                variant={stamps[0].score >= tier ? 'success' : 'default'}
-                                dot
-                              >
-                                Tier {tier}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setSelectedStamp(stamps[0]);
-                            setProveModalOpen(true);
-                          }}
-                          icon={<ShieldIcon size={16} />}
-                        >
-                          Send Loyalty Badge
-                        </Button>
-                      </div>
-
-                      <div className="mt-5 p-3.5 bg-purple-500/[0.04] border border-purple-500/10 rounded-xl">
-                        <p className="text-xs text-purple-300/50 leading-relaxed">
-                          <strong className="text-purple-300/70">What are stamps for?</strong> Each purchase earns you a stamp. Send your loyalty badge to a merchant to unlock rewards — they only see you qualify (≥ N stamps), never your purchase history or spending amounts.
-                        </p>
-                      </div>
-                    </Card>
-                  </motion.div>
-                )}
-
-                {stamps.length === 0 && (
-                  <EmptyState
-                    icon={<LoyaltyIcon size={52} className="text-white/15" />}
-                    title="No Loyalty Stamps"
-                    description="Claim loyalty stamps from your purchase receipts to build your score."
-                    action={
-                      receipts.length > 0 ? (
-                        <Button
-                          variant="secondary"
-                          onClick={() => setTab('receipts')}
-                        >
-                          Go to Receipts to Claim
-                        </Button>
-                      ) : undefined
-                    }
-                  />
-                )}
-              </div>
-            )}
           </>
         )}
       </div>
@@ -697,58 +586,6 @@ const Receipts: FC = () => {
         </div>
       </Modal>
 
-      {/* ========== PROVE TIER MODAL ========== */}
-      <Modal
-        isOpen={proveModalOpen}
-        onClose={() => { setProveModalOpen(false); setSelectedStamp(null); }}
-        title="Send Loyalty Badge"
-      >
-        <div className="space-y-5">
-          {/* What is a loyalty badge — VeilReceipt-specific explanation */}
-          <div className="p-3.5 bg-purple-500/[0.06] border border-purple-500/15 rounded-xl space-y-2">
-            <p className="text-xs font-semibold text-purple-300/80 uppercase tracking-wider">How it works</p>
-            <ul className="text-xs text-white/45 space-y-1 leading-relaxed list-none">
-              <li>🛍 Every private purchase at a VeilReceipt merchant earns you a stamp</li>
-              <li>🔒 Send your badge to a merchant — they confirm you qualify, nothing more</li>
-              <li>🎁 Merchants can offer discounts, early drops, or VIP access to badge holders</li>
-              <li>👁 Your purchase history and exact stamp count stay completely private</li>
-            </ul>
-          </div>
-
-          {selectedStamp && (
-            <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-xl">
-              <p className="text-sm text-white/50">
-                Your stamps: <strong className="text-purple-400 font-semibold">{selectedStamp.score}</strong>
-                <span className="text-white/25 ml-2 text-xs">The recipient only sees whether you meet the minimum — not this number</span>
-              </p>
-            </div>
-          )}
-          <Input
-            label="Minimum stamps required (badge threshold)"
-            type="number"
-            value={proveThreshold}
-            onChange={(e) => setProveThreshold(e.target.value)}
-            placeholder="e.g. 3"
-          />
-          <Input
-            label="Merchant or recipient address"
-            value={proveVerifier}
-            onChange={(e) => setProveVerifier(e.target.value)}
-            placeholder="aleo1... (the merchant who will verify your badge)"
-          />
-          <div className="flex gap-3 justify-end pt-1">
-            <Button variant="ghost" onClick={() => setProveModalOpen(false)}>Cancel</Button>
-            <Button
-              variant="glow"
-              onClick={handleProveTier}
-              loading={actionLoading === 'prove'}
-              icon={<ShieldIcon size={16} />}
-            >
-              Send Badge
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 };

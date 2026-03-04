@@ -8,18 +8,19 @@
   }
 
   body {
-    @apply bg-[#030014] text-white antialiased;
+    @apply bg-black text-white antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   ::selection {
-    @apply bg-sky-500/30 text-white;
+    @apply bg-green-500/30 text-white;
   }
 }
 
 /* Wallet Adapter UI — Dark theme overrides */
 .wallet-adapter-button {
-  @apply !bg-white/[0.08] hover:!bg-white/[0.12] !backdrop-blur-xl
+  @apply !bg-white/[0.06] hover:!bg-white/[0.10] !backdrop-blur-xl
          !text-white !font-medium !py-2.5 !px-5 !rounded-xl !transition-all !duration-300
          !border !border-white/[0.08] hover:!border-white/[0.15] !shadow-none;
 }
@@ -29,7 +30,7 @@
 }
 
 .wallet-adapter-button-trigger {
-  @apply !bg-gradient-to-r !from-sky-500/20 !to-purple-500/20 !border-sky-500/20;
+  @apply !bg-green-500/10 !border-green-500/20;
 }
 
 .wallet-adapter-modal-wrapper {
@@ -37,7 +38,7 @@
 }
 
 .wallet-adapter-modal-container {
-  @apply !bg-[#0a0a1a] !border !border-white/[0.08] !rounded-2xl !shadow-2xl !shadow-sky-500/5;
+  @apply !bg-neutral-950 !border !border-white/[0.08] !rounded-2xl !shadow-2xl;
 }
 
 .wallet-adapter-modal-title {
@@ -53,7 +54,7 @@
 }
 
 .wallet-adapter-modal-list-more {
-  @apply !text-sky-400 hover:!text-sky-300;
+  @apply !text-green-400 hover:!text-green-300;
 }
 
 /* Scrollbar */
@@ -73,20 +74,7 @@
 
 /* Focus */
 *:focus-visible {
-  @apply outline-none ring-2 ring-sky-500/50 ring-offset-2 ring-offset-[#030014];
-}
-
-/* Glow text utility */
-@layer utilities {
-  .text-glow {
-    text-shadow: 0 0 20px rgba(56, 189, 248, 0.3), 0 0 60px rgba(56, 189, 248, 0.1);
-  }
-  .text-glow-purple {
-    text-shadow: 0 0 20px rgba(168, 85, 247, 0.3), 0 0 60px rgba(168, 85, 247, 0.1);
-  }
-  .glow-border {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.1), inset 0 0 15px rgba(56, 189, 248, 0.05);
-  }
+  @apply outline-none ring-2 ring-green-500/50 ring-offset-2 ring-offset-black;
 }
 
 /* Smooth page transitions */

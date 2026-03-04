@@ -1,4 +1,4 @@
-// Checkout Page — Cosmic glassmorphism product grid + cart + multi-mode purchase
+// Checkout Page — Clean dark product grid + cart + multi-mode purchase
 
 import { FC, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,7 +19,7 @@ import {
   PackageIcon,
   TagIcon,
 } from '@/components/icons/Icons';
-import { FloatingParticles, GridBackground } from '@/components/effects/CosmicBackground';
+import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress } from '@/lib/utils';
 import { formatUsdcx, formatCredits } from '@/lib/stablecoin';
 import type { Product } from '@/lib/types';
@@ -115,12 +115,8 @@ const Checkout: FC = () => {
 
   return (
     <div className="relative min-h-screen pt-24 pb-16">
-      {/* Ambient background effects */}
+      {/* Background */}
       <GridBackground className="opacity-30" />
-      <FloatingParticles count={30} />
-
-      {/* Top gradient glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-sky-500/[0.04] rounded-full blur-[120px] pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Page Header */}
@@ -139,14 +135,14 @@ const Checkout: FC = () => {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
             onClick={() => setShowCart(!showCart)}
-            className="relative p-3.5 bg-white/[0.04] backdrop-blur-xl rounded-xl border border-white/[0.08] hover:border-sky-500/30 hover:bg-white/[0.08] transition-all duration-300 group"
+            className="relative p-3.5 bg-white/[0.04] rounded-xl border border-white/[0.08] hover:border-green-500/30 hover:bg-white/[0.08] transition-all duration-300 group"
           >
             <CartIcon size={22} className="text-white/70 group-hover:text-white transition-colors" />
             {itemCount > 0 && (
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="absolute -top-2 -right-2 bg-gradient-to-r from-sky-500 to-purple-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow-lg shadow-sky-500/30"
+                className="absolute -top-2 -right-2 bg-green-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow-lg shadow-green-500/30"
               >
                 {itemCount}
               </motion.span>
@@ -162,7 +158,7 @@ const Checkout: FC = () => {
           className="flex flex-wrap items-center gap-3 mb-8 p-3.5 bg-white/[0.02] border border-white/[0.05] rounded-xl text-xs text-white/35"
         >
           <span className="text-white/20 uppercase tracking-wider font-semibold">Payment Modes:</span>
-          <span className="flex items-center gap-1.5"><ShieldIcon size={12} className="text-sky-400" /><span className="text-sky-400/80">Private</span> — ZK proof, untraceable</span>
+          <span className="flex items-center gap-1.5"><ShieldIcon size={12} className="text-green-400" /><span className="text-green-400/80">Private</span> — ZK proof, untraceable</span>
           <span className="text-white/10">|</span>
           <span className="flex items-center gap-1.5"><PublicIcon size={12} className="text-white/40" /><span>Public</span> — on-chain visible</span>
           <span className="text-white/10">|</span>
@@ -215,10 +211,10 @@ const Checkout: FC = () => {
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                 className="w-full lg:w-[400px] flex-shrink-0"
               >
-                <div className="sticky top-24 bg-white/[0.03] backdrop-blur-2xl border border-white/[0.07] rounded-2xl p-6 shadow-2xl shadow-sky-500/[0.03]">
+                <div className="sticky top-24 bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6 shadow-2xl">
                   <h2 className="text-xl font-bold text-white mb-5 flex items-center gap-3">
-                    <div className="p-2 bg-sky-500/10 rounded-lg">
-                      <CartIcon size={18} className="text-sky-400" />
+                    <div className="p-2 bg-green-500/10 rounded-lg">
+                      <CartIcon size={18} className="text-green-400" />
                     </div>
                     Cart
                     <span className="text-white/30 text-base font-normal">({itemCount})</span>
@@ -296,7 +292,7 @@ const Checkout: FC = () => {
                                   disabled={disabled}
                                   className={`relative flex flex-col items-center gap-1.5 p-3.5 rounded-xl border text-xs transition-all duration-300 ${
                                     privacy === opt.value
-                                      ? 'border-sky-500/40 bg-sky-500/[0.08] text-white shadow-sm shadow-sky-500/10'
+                                      ? 'border-green-500/40 bg-green-500/[0.08] text-white shadow-sm shadow-green-500/10'
                                       : disabled
                                       ? 'border-white/[0.04] text-white/20 cursor-not-allowed'
                                       : 'border-white/[0.07] text-white/40 hover:border-white/[0.15] hover:text-white/70'
@@ -305,7 +301,7 @@ const Checkout: FC = () => {
                                   {privacy === opt.value && (
                                     <motion.div
                                       layoutId="privacyMode"
-                                      className="absolute inset-0 border border-sky-500/30 rounded-xl bg-gradient-to-b from-sky-500/[0.06] to-transparent"
+                                      className="absolute inset-0 border border-green-500/30 rounded-xl bg-gradient-to-b from-green-500/[0.06] to-transparent"
                                       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                                     />
                                   )}
@@ -394,19 +390,19 @@ const ProductCard: FC<{
   // Generate a gradient based on category/price_type
   const iconBgGradient = isUsdcx
     ? 'from-emerald-500/20 to-teal-500/10'
-    : 'from-sky-500/20 to-indigo-500/10';
+    : 'from-green-500/20 to-emerald-500/10';
   const priceGradient = isUsdcx
     ? 'from-emerald-400 via-teal-400 to-cyan-400'
-    : 'from-sky-400 via-indigo-400 to-purple-400';
+    : 'from-green-400 via-emerald-400 to-teal-400';
   const borderHover = isUsdcx
     ? 'hover:border-emerald-500/25'
-    : 'hover:border-sky-500/25';
+    : 'hover:border-green-500/25';
   const shadowHover = isUsdcx
     ? 'hover:shadow-emerald-500/[0.08]'
-    : 'hover:shadow-sky-500/[0.08]';
+    : 'hover:shadow-green-500/[0.08]';
   const buttonBg = isUsdcx
     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 group-hover:shadow-emerald-500/20'
-    : 'bg-sky-500/10 border-sky-500/20 text-sky-400 group-hover:bg-sky-500/20 group-hover:border-sky-500/40 group-hover:shadow-sky-500/20';
+    : 'bg-green-500/10 border-green-500/20 text-green-400 group-hover:bg-green-500/20 group-hover:border-green-500/40 group-hover:shadow-green-500/20';
 
   return (
     <motion.div
@@ -419,10 +415,10 @@ const ProductCard: FC<{
         onClick={onAdd}
         whileHover={{ y: -6, scale: 1.02 }}
         whileTap={{ scale: 0.97 }}
-        className={`relative group cursor-pointer overflow-hidden rounded-2xl bg-gradient-to-b from-white/[0.05] to-white/[0.02] backdrop-blur-2xl border border-white/[0.08] ${borderHover} ${shadowHover} shadow-xl transition-all duration-500`}
+        className={`relative group cursor-pointer overflow-hidden rounded-2xl bg-white/[0.03] border border-white/[0.08] ${borderHover} ${shadowHover} shadow-xl transition-all duration-500`}
       >
         {/* Ambient glow effect on hover */}
-        <div className={`absolute -inset-1 bg-gradient-to-r ${isUsdcx ? 'from-emerald-500/[0.07] via-teal-500/[0.05] to-cyan-500/[0.07]' : 'from-sky-500/[0.07] via-indigo-500/[0.05] to-purple-500/[0.07]'} rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl -z-10`} />
+        <div className={`absolute -inset-1 bg-gradient-to-r ${isUsdcx ? 'from-emerald-500/[0.07] via-teal-500/[0.05] to-cyan-500/[0.07]' : 'from-green-500/[0.07] via-emerald-500/[0.05] to-teal-500/[0.07]'} rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl -z-10`} />
 
         {/* Top accent line */}
         <div className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r ${priceGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
@@ -431,12 +427,12 @@ const ProductCard: FC<{
           {/* Header: Category + Token badge */}
           <div className="flex items-center justify-between mb-4">
             {product.category ? (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider ${isUsdcx ? 'bg-emerald-500/[0.08] text-emerald-400 border border-emerald-500/[0.12]' : 'bg-sky-500/[0.08] text-sky-400 border border-sky-500/[0.12]'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${isUsdcx ? 'bg-emerald-400' : 'bg-sky-400'}`} />
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider ${isUsdcx ? 'bg-emerald-500/[0.08] text-emerald-400 border border-emerald-500/[0.12]' : 'bg-green-500/[0.08] text-green-400 border border-green-500/[0.12]'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isUsdcx ? 'bg-emerald-400' : 'bg-green-400'}`} />
                 {product.category}
               </span>
             ) : <span />}
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${isUsdcx ? 'bg-emerald-500/[0.06] text-emerald-500/60 border border-emerald-500/10' : 'bg-sky-500/[0.06] text-sky-500/60 border border-sky-500/10'}`}>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${isUsdcx ? 'bg-emerald-500/[0.06] text-emerald-500/60 border border-emerald-500/10' : 'bg-green-500/[0.06] text-green-500/60 border border-green-500/10'}`}>
               {isUsdcx ? '$ USDCx' : '◈ ALEO'}
             </span>
           </div>
@@ -444,7 +440,7 @@ const ProductCard: FC<{
           {/* Product icon/visual area */}
           <div className="relative mb-4">
             <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${iconBgGradient} border border-white/[0.06] flex items-center justify-center`}>
-              <PackageIcon size={24} className={isUsdcx ? 'text-emerald-400/80' : 'text-sky-400/80'} />
+              <PackageIcon size={24} className={isUsdcx ? 'text-emerald-400/80' : 'text-green-400/80'} />
             </div>
             {/* Decorative dot */}
             <div className={`absolute top-1 right-0 w-8 h-8 rounded-full bg-gradient-to-br ${iconBgGradient} blur-2xl opacity-60 group-hover:opacity-100 transition-opacity`} />

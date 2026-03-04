@@ -1,4 +1,4 @@
-// Header — Floating glass navigation bar
+// Header — Clean dark navigation bar
 
 import { FC, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -8,7 +8,6 @@ import { useVeilWallet } from '@/hooks/useVeilWallet';
 import { useCartStore } from '@/stores/cartStore';
 import { truncateAddress } from '@/lib/utils';
 import {
-  VeilIcon,
   CartIcon,
   StoreIcon,
   ReceiptIcon,
@@ -16,11 +15,13 @@ import {
   CloseIcon,
   HomeIcon,
   LogOutIcon,
+  PackageIcon,
 } from '@/components/icons/Icons';
 
 const navLinks = [
   { path: '/', label: 'Home', icon: HomeIcon },
   { path: '/checkout', label: 'Shop', icon: CartIcon },
+  { path: '/purchases', label: 'Purchases', icon: PackageIcon },
   { path: '/merchant', label: 'Merchant', icon: StoreIcon },
   { path: '/receipts', label: 'Receipts', icon: ReceiptIcon },
 ];
@@ -33,13 +34,16 @@ export const Header: FC = () => {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
-      {/* Glass bar */}
-      <div className="mx-4 mt-4 rounded-2xl bg-white/[0.03] backdrop-blur-2xl border border-white/[0.06] shadow-lg shadow-black/20">
+      <div className="mx-4 mt-4 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-5">
           <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2.5 group">
-              <VeilIcon size={30} className="transition-transform group-hover:scale-110 duration-300" />
+              <img
+                src="/App Logo.png"
+                alt="VeilReceipt"
+                className="w-8 h-8 rounded-lg transition-transform group-hover:scale-110 duration-300"
+              />
               <span className="text-lg font-bold text-white tracking-tight">
                 VeilReceipt
               </span>
@@ -67,7 +71,7 @@ export const Header: FC = () => {
                       />
                     )}
                     {path === '/checkout' && itemCount > 0 && (
-                      <span className="absolute -top-1 -right-0.5 bg-sky-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold leading-none">
+                      <span className="absolute -top-1 -right-0.5 bg-green-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold leading-none">
                         {itemCount}
                       </span>
                     )}
@@ -114,7 +118,7 @@ export const Header: FC = () => {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="md:hidden mx-4 mt-2 rounded-2xl bg-[#0a0a1a]/95 backdrop-blur-2xl border border-white/[0.06] overflow-hidden"
+            className="md:hidden mx-4 mt-2 rounded-2xl bg-neutral-950/95 backdrop-blur-2xl border border-white/[0.06] overflow-hidden"
           >
             <nav className="p-3 space-y-1">
               {navLinks.map(({ path, label, icon: Icon }) => (

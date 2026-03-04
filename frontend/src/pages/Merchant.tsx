@@ -1,4 +1,4 @@
-// Merchant Page — Cosmic glassmorphism dashboard with product management and analytics
+// Merchant Page — Clean dark dashboard with product management and analytics
 
 import { FC, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -19,7 +19,7 @@ import {
   RefreshIcon,
   ShieldIcon,
 } from '@/components/icons/Icons';
-import { FloatingParticles, GridBackground, GlowOrb } from '@/components/effects/CosmicBackground';
+import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress } from '@/lib/utils';
 import { formatUsdcx, formatCredits } from '@/lib/stablecoin';
 import type { Product } from '@/lib/types';
@@ -158,7 +158,6 @@ const Merchant: FC = () => {
     return (
       <div className="relative min-h-screen pt-24 flex items-center justify-center">
         <GridBackground className="opacity-20" />
-        <GlowOrb color="sky" size={300} className="top-1/3 left-1/2 -translate-x-1/2" />
         <div className="relative z-10">
           <EmptyState
             icon={<StoreIcon size={52} className="text-white/20" />}
@@ -175,8 +174,6 @@ const Merchant: FC = () => {
     return (
       <div className="relative min-h-screen pt-24 flex items-center justify-center">
         <GridBackground className="opacity-20" />
-        <FloatingParticles count={20} />
-        <GlowOrb color="purple" size={300} className="top-1/4 left-1/2 -translate-x-1/2" />
 
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -187,9 +184,8 @@ const Merchant: FC = () => {
           <Card glow className="text-center">
             {/* Animated store icon */}
             <div className="relative inline-flex mb-6">
-              <div className="absolute inset-0 bg-gradient-to-r from-sky-500/20 to-purple-500/20 rounded-full blur-xl" />
-              <div className="relative p-5 bg-gradient-to-br from-sky-500/10 to-purple-500/10 border border-white/[0.08] rounded-2xl">
-                <StoreIcon size={36} className="text-sky-400" />
+              <div className="relative p-5 bg-green-500/10 border border-white/[0.08] rounded-2xl">
+                <StoreIcon size={36} className="text-green-400" />
               </div>
             </div>
 
@@ -216,9 +212,7 @@ const Merchant: FC = () => {
     <div className="relative min-h-screen pt-24 pb-16">
       {/* Background */}
       <GridBackground className="opacity-20" />
-      <FloatingParticles count={20} />
-      <div className="absolute top-20 left-0 w-[500px] h-[400px] bg-sky-500/[0.03] rounded-full blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-20 right-0 w-[400px] h-[300px] bg-purple-500/[0.03] rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-20 left-0 w-[500px] h-[400px] bg-green-500/[0.02] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
@@ -372,8 +366,8 @@ const Merchant: FC = () => {
           >
             <Card glow>
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-sky-500/10 rounded-xl">
-                  <ChartIcon size={20} className="text-sky-400" />
+                  <div className="p-2 bg-green-500/10 rounded-xl">
+                  <ChartIcon size={20} className="text-green-400" />
                 </div>
                 <h2 className="text-xl font-bold text-white">Sales Analytics</h2>
               </div>
@@ -382,8 +376,8 @@ const Merchant: FC = () => {
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { label: 'Private Sales', value: stats.privateSales ?? 0, color: 'sky' },
-                      { label: 'Public Sales', value: stats.publicSales ?? 0, color: 'purple' },
+                      { label: 'Private Sales', value: stats.privateSales ?? 0, color: 'green' },
+                      { label: 'Public Sales', value: stats.publicSales ?? 0, color: 'white' },
                       { label: 'Escrow Sales', value: stats.escrowSales ?? 0, color: 'amber' },
                       { label: 'Refunds', value: stats.refunds ?? 0, color: 'red' },
                     ].map((item) => (
@@ -397,12 +391,12 @@ const Merchant: FC = () => {
                     ))}
                   </div>
 
-                  <div className="p-4 bg-purple-500/[0.04] border border-purple-500/10 rounded-xl">
+                  <div className="p-4 bg-green-500/[0.04] border border-green-500/10 rounded-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <ShieldIcon size={14} className="text-purple-400" />
-                      <span className="text-purple-300 text-sm font-medium">Privacy Note</span>
+                      <ShieldIcon size={14} className="text-green-400" />
+                      <span className="text-green-300 text-sm font-medium">Privacy Note</span>
                     </div>
-                    <p className="text-xs text-purple-300/50 leading-relaxed">
+                    <p className="text-xs text-green-300/50 leading-relaxed">
                       All buyer addresses are hashed before storage. You can see aggregate totals but individual buyer identities remain private.
                     </p>
                   </div>
