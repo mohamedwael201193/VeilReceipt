@@ -80,8 +80,8 @@ export function formatRelativeTime(timestamp: number | bigint | string): string 
 }
 
 /**
- * Generate cart commitment hash (simplified - use Poseidon in production)
- * This is a placeholder - actual implementation should use Aleo's hash functions
+ * Generate cart commitment using Merkle tree root.
+ * For compatibility with non-Merkle callers, falls back to simple hash.
  */
 export function computeCartCommitment(items: { sku: string; quantity: number }[]): string {
   // Sort items for deterministic hash
@@ -164,6 +164,18 @@ export function toAleoU8(value: number): string {
 export function toAleoField(value: string | number): string {
   const cleaned = String(value).replace(/field$/i, '');
   return `${cleaned}field`;
+}
+
+/**
+ * Generate a random scalar for Aleo commitment randomizers.
+ * Used as salt parameter in purchase transitions (BHP256::commit_to_field).
+ */
+export function generateAleoScalar(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let val = 0n;
+  for (const b of bytes) val = (val << 8n) | BigInt(b);
+  return `${val}scalar`;
 }
 
 /**

@@ -1,4 +1,4 @@
-// Receipts Page — Clean dark receipts, escrow, and support proofs
+// Receipts Page — On-chain receipts, escrow, and support proofs
 
 import { FC, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -10,7 +10,6 @@ import {
   ReceiptIcon,
   ShieldIcon,
   ClockIcon,
-  LoyaltyIcon,
   RefreshIcon,
   CheckIcon,
   AlertIcon,
@@ -21,16 +20,15 @@ import { truncateAddress, formatDate, computeReasonHash } from '@/lib/utils';
 import { formatCredits, formatUsdcx } from '@/lib/stablecoin';
 import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
 import { usePendingTxStore } from '@/stores/txStore';
-import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, LoyaltyStampRecord } from '@/lib/types';
+import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord } from '@/lib/types';
 
 type TabId = 'receipts' | 'sales' | 'escrow';
 
 const Receipts: FC = () => {
   const {
     connected,
-    getBuyerReceipts, getMerchantReceipts, getEscrowReceipts, getLoyaltyStamps,
+    getBuyerReceipts, getMerchantReceipts, getEscrowReceipts,
     completeEscrow, refundEscrow,
-    claimLoyalty, mergeLoyalty,
     provePurchaseSupport,
   } = useVeilWallet();
 
@@ -38,7 +36,6 @@ const Receipts: FC = () => {
   const [receipts, setReceipts] = useState<BuyerReceiptRecord[]>([]);
   const [merchantReceipts, setMerchantReceipts] = useState<MerchantReceiptRecord[]>([]);
   const [escrows, setEscrows] = useState<EscrowReceiptRecord[]>([]);
-  const [stamps, setStamps] = useState<LoyaltyStampRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -75,23 +72,21 @@ const Receipts: FC = () => {
     if (!connected) return;
     setLoadingRecords(true);
     try {
-      const [r, mr, e, s] = await Promise.all([
+      const [r, mr, e] = await Promise.all([
         getBuyerReceipts(),
         getMerchantReceipts(),
         getEscrowReceipts(),
-        getLoyaltyStamps(),
       ]);
       setReceipts(r);
       setMerchantReceipts(mr);
       setEscrows(e);
-      setStamps(s);
     } catch (err) {
       console.error('Failed to load records:', err);
       toast.error('Failed to load on-chain records');
     } finally {
       setLoadingRecords(false);
     }
-  }, [connected, getBuyerReceipts, getMerchantReceipts, getEscrowReceipts, getLoyaltyStamps]);
+  }, [connected, getBuyerReceipts, getMerchantReceipts, getEscrowReceipts]);
 
   useEffect(() => {
     if (connected) loadRecords();
@@ -120,22 +115,6 @@ const Receipts: FC = () => {
       setSelectedEscrow(null);
     } catch (e: any) {
       toast.error(e.message || 'Failed to request refund');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Loyalty actions
-  const handleClaimLoyalty = async (receipt: BuyerReceiptRecord) => {
-    setActionLoading(receipt.purchase_commitment);
-    try {
-      if (stamps.length === 0) {
-        await claimLoyalty(receipt);
-      } else {
-        await mergeLoyalty(receipt, stamps[0]);
-      }
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to claim loyalty');
     } finally {
       setActionLoading(null);
     }
@@ -359,22 +338,13 @@ const Receipts: FC = () => {
 
                           <div className="flex flex-col gap-2">
                             <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleClaimLoyalty(r)}
-                              loading={actionLoading === r.purchase_commitment}
-                              icon={<LoyaltyIcon size={13} />}
-                            >
-                              {stamps.length > 0 ? 'Add Stamp' : 'Claim'}
-                            </Button>
-                            <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleSupportProof(r)}
                               loading={actionLoading === `support_${r.purchase_commitment}`}
                               icon={<ShieldIcon size={13} />}
                             >
-                              Support
+                              Support Proof
                             </Button>
                           </div>
                         </div>

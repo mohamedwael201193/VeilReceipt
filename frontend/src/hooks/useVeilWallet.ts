@@ -1,6 +1,7 @@
-// useVeilWallet — Core wallet hook for VeilReceipt v3
+// useVeilWallet — Core wallet hook for VeilReceipt v4
 // Full Shield Wallet integration: decrypt records via wallet.decrypt(),
 // proper record plaintext extraction, private-first payment architecture.
+// Uses BHP256::commit_to_field() with scalar salts for commitments.
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
@@ -8,11 +9,12 @@ import type { TransactionOptions } from '@provablehq/aleo-types';
 import toast from 'react-hot-toast';
 import { ALEO_CONFIG, TRANSITIONS, DEFAULT_FEE, type PaymentPrivacy, type TokenType } from '@/lib/chain';
 import { buildUsdcxMerkleProofs } from '@/lib/stablecoin';
-import { computeCartCommitment, getCurrentTimestamp, sleep, toAleoU64, toAleoField } from '@/lib/utils';
+import { getCurrentTimestamp, sleep, toAleoU64, toAleoField, generateAleoScalar } from '@/lib/utils';
+import { buildCartMerkleTree, skuToField, storeMerkleTree, loadMerkleTree, formatMerkleProofInput, formatCartItemInput, type MerkleCartItem } from '@/lib/merkle';
 import { useUserStore } from '@/stores/userStore';
 import { usePendingTxStore } from '@/stores/txStore';
 import { api } from '@/lib/api';
-import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, LoyaltyStampRecord } from '@/lib/types';
+import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, MerchantLicenseRecord } from '@/lib/types';
 
 // Program IDs
 const PROGRAM_ID = ALEO_CONFIG.programId;
@@ -340,7 +342,7 @@ export function useVeilWallet() {
 
   /**
    * Find a record from the main program by metadata criteria.
-   * Used for BuyerReceipt, EscrowReceipt, LoyaltyStamp etc.
+   * Used for BuyerReceipt, EscrowReceipt, CartItemProof etc.
    */
   const findRecord = useCallback(async (
     criteria: { functionName?: string; programName?: string },
@@ -484,25 +486,42 @@ export function useVeilWallet() {
     });
   }, [findAllRecords, address]);
 
-  const getLoyaltyStamps = useCallback(async (): Promise<LoyaltyStampRecord[]> => {
+  const getCartItemProofs = useCallback(async () => {
     const plaintexts = await findAllRecords(
       {},
       PROGRAM_ID,
-      (pt) => pt.includes('score') && pt.includes('total_spent') && pt.includes('stamp_commitment'),
+      (pt) => pt.includes('item_commitment') && pt.includes('verified_by'),
     );
 
     return plaintexts.map((pt) => {
       const parsed = parseRecordPlaintext(pt);
       return {
         owner: parsed.owner || address!,
-        score: parseInt(stripSuffix(parsed.score || '0')),
-        total_spent: parseInt(stripSuffix(parsed.total_spent || '0')),
-        stamp_commitment: parsed.stamp_commitment || '0field',
-        nonce_seed: parsed.nonce_seed || '0field',
+        item_commitment: parsed.item_commitment || '0field',
+        verified_by: parsed.verified_by || '',
         _plaintext: pt,
         _fromWallet: true,
-      } as LoyaltyStampRecord;
+      };
     });
+  }, [findAllRecords, address]);
+
+  const getMerchantLicense = useCallback(async (): Promise<MerchantLicenseRecord | null> => {
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('store_name_hash') && !pt.includes('purchase_commitment'),
+    );
+
+    if (plaintexts.length === 0) return null;
+    const pt = plaintexts[0];
+    const parsed = parseRecordPlaintext(pt);
+    return {
+      owner: parsed.owner || address!,
+      store_commitment: parsed.store_commitment || parsed.store_name_hash || '0field',
+      nonce_seed: parsed.nonce_seed || '0field',
+      _plaintext: pt,
+      _fromWallet: true,
+    } as MerchantLicenseRecord;
   }, [findAllRecords, address]);
 
   /**
@@ -739,15 +758,23 @@ export function useVeilWallet() {
         );
       }
 
-      const cartCommitment = computeCartCommitment(cartItems);
       const timestamp = getCurrentTimestamp();
-      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+      const salt = generateAleoScalar();
+
+      // Build Merkle tree for cart items
+      const merkleItems: MerkleCartItem[] = cartItems.map(ci => ({
+        product_id: skuToField(ci.sku),
+        quantity: ci.quantity,
+        price: 0, // price tracked in receipt total, not per-item leaf
+      }));
+      const merkleTree = buildCartMerkleTree(merkleItems);
+      const merkleRoot = merkleTree.root;
 
       const inputs = [
         creditRecord,
         merchantAddress,
         toAleoU64(totalMicrocredits),
-        toAleoField(cartCommitment),
+        toAleoField(merkleRoot),
         toAleoU64(timestamp),
         salt,
       ];
@@ -770,6 +797,8 @@ export function useVeilWallet() {
         if (confirmed) {
           pendingTxStore.confirmTransaction(txId);
           toast.success('Purchase confirmed on-chain!');
+          // Store Merkle tree for later item proofs
+          storeMerkleTree(txId, merkleTree, address);
           try {
             await api.storeReceipt({
               txId,
@@ -778,7 +807,7 @@ export function useVeilWallet() {
               total: totalMicrocredits,
               tokenType: 'credits',
               purchaseType: 'private',
-              cartCommitment,
+              cartCommitment: merkleRoot,
               timestamp,
             });
           } catch { /* non-critical */ }
@@ -807,14 +836,22 @@ export function useVeilWallet() {
     setLoading(true);
 
     try {
-      const cartCommitment = computeCartCommitment(cartItems);
       const timestamp = getCurrentTimestamp();
-      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+      const salt = generateAleoScalar();
+
+      // Build Merkle tree for cart items
+      const merkleItems: MerkleCartItem[] = cartItems.map(ci => ({
+        product_id: skuToField(ci.sku),
+        quantity: ci.quantity,
+        price: 0,
+      }));
+      const merkleTree = buildCartMerkleTree(merkleItems);
+      const merkleRoot = merkleTree.root;
 
       const inputs = [
         merchantAddress,
         toAleoU64(totalMicrocredits),
-        toAleoField(cartCommitment),
+        toAleoField(merkleRoot),
         toAleoU64(timestamp),
         salt,
       ];
@@ -837,6 +874,7 @@ export function useVeilWallet() {
         if (confirmed) {
           pendingTxStore.confirmTransaction(txId);
           toast.success('Public purchase confirmed!');
+          storeMerkleTree(txId, merkleTree, address);
           try {
             await api.storeReceipt({
               txId,
@@ -845,7 +883,7 @@ export function useVeilWallet() {
               total: totalMicrocredits,
               tokenType: 'credits',
               purchaseType: 'public',
-              cartCommitment,
+              cartCommitment: merkleRoot,
               timestamp,
             });
           } catch { /* non-critical */ }
@@ -893,16 +931,24 @@ export function useVeilWallet() {
         );
       }
 
-      const cartCommitment = computeCartCommitment(cartItems);
       const timestamp = getCurrentTimestamp();
-      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+      const salt = generateAleoScalar();
       const proofs = buildUsdcxMerkleProofs();
+
+      // Build Merkle tree for cart items
+      const merkleItems: MerkleCartItem[] = cartItems.map(ci => ({
+        product_id: skuToField(ci.sku),
+        quantity: ci.quantity,
+        price: 0,
+      }));
+      const merkleTree = buildCartMerkleTree(merkleItems);
+      const merkleRoot = merkleTree.root;
 
       const inputs = [
         tokenRecord,
         merchantAddress,
         `${amountMicro}u128`,
-        toAleoField(cartCommitment),
+        toAleoField(merkleRoot),
         toAleoU64(timestamp),
         salt,
         proofs,
@@ -926,6 +972,7 @@ export function useVeilWallet() {
         if (confirmed) {
           pendingTxStore.confirmTransaction(txId);
           toast.success('USDCx purchase confirmed!');
+          storeMerkleTree(txId, merkleTree, address);
           try {
             await api.storeReceipt({
               txId,
@@ -934,7 +981,7 @@ export function useVeilWallet() {
               total: amountMicro,
               tokenType: 'usdcx',
               purchaseType: 'private',
-              cartCommitment,
+              cartCommitment: merkleRoot,
               timestamp,
             });
           } catch { /* non-critical */ }
@@ -980,15 +1027,23 @@ export function useVeilWallet() {
         );
       }
 
-      const cartCommitment = computeCartCommitment(cartItems);
       const timestamp = getCurrentTimestamp();
-      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+      const salt = generateAleoScalar();
+
+      // Build Merkle tree for cart items
+      const merkleItems: MerkleCartItem[] = cartItems.map(ci => ({
+        product_id: skuToField(ci.sku),
+        quantity: ci.quantity,
+        price: 0,
+      }));
+      const merkleTree = buildCartMerkleTree(merkleItems);
+      const merkleRoot = merkleTree.root;
 
       const inputs = [
         creditRecord,
         merchantAddress,
         toAleoU64(totalMicrocredits),
-        toAleoField(cartCommitment),
+        toAleoField(merkleRoot),
         toAleoU64(timestamp),
         salt,
       ];
@@ -1011,6 +1066,7 @@ export function useVeilWallet() {
         if (confirmed) {
           pendingTxStore.confirmTransaction(txId);
           toast.success('Escrow confirmed! You can release or refund within the return window.');
+          storeMerkleTree(txId, merkleTree, address);
           try {
             await api.storeReceipt({
               txId,
@@ -1020,7 +1076,7 @@ export function useVeilWallet() {
               tokenType: 'credits',
               purchaseType: 'escrow',
               status: 'escrowed',
-              cartCommitment,
+              cartCommitment: merkleRoot,
               timestamp,
             });
           } catch { /* non-critical */ }
@@ -1115,112 +1171,86 @@ export function useVeilWallet() {
   }, [address, executeTransaction, pollTransaction]);
 
   // ============================
-  // LOYALTY OPERATIONS
+  // CART ITEM PROOF
   // ============================
 
-  const claimLoyalty = useCallback(async (receiptRecord: BuyerReceiptRecord) => {
+  const proveCartItem = useCallback(async (
+    receiptRecord: BuyerReceiptRecord,
+    itemIndex: number,
+    verifierAddress: string,
+  ) => {
     if (!address) throw new Error('Wallet not connected');
     setLoading(true);
 
     try {
       if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
 
-      const txId = await executeTransaction(
+      // Load the stored Merkle tree for this receipt
+      const treeData = loadMerkleTree(receiptRecord.cart_commitment, address);
+      if (!treeData) throw new Error('Merkle tree data not found for this receipt. Cannot generate proof.');
+
+      const proofInput = formatMerkleProofInput(treeData.proofs[itemIndex]);
+      const itemInput = formatCartItemInput(treeData.items[itemIndex]);
+
+      const resultTxId = await executeTransaction(
         PROGRAM_ID,
-        TRANSITIONS.claim_loyalty,
-        [receiptRecord._plaintext],
+        TRANSITIONS.prove_cart_item,
+        [receiptRecord._plaintext, itemInput, proofInput, verifierAddress],
       );
 
       pendingTxStore.addTransaction({
-        txId,
-        type: 'loyalty',
-        data: { action: 'claim', total: receiptRecord.total },
+        txId: resultTxId,
+        type: 'proof',
+        data: { action: 'cart_item_proof', itemIndex },
       });
 
-      toast.success('Loyalty stamp claim submitted!');
+      toast.success('Cart item proof submitted!');
 
-      pollTransaction(txId).then((confirmed) => {
+      pollTransaction(resultTxId).then((confirmed) => {
         if (confirmed) {
-          pendingTxStore.confirmTransaction(txId);
-          toast.success('Loyalty stamp claimed!');
+          pendingTxStore.confirmTransaction(resultTxId);
+          toast.success('Cart item proof verified on-chain!');
         } else {
-          pendingTxStore.failTransaction(txId);
-          toast.error('Loyalty claim may have failed.');
+          pendingTxStore.failTransaction(resultTxId);
         }
       });
 
-      return txId;
+      return resultTxId;
     } finally {
       setLoading(false);
     }
   }, [address, executeTransaction, pollTransaction]);
 
-  const mergeLoyalty = useCallback(async (receiptRecord: BuyerReceiptRecord, existingStamp: LoyaltyStampRecord) => {
+  // ============================
+  // MERCHANT REGISTRATION
+  // ============================
+
+  const registerMerchant = useCallback(async (storeNameHash: string) => {
     if (!address) throw new Error('Wallet not connected');
     setLoading(true);
 
     try {
-      if (!receiptRecord._plaintext || !existingStamp._plaintext) {
-        throw new Error('Missing record plaintext for merge');
-      }
-
       const txId = await executeTransaction(
         PROGRAM_ID,
-        TRANSITIONS.merge_loyalty,
-        [receiptRecord._plaintext, existingStamp._plaintext],
+        TRANSITIONS.register_merchant,
+        [toAleoField(storeNameHash)],
       );
 
       pendingTxStore.addTransaction({
         txId,
-        type: 'loyalty',
-        data: { action: 'merge', score: existingStamp.score + 1 },
+        type: 'merchant',
+        data: { action: 'register', storeNameHash },
       });
 
-      toast.success('Loyalty merge submitted!');
+      toast.success('Merchant registration submitted!');
 
       pollTransaction(txId).then((confirmed) => {
         if (confirmed) {
           pendingTxStore.confirmTransaction(txId);
-          toast.success('Loyalty stamps merged!');
+          toast.success('Merchant registered on-chain!');
         } else {
           pendingTxStore.failTransaction(txId);
-          toast.error('Loyalty merge may have failed.');
-        }
-      });
-
-      return txId;
-    } finally {
-      setLoading(false);
-    }
-  }, [address, executeTransaction, pollTransaction]);
-
-  const proveLoyaltyTier = useCallback(async (stamp: LoyaltyStampRecord, threshold: number, verifierAddress: string) => {
-    if (!address) throw new Error('Wallet not connected');
-    setLoading(true);
-
-    try {
-      if (!stamp._plaintext) throw new Error('Missing stamp plaintext');
-
-      const txId = await executeTransaction(
-        PROGRAM_ID,
-        TRANSITIONS.prove_loyalty_tier,
-        [stamp._plaintext, toAleoU64(threshold), verifierAddress],
-      );
-
-      pendingTxStore.addTransaction({
-        txId,
-        type: 'loyalty',
-        data: { action: 'prove', threshold },
-      });
-
-      toast.success('Loyalty tier proof submitted!');
-
-      pollTransaction(txId).then((confirmed) => {
-        if (confirmed) {
-          pendingTxStore.confirmTransaction(txId);
-          toast.success(`Proved ≥ ${threshold} purchases!`);
-        } else {
-          pendingTxStore.failTransaction(txId);
+          toast.error('Merchant registration may have failed.');
         }
       });
 
@@ -1239,7 +1269,7 @@ export function useVeilWallet() {
 
     try {
       if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
-      const salt = `${Math.floor(Math.random() * 1e15)}field`;
+      const salt = generateAleoScalar();
 
       const txId = await executeTransaction(
         PROGRAM_ID,
@@ -1306,10 +1336,11 @@ export function useVeilWallet() {
     completeEscrow,
     refundEscrow,
 
-    // Loyalty operations
-    claimLoyalty,
-    mergeLoyalty,
-    proveLoyaltyTier,
+    // Cart item proof
+    proveCartItem,
+
+    // Merchant registration
+    registerMerchant,
 
     // Support proof
     provePurchaseSupport,
@@ -1318,7 +1349,8 @@ export function useVeilWallet() {
     getBuyerReceipts,
     getMerchantReceipts,
     getEscrowReceipts,
-    getLoyaltyStamps,
+    getCartItemProofs,
+    getMerchantLicense,
     getCreditRecords,
     getUsdcxTokens,
 

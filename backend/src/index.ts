@@ -1,4 +1,4 @@
-// VeilReceipt v3 Backend Server
+// VeilReceipt v4 Backend Server
 // Express API with PostgreSQL (production) / JSON file (development)
 
 import express, { Request, Response, NextFunction } from 'express';
@@ -14,7 +14,6 @@ import productRoutes from './routes/products';
 import merchantRoutes from './routes/merchant';
 import receiptsRoutes from './routes/receipts';
 import escrowRoutes from './routes/escrow';
-import loyaltyRoutes from './routes/loyalty';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,7 +35,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'healthy',
-    version: '3.0.0',
+    version: '4.0.0',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV || 'development',
   });
@@ -46,16 +45,15 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'VeilReceipt API',
-    version: '3.0.0',
-    program: 'veilreceipt_v3.aleo',
-    description: 'Privacy-first commerce protocol — atomic payments, escrow refund, ZK loyalty',
+    version: '4.0.0',
+    program: 'veilreceipt_v4.aleo',
+    description: 'Privacy-first commerce protocol — atomic payments, escrow refund, Merkle cart proofs',
     endpoints: {
       auth: '/auth',
       products: '/products',
       merchant: '/merchant',
       receipts: '/receipts',
       escrow: '/escrow',
-      loyalty: '/loyalty',
       tx: '/tx/:txId/status',
     },
   });
@@ -67,7 +65,6 @@ app.use('/products', productRoutes);
 app.use('/merchant', merchantRoutes);
 app.use('/receipts', receiptsRoutes);
 app.use('/escrow', escrowRoutes);
-app.use('/loyalty', loyaltyRoutes);
 
 // Transaction status endpoint (cached on-chain lookup)
 app.get('/tx/:txId/status', async (req: Request, res: Response) => {
@@ -111,9 +108,9 @@ async function start() {
     app.listen(PORT, () => {
       console.log(`
   ╔══════════════════════════════════════════════════╗
-  ║     VeilReceipt v3 Backend                       ║
+  ║     VeilReceipt v4 Backend                       ║
   ║     Port: ${String(PORT).padEnd(10)}                          ║
-  ║     Program: veilreceipt_v3.aleo                 ║
+  ║     Program: veilreceipt_v4.aleo                 ║
   ╚══════════════════════════════════════════════════╝
       `);
     });

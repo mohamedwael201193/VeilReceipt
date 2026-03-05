@@ -2,7 +2,7 @@
 
 const ALEO_RPC = process.env.ALEO_RPC_URL || 'https://api.explorer.provable.com/v1';
 const NETWORK = process.env.ALEO_NETWORK || 'testnet';
-const PROGRAM_ID = process.env.ALEO_PROGRAM_ID || 'veilreceipt_v3.aleo';
+const PROGRAM_ID = process.env.ALEO_PROGRAM_ID || 'veilreceipt_v4.aleo';
 
 /**
  * Check transaction status on-chain

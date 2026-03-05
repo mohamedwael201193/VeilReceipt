@@ -54,17 +54,6 @@ export interface EscrowReceiptRecord {
   _fromWallet?: boolean;
 }
 
-// LoyaltyStamp record from chain
-export interface LoyaltyStampRecord {
-  owner: AleoAddress;
-  score: number;
-  total_spent: number;
-  stamp_commitment: string;
-  nonce_seed: string;
-  _plaintext?: string;
-  _fromWallet?: boolean;
-}
-
 // ReturnClaim record from chain
 export interface ReturnClaimRecord {
   owner: AleoAddress;
@@ -74,13 +63,22 @@ export interface ReturnClaimRecord {
   nonce_seed: string;
 }
 
-// LoyaltyProof record
-export interface LoyaltyProofRecord {
+// CartItemProof record from chain
+export interface CartItemProofRecord {
   owner: AleoAddress;
-  prover_commitment: string;
-  threshold: number;
+  item_commitment: string;
+  cart_root: string;
   verified: boolean;
   nonce_seed: string;
+}
+
+// MerchantLicense record from chain
+export interface MerchantLicenseRecord {
+  owner: AleoAddress;
+  store_commitment: string;
+  nonce_seed: string;
+  _plaintext?: string;
+  _fromWallet?: boolean;
 }
 
 // MerchantReceipt record from chain (decrypted) — simpler than BuyerReceipt

@@ -1,7 +1,7 @@
 {
-  "program": "veilreceipt_v3.aleo",
-  "version": "0.1.0",
-  "description": "Privacy-first commerce protocol: atomic private payments (Credits + USDCx), escrow with refund, ZK loyalty proofs",
+  "program": "veilreceipt_v4.aleo",
+  "version": "0.2.0",
+  "description": "Privacy-first commerce protocol: atomic private payments (Credits + USDCx), escrow with refund, Cart Merkle proofs, merchant registration",
   "license": "MIT",
   "leo": "3.4.0",
   "dependencies": [

@@ -1,17 +1,40 @@
-// VeilReceipt v3 — Privacy-first commerce protocol on Aleo
+// VeilReceipt v4 — Privacy-first commerce protocol on Aleo
 // Atomic private payments (Credits + USDCx), escrow with refund window,
-// ZK loyalty proofs, and purchase verification tokens.
-// All mappings use BHP256 commitments with boolean-only values for maximum privacy.
+// Cart Merkle proofs for selective item disclosure, and merchant registration.
+// All commitments use BHP256::commit_to_field() with scalar randomizers.
 // Shield Wallet compatible (no private fee requirements).
 
 import credits.aleo;
 import test_usdcx_stablecoin.aleo;
 
-program veilreceipt_v3.aleo {
+program veilreceipt_v4.aleo {
 
     // ========== Lifecycle ==========
     @noupgrade
     async constructor() {}
+
+    // ========== Structs for Commitments ==========
+
+    // Data packed for purchase commitment (used with BHP256::commit_to_field)
+    struct PurchaseData {
+        merchant: field,
+        amount: u64,
+    }
+
+    // Cart item leaf data (hashed into Merkle tree)
+    struct CartItem {
+        product_id: field,
+        quantity: u64,
+        price: u64,
+    }
+
+    // Merkle inclusion proof for depth-2 tree (up to 4 cart items)
+    struct CartMerkleProof {
+        sibling_0: field,
+        sibling_1: field,
+        path_bit_0: bool,
+        path_bit_1: bool,
+    }
 
     // ========== Record Types ==========
 
@@ -55,21 +78,19 @@ program veilreceipt_v3.aleo {
         nonce_seed: field
     }
 
-    // Private loyalty stamp with accumulated score
-    record LoyaltyStamp {
+    // Proof that a specific item was in the buyer's cart
+    record CartItemProof {
         owner: address,
-        score: u64,
-        total_spent: u64,
-        stamp_commitment: field,
+        item_commitment: field,
+        cart_root: field,
+        verified: bool,
         nonce_seed: field
     }
 
-    // ZK threshold proof sent to a verifier address
-    record LoyaltyProof {
+    // Merchant's on-chain registration license
+    record MerchantLicense {
         owner: address,
-        prover_commitment: field,
-        threshold: u64,
-        verified: bool,
+        store_commitment: field,
         nonce_seed: field
     }
 
@@ -79,12 +100,12 @@ program veilreceipt_v3.aleo {
     mapping escrow_active: field => bool;
     mapping escrow_timestamps: field => u64;
     mapping return_processed: field => bool;
-    mapping loyalty_claimed: field => bool;
+    mapping merchant_active: field => bool;
 
     // ================================================================
     //  1. ATOMIC PRIVATE PURCHASE — ALEO CREDITS
     //     Single transaction: credits transfer_private + dual receipts.
-    //     Finalize receives ONLY the commitment hash (no raw merchant/amount).
+    //     Uses BHP256::commit_to_field() for proper cryptographic commitments.
     // ================================================================
 
     async transition purchase_private_credits(
@@ -93,7 +114,7 @@ program veilreceipt_v3.aleo {
         total: u64,
         cart_commitment: field,
         timestamp: u64,
-        salt: field
+        salt: scalar
     ) -> (BuyerReceipt, MerchantReceipt, credits.aleo/credits, credits.aleo/credits, Future) {
         assert(total > 0u64);
         assert(merchant != self.signer);
@@ -102,13 +123,12 @@ program veilreceipt_v3.aleo {
         let (buyer_change, merchant_payment): (credits.aleo/credits, credits.aleo/credits) =
             credits.aleo/transfer_private(payment, merchant, total);
 
-        // Compute purchase commitment — only this goes on-chain
-        let merchant_hash: field = BHP256::hash_to_field(merchant as field);
-        let amount_hash: field = BHP256::hash_to_field(total as field);
-        let salt_hash: field = BHP256::hash_to_field(salt);
-        let purchase_commitment: field = BHP256::hash_to_field(
-            merchant_hash + amount_hash + salt_hash
-        );
+        // Proper cryptographic commitment using built-in commit method
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: total,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
 
         let nonce_buyer: field = BHP256::hash_to_field(
             purchase_commitment + self.signer as field
@@ -165,7 +185,7 @@ program veilreceipt_v3.aleo {
         amount: u128,
         cart_commitment: field,
         timestamp: u64,
-        salt: field,
+        salt: scalar,
         private proofs: [MerkleProof; 2]
     ) -> (
         BuyerReceipt,
@@ -187,13 +207,12 @@ program veilreceipt_v3.aleo {
             Future
         ) = test_usdcx_stablecoin.aleo/transfer_private(merchant, amount, payment, proofs);
 
-        // Compute purchase commitment
-        let merchant_hash: field = BHP256::hash_to_field(merchant as field);
-        let amount_hash: field = BHP256::hash_to_field(amount as field);
-        let salt_hash: field = BHP256::hash_to_field(salt);
-        let purchase_commitment: field = BHP256::hash_to_field(
-            merchant_hash + amount_hash + salt_hash
-        );
+        // Proper cryptographic commitment
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: amount_u64,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
 
         let nonce_buyer: field = BHP256::hash_to_field(
             purchase_commitment + self.signer as field
@@ -246,19 +265,18 @@ program veilreceipt_v3.aleo {
         total: u64,
         cart_commitment: field,
         timestamp: u64,
-        salt: field
+        salt: scalar
     ) -> (BuyerReceipt, MerchantReceipt, Future) {
         assert(total > 0u64);
         assert(merchant != self.signer);
 
         let transfer_f: Future = credits.aleo/transfer_public(merchant, total);
 
-        let merchant_hash: field = BHP256::hash_to_field(merchant as field);
-        let amount_hash: field = BHP256::hash_to_field(total as field);
-        let salt_hash: field = BHP256::hash_to_field(salt);
-        let purchase_commitment: field = BHP256::hash_to_field(
-            merchant_hash + amount_hash + salt_hash
-        );
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: total,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
 
         let nonce_buyer: field = BHP256::hash_to_field(
             purchase_commitment + self.signer as field
@@ -313,7 +331,7 @@ program veilreceipt_v3.aleo {
         total: u64,
         cart_commitment: field,
         timestamp: u64,
-        salt: field
+        salt: scalar
     ) -> (BuyerReceipt, EscrowReceipt, credits.aleo/credits, Future) {
         assert(total > 0u64);
         assert(merchant != self.signer);
@@ -322,12 +340,11 @@ program veilreceipt_v3.aleo {
         let (change, transfer_f): (credits.aleo/credits, Future) =
             credits.aleo/transfer_private_to_public(payment, self.address, total);
 
-        let merchant_hash: field = BHP256::hash_to_field(merchant as field);
-        let amount_hash: field = BHP256::hash_to_field(total as field);
-        let salt_hash: field = BHP256::hash_to_field(salt);
-        let purchase_commitment: field = BHP256::hash_to_field(
-            merchant_hash + amount_hash + salt_hash
-        );
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: total,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
 
         let nonce_buyer: field = BHP256::hash_to_field(
             purchase_commitment + self.signer as field
@@ -471,70 +488,47 @@ program veilreceipt_v3.aleo {
     }
 
     // ================================================================
-    //  7. CLAIM LOYALTY — First loyalty stamp from a receipt
-    //     Receipt is preserved (returned with new nonce).
-    //     Nullifier prevents double-claim on the same receipt.
+    //  7. PROVE CART ITEM — Selective item disclosure via Merkle proof
+    //     Proves a specific item was in the buyer's cart without
+    //     revealing other items. Verifies Merkle path against
+    //     receipt.cart_commitment. Proof sent to verifier address.
     // ================================================================
 
-    async transition claim_loyalty(
-        receipt: BuyerReceipt
-    ) -> (BuyerReceipt, LoyaltyStamp, Future) {
-        assert_eq(receipt.owner, self.signer);
-
-        // Domain-separated nullifier for loyalty
-        let loyalty_nullifier: field = BHP256::hash_to_field(
-            receipt.purchase_commitment + 1field
-        );
-
-        // Preserve receipt (recreate with new nonce)
-        let refreshed: BuyerReceipt = BuyerReceipt {
-            owner: self.signer,
-            merchant: receipt.merchant,
-            total: receipt.total,
-            cart_commitment: receipt.cart_commitment,
-            timestamp: receipt.timestamp,
-            purchase_commitment: receipt.purchase_commitment,
-            token_type: receipt.token_type,
-            nonce_seed: BHP256::hash_to_field(receipt.nonce_seed + 1field)
-        };
-
-        let stamp_commitment: field = BHP256::hash_to_field(
-            self.signer as field + 1field
-        );
-
-        let stamp: LoyaltyStamp = LoyaltyStamp {
-            owner: self.signer,
-            score: 1u64,
-            total_spent: receipt.total,
-            stamp_commitment: stamp_commitment,
-            nonce_seed: BHP256::hash_to_field(loyalty_nullifier + self.signer as field)
-        };
-
-        return (refreshed, stamp, finalize_claim_loyalty(loyalty_nullifier));
-    }
-
-    async function finalize_claim_loyalty(loyalty_nullifier: field) {
-        let already: bool = Mapping::get_or_use(loyalty_claimed, loyalty_nullifier, false);
-        assert(!already);
-        Mapping::set(loyalty_claimed, loyalty_nullifier, true);
-    }
-
-    // ================================================================
-    //  8. MERGE LOYALTY — Combine new receipt into existing stamp
-    //     Score and total_spent accumulate. Receipt is preserved.
-    //     Nullifier prevents double-merge of the same receipt.
-    // ================================================================
-
-    async transition merge_loyalty(
+    transition prove_cart_item(
         receipt: BuyerReceipt,
-        existing: LoyaltyStamp
-    ) -> (BuyerReceipt, LoyaltyStamp, Future) {
+        item: CartItem,
+        proof: CartMerkleProof,
+        item_salt: scalar,
+        verifier: address
+    ) -> (BuyerReceipt, CartItemProof) {
         assert_eq(receipt.owner, self.signer);
-        assert_eq(existing.owner, self.signer);
 
-        let loyalty_nullifier: field = BHP256::hash_to_field(
-            receipt.purchase_commitment + 1field
+        // Compute leaf commitment from item data
+        let leaf: field = BHP256::commit_to_field(item, item_salt);
+
+        // Verify Merkle path (depth-2 binary tree)
+        let h0: field = proof.path_bit_0 ?
+            BHP256::hash_to_field(proof.sibling_0 + leaf) :
+            BHP256::hash_to_field(leaf + proof.sibling_0);
+
+        let root: field = proof.path_bit_1 ?
+            BHP256::hash_to_field(proof.sibling_1 + h0) :
+            BHP256::hash_to_field(h0 + proof.sibling_1);
+
+        // Assert reconstructed root matches receipt's cart_commitment
+        assert_eq(root, receipt.cart_commitment);
+
+        let proof_nonce: field = BHP256::hash_to_field(
+            leaf + verifier as field
         );
+
+        let cart_proof: CartItemProof = CartItemProof {
+            owner: verifier,
+            item_commitment: leaf,
+            cart_root: receipt.cart_commitment,
+            verified: true,
+            nonce_seed: proof_nonce
+        };
 
         // Preserve receipt
         let refreshed: BuyerReceipt = BuyerReceipt {
@@ -545,79 +539,14 @@ program veilreceipt_v3.aleo {
             timestamp: receipt.timestamp,
             purchase_commitment: receipt.purchase_commitment,
             token_type: receipt.token_type,
-            nonce_seed: BHP256::hash_to_field(receipt.nonce_seed + 2field)
+            nonce_seed: BHP256::hash_to_field(receipt.nonce_seed + 5field)
         };
 
-        let new_score: u64 = existing.score + 1u64;
-        let new_total: u64 = existing.total_spent + receipt.total;
-        let new_commitment: field = BHP256::hash_to_field(
-            self.signer as field + new_score as field
-        );
-
-        let merged: LoyaltyStamp = LoyaltyStamp {
-            owner: self.signer,
-            score: new_score,
-            total_spent: new_total,
-            stamp_commitment: new_commitment,
-            nonce_seed: BHP256::hash_to_field(
-                loyalty_nullifier + existing.stamp_commitment
-            )
-        };
-
-        return (refreshed, merged, finalize_merge_loyalty(loyalty_nullifier));
-    }
-
-    async function finalize_merge_loyalty(loyalty_nullifier: field) {
-        let already: bool = Mapping::get_or_use(loyalty_claimed, loyalty_nullifier, false);
-        assert(!already);
-        Mapping::set(loyalty_claimed, loyalty_nullifier, true);
+        return (refreshed, cart_proof);
     }
 
     // ================================================================
-    //  9. PROVE LOYALTY TIER — ZK threshold proof
-    //     Proves "I purchased ≥ threshold items" without revealing
-    //     exact count. Proof record is sent to the verifier address.
-    //     Stamp is preserved (returned with new nonce).
-    // ================================================================
-
-    transition prove_loyalty_tier(
-        stamp: LoyaltyStamp,
-        threshold: u64,
-        verifier: address
-    ) -> (LoyaltyStamp, LoyaltyProof) {
-        assert_eq(stamp.owner, self.signer);
-        assert(stamp.score >= threshold);
-
-        let prover_commitment: field = BHP256::hash_to_field(
-            self.signer as field + stamp.score as field
-        );
-
-        let proof_nonce: field = BHP256::hash_to_field(
-            prover_commitment + threshold as field + verifier as field
-        );
-
-        let proof: LoyaltyProof = LoyaltyProof {
-            owner: verifier,
-            prover_commitment: prover_commitment,
-            threshold: threshold,
-            verified: true,
-            nonce_seed: proof_nonce
-        };
-
-        // Preserve stamp
-        let updated_stamp: LoyaltyStamp = LoyaltyStamp {
-            owner: self.signer,
-            score: stamp.score,
-            total_spent: stamp.total_spent,
-            stamp_commitment: stamp.stamp_commitment,
-            nonce_seed: BHP256::hash_to_field(stamp.nonce_seed + 3field)
-        };
-
-        return (updated_stamp, proof);
-    }
-
-    // ================================================================
-    //  10. PURCHASE SUPPORT PROOF — Non-consuming verification token
+    //  8. PURCHASE SUPPORT PROOF — Non-consuming verification token
     //      Generates a proof token for customer support without
     //      revealing full receipt details. Receipt is preserved.
     // ================================================================
@@ -649,7 +578,7 @@ program veilreceipt_v3.aleo {
     }
 
     // ================================================================
-    //  11. VERIFY SUPPORT TOKEN — Public verification helper
+    //  9. VERIFY SUPPORT TOKEN — Public verification helper
     //      Anyone can verify a claimed proof token matches expected values.
     // ================================================================
 
@@ -664,5 +593,35 @@ program veilreceipt_v3.aleo {
         );
         let expected_token: field = BHP256::hash_to_field(base_hash + salt);
         return expected_token == claimed_token;
+    }
+
+    // ================================================================
+    //  10. REGISTER MERCHANT — On-chain merchant registration
+    //      Creates a MerchantLicense record and registers the store
+    //      commitment on-chain. Prevents duplicate registrations.
+    // ================================================================
+
+    async transition register_merchant(
+        store_name_hash: field,
+        salt: scalar
+    ) -> (MerchantLicense, Future) {
+        let store_commitment: field = BHP256::commit_to_field(
+            store_name_hash, salt
+        );
+        let nonce: field = BHP256::hash_to_field(
+            store_commitment + self.signer as field
+        );
+        let license: MerchantLicense = MerchantLicense {
+            owner: self.signer,
+            store_commitment: store_commitment,
+            nonce_seed: nonce
+        };
+        return (license, finalize_register(store_commitment));
+    }
+
+    async function finalize_register(store_commitment: field) {
+        let exists: bool = Mapping::get_or_use(merchant_active, store_commitment, false);
+        assert(!exists);
+        Mapping::set(merchant_active, store_commitment, true);
     }
 }

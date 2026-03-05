@@ -67,6 +67,9 @@ const Checkout: FC = () => {
     fetchProducts();
   }, []);
 
+  // Detect self-purchase (buyer === merchant)
+  const isSelfPurchase = connected && address && merchantAddress && address === merchantAddress;
+
   const handleCheckout = async () => {
     if (!connected || !address) {
       toast.error('Please connect your wallet first');
@@ -78,6 +81,10 @@ const Checkout: FC = () => {
     }
     if (!merchantAddress) {
       toast.error('No merchant address found');
+      return;
+    }
+    if (address === merchantAddress) {
+      toast.error('You cannot purchase your own products. The on-chain contract prevents self-purchases for security.');
       return;
     }
     if (tokenType === 'usdcx' && privacy !== 'private') {
@@ -99,7 +106,14 @@ const Checkout: FC = () => {
       setShowCart(false);
     } catch (e: any) {
       console.error('Checkout error:', e);
-      toast.error(e.message || 'Checkout failed');
+      const msg = e.message || 'Checkout failed';
+      if (msg.includes('rejected') || msg.includes('Rejected')) {
+        toast.error('Transaction rejected on-chain. Check your balance and try a different payment mode.');
+      } else if (msg.includes('Insufficient')) {
+        toast.error(msg);
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setCheckingOut(false);
     }
@@ -234,7 +248,7 @@ const Checkout: FC = () => {
                           >
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{item.product.name}</p>
-                              <p className="text-xs text-white/30 mt-0.5">{formatPrice(item.product.price)} each</p>
+                              <p className="text-xs text-white/30 mt-0.5">{item.product.price_type === 'usdcx' ? formatUsdcx(item.product.price) : formatCredits(item.product.price)} each</p>
                             </div>
                             <div className="flex items-center gap-1.5 ml-3">
                               <button
@@ -344,16 +358,22 @@ const Checkout: FC = () => {
                           )}
                         </div>
 
+                        {isSelfPurchase && (
+                          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                            <p className="text-red-400 text-xs font-medium">⚠ You cannot buy your own products. The smart contract prevents self-purchases. Use a different wallet to test buying.</p>
+                          </div>
+                        )}
+
                         <Button
                           onClick={handleCheckout}
                           loading={checkingOut || walletLoading}
-                          disabled={!connected || items.length === 0}
+                          disabled={!connected || items.length === 0 || !!isSelfPurchase}
                           className="w-full"
                           size="lg"
                           variant="glow"
                           icon={<ShieldIcon size={18} />}
                         >
-                          {!connected ? 'Connect Wallet' : checkingOut ? 'Processing...' : 'Pay Now'}
+                          {!connected ? 'Connect Wallet' : isSelfPurchase ? 'Cannot Self-Purchase' : checkingOut ? 'Processing...' : 'Pay Now'}
                         </Button>
 
                         {items.length > 0 && (

@@ -27,8 +27,9 @@ export const useCartStore = create<CartState>()(
       tokenType: 'credits',
 
       addItem: (product) => set((state) => {
+        const tokenForProduct = product.price_type === 'usdcx' ? 'usdcx' : 'credits';
         if (state.merchantAddress && state.merchantAddress !== product.merchant_address) {
-          return { items: [{ product, quantity: 1 }], merchantAddress: product.merchant_address };
+          return { items: [{ product, quantity: 1 }], merchantAddress: product.merchant_address, tokenType: tokenForProduct };
         }
         const idx = state.items.findIndex(i => i.product.id === product.id);
         if (idx >= 0) {
@@ -36,7 +37,9 @@ export const useCartStore = create<CartState>()(
           newItems[idx] = { ...newItems[idx], quantity: newItems[idx].quantity + 1 };
           return { items: newItems };
         }
-        return { items: [...state.items, { product, quantity: 1 }], merchantAddress: product.merchant_address };
+        // Auto-set token type to match first item's price_type
+        const newTokenType = state.items.length === 0 ? tokenForProduct : state.tokenType;
+        return { items: [...state.items, { product, quantity: 1 }], merchantAddress: product.merchant_address, tokenType: newTokenType };
       }),
 
       removeItem: (productId) => set((state) => {

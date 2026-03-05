@@ -11,7 +11,7 @@
 <br/>
 
 [![Aleo Testnet](https://img.shields.io/badge/Network-Aleo%20Testnet-6366f1?style=for-the-badge)](https://explorer.provable.com/testnet)
-[![Contract](https://img.shields.io/badge/Contract-veilreceipt__v3.aleo-8b5cf6?style=for-the-badge)](https://testnet.explorer.provable.com)
+[![Contract](https://img.shields.io/badge/Contract-veilreceipt__v4.aleo-8b5cf6?style=for-the-badge)](https://testnet.explorer.provable.com)
 [![Leo](https://img.shields.io/badge/Leo-Smart%20Contract-a855f7?style=for-the-badge)](https://leo-lang.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
@@ -34,14 +34,15 @@ The protocol covers the full commerce lifecycle:
 
 | Feature | What it does |
 |---|---|
-| 🔒 **Private Purchase** | ZK proof of payment — encrypted receipts for buyer & merchant |
+| 🔒 **Private Purchase** | ZK proof of payment — `BHP256::commit_to_field()` with scalar randomizers |
 | 🌐 **Public Purchase** | Auditable on-chain payment for compliance use cases |
 | 🔐 **Escrow** | Trustless fund lock with an enforced 500-block (~8h) refund window |
-| ⭐ **Loyalty Stamps** | Accumulate stamps per purchase; prove tier without revealing your history |
-| 🎫 **Support Proofs** | Selective-disclosure tokens for dispute resolution |
+| 🌲 **Cart Merkle Proofs** | Prove individual cart items without revealing the rest of your purchase |
+| 🎤 **Support Proofs** | Selective-disclosure tokens for dispute resolution |
+| 📎 **Merchant Registration** | On-chain merchant identity with MerchantLicense records |
 | 💎 **USDCx Payments** | Private stablecoin purchases via `test_usdcx_stablecoin.aleo` |
 
-Everything runs through a single Leo smart contract (`veilreceipt_v3.aleo`) deployed on Aleo Testnet, with a React frontend and Express API backend.
+Everything runs through a single Leo smart contract (`veilreceipt_v4.aleo`) deployed on Aleo Testnet, with a React frontend and Express API backend.
 
 ---
 
@@ -58,8 +59,8 @@ Everything runs through a single Leo smart contract (`veilreceipt_v3.aleo`) depl
 │  │  ──────────        ────────────    ────────────       │    │
 │  │  Product cards     Buyer receipts  Revenue split      │    │
 │  │  Cart sidebar      Escrow mgmt     ALEO / USDCx       │    │
-│  │  Pay mode select   Loyalty stamps  Sales history      │    │
-│  │  ALEO / USDCx      TX activity                        │    │
+│  Pay mode select   Support proofs  Sales history      │    │
+│  ALEO / USDCx      TX activity     On-chain register  │    │
 │  │                                                       │    │
 │  │        useVeilWallet hook  (Shield Wallet SDK)        │    │
 │  └──────────────┬─────────────────────┬──────────────────┘   │
@@ -71,13 +72,13 @@ Everything runs through a single Leo smart contract (`veilreceipt_v3.aleo`) depl
        │  ─────────────  │    │  ─────────────────────   │
        │  ZK proof gen   │    │  /auth    /products      │
        │  TX signing     │    │  /receipts  /merchant    │
-       │  Record decrypt │    │  /escrow    /loyalty     │
+       │  Record decrypt │    │  /escrow                 │
        └──────────┬──────┘    └──────────┬───────────────┘
                   │                      │
        ┌──────────▼──────────────────────▼──────────────┐
        │                 Aleo Testnet                    │
        │  ──────────────────────────────────────────    │
-       │  veilreceipt_v3.aleo      (11 transitions)     │
+       │  veilreceipt_v4.aleo      (10 transitions)     │
        │  test_usdcx_stablecoin.aleo                    │
        └─────────────────────┬──────────────────────────┘
                              │  metadata only
@@ -91,9 +92,9 @@ Everything runs through a single Leo smart contract (`veilreceipt_v3.aleo`) depl
 
 ---
 
-##  Smart Contract  `veilreceipt_v3.aleo`
+##  Smart Contract  `veilreceipt_v4.aleo`
 
-The entire protocol lives in one Leo program with **11 transitions**. All on-chain state uses **BHP256 commitment hashes**  raw addresses, amounts, and identities are never stored in any mapping.
+The entire protocol lives in one Leo program with **10 transitions**. All on-chain state uses **BHP256::commit_to_field** with scalar randomizers — raw addresses, amounts, and identities are never stored in any mapping.
 
 ### Record Types (Private  encrypted for owner)
 
@@ -164,7 +165,7 @@ Buyer pays with Escrow mode
          │
          ▼
 purchase_escrow_credits()
-   Credits locked under veilreceipt_v3.aleo program address
+   Credits locked under veilreceipt_v4.aleo program address
    escrow_active[commitment]     = true
    escrow_timestamps[commitment] = block.height
    → BuyerReceipt + EscrowReceipt issued to buyer
@@ -180,19 +181,26 @@ purchase_escrow_credits()
                   → MerchantReceipt issued
 ```
 
-### ⭐ Loyalty Stamp System
+### 🌲 Cart Merkle Proofs
 
 ```
-Purchase 1  →  claim_loyalty()  →  LoyaltyStamp { score: 1, total_spent: X }
-Purchase 2  →  merge_loyalty()  →  LoyaltyStamp { score: 2, total_spent: X+Y }
-Purchase N  →  merge_loyalty()  →  LoyaltyStamp { score: N }
+Purchase with 3 items (padded to 4 leaves)
+         │
+         ▼
+Build depth-2 Merkle tree:
+   leaf_0 = hash(item_0)   leaf_1 = hash(item_1)
+   leaf_2 = hash(item_2)   leaf_3 = hash(0field)  ← zero padding
+
+   node_01 = hash(leaf_0, leaf_1)
+   node_23 = hash(leaf_2, leaf_3)
+   root    = hash(node_01, node_23)  ← stored as cart_commitment
 
          ┌─────────────────────────────────────────────────────┐
-         │  prove_loyalty_tier(threshold=3, merchant_addr)     │
-         │                                                      │
-         │  ZK circuit asserts:  score (5) >= threshold (3)    │
-         │  Merchant receives:   LoyaltyProof { verified:true } │
-         │  Merchant never sees: your score or purchase history │
+         │  prove_cart_item(receipt, item_1, path, verifier)   │
+         │                                                     │
+         │  Verifies Merkle path from item_1 to cart root      │
+         │  Verifier receives: CartItemProof { verified }       │
+         │  Verifier never sees: other items, total, merchant  │
          └─────────────────────────────────────────────────────┘
 ```
 
@@ -214,7 +222,7 @@ Purchase N  →  merge_loyalty()  →  LoyaltyStamp { score: N }
 VeilReceipt/
 │
 ├── 📜 contracts/
-│   ├── src/main.leo              ← Full protocol (11 transitions)
+│   ├── src/main.leo              ← Full protocol (10 transitions)
 │   └── build/                   ← Compiled .aleo bytecode
 │
 ├── 🖥️ backend/
@@ -226,8 +234,7 @@ VeilReceipt/
 │       │   ├── products.ts       ← Product catalog CRUD
 │       │   ├── merchant.ts       ← Revenue dashboard + token analytics
 │       │   ├── receipts.ts       ← Off-chain receipt metadata
-│       │   ├── escrow.ts         ← Escrow record management
-│       │   └── loyalty.ts        ← Loyalty event logging
+│       │   └── escrow.ts         ← Escrow record management
 │       └── services/
 │           ├── database.ts       ← PostgreSQL (prod) / JSON (dev)
 │           └── aleo.ts           ← TX status + block height RPC
@@ -237,17 +244,20 @@ VeilReceipt/
         ├── pages/
         │   ├── Home.tsx          ← Landing + wallet connect
         │   ├── Checkout.tsx      ← Shop, cart, payment mode selector
-        │   ├── Merchant.tsx      ← Revenue dashboard
-        │   └── Receipts.tsx      ← Receipts, escrow, loyalty, TX history
+        │   ├── Purchases.tsx     ← Purchase history + Merkle cart proofs
+        │   ├── Merchant.tsx      ← Revenue dashboard + on-chain registration
+        │   └── Receipts.tsx      ← Receipts, escrow, TX history
         ├── hooks/
         │   └── useVeilWallet.ts  ← All wallet ops + ZK proof + TX polling
         ├── stores/
         │   ├── cartStore.ts      ← Zustand cart state
+        │   ├── purchaseStore.ts  ← Persistent purchase history
         │   ├── txStore.ts        ← TX tracker (shield→at1 ID resolution)
         │   └── userStore.ts      ← Auth + session
         ├── lib/
         │   ├── api.ts            ← Backend REST client
         │   ├── chain.ts          ← Constants (escrow window, program ID)
+        │   ├── merkle.ts         ← Cart Merkle tree builder + proof formatting
         │   └── stablecoin.ts     ← USDCx / Credits formatting
         └── components/
             ├── ui/Components.tsx ← Design system (Card, Badge, Button…)
@@ -259,17 +269,17 @@ VeilReceipt/
 
 ## 🧠 Key Design Decisions
 
-### 🔑 BHP256 Commitments Everywhere
+### 🔑 BHP256::commit_to_field() Commitments
 
-Aleo mappings are **public state**. Instead of storing `merchant → sale_count`, VeilReceipt stores `BHP256(merchant + amount + salt) → bool`. A blockchain observer sees only hashes — the purchase relationship is completely hidden.
+Aleo mappings are **public state**. Instead of chaining multiple `hash_to_field()` calls with manual salts, VeilReceipt v4 uses proper `BHP256::commit_to_field(PurchaseData, scalar_salt)`. The `scalar` type provides a cryptographic randomizer that makes commitments binding and hiding — a blockchain observer sees only commitments, the purchase relationship is completely hidden.
 
 ### ⚛️ Atomic Dual-Record Issuance
 
 Each purchase creates a `BuyerReceipt` and a `MerchantReceipt` in the **same ZK transaction**. The circuit guarantees both records are issued simultaneously — no race condition, no partial state.
 
-### 🔄 Non-Destructive Record Operations
+### 🌲 Merkle Cart Proofs
 
-`claim_loyalty`, `merge_loyalty`, and `prove_loyalty_tier` return a **refreshed copy** of the input record (nonce rotated). The buyer retains their receipt after claiming loyalty and keeps their stamp after proving tier. Domain-separated nullifiers prevent replay attacks.
+Cart items are organized into a depth-2 binary Merkle tree (max 4 items per purchase). The root becomes the `cart_commitment` in the receipt. Later, `prove_cart_item` verifies a Merkle path on-chain and issues a `CartItemProof` to a verifier — proving a specific item was purchased without revealing other items, the total, or the merchant.
 
 ### 🗄️ Backend Stores Only Metadata
 
@@ -308,7 +318,7 @@ npm run dev          # → http://localhost:5173
 ```env
 VITE_API_BASE_URL=http://localhost:3001
 VITE_ALEO_NETWORK=testnet
-VITE_ALEO_PROGRAM_ID=veilreceipt_v3.aleo
+VITE_ALEO_PROGRAM_ID=veilreceipt_v4.aleo
 VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 ```
 
@@ -317,12 +327,14 @@ VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 ## 🗺️ Roadmap
 
 ### ✅ Shipped
-- [x] Leo smart contract with 11 transitions deployed on Aleo Testnet
+- [x] Leo smart contract with 10 transitions deployed on Aleo Testnet
+- [x] Proper `BHP256::commit_to_field()` with scalar randomizers for all commitments
 - [x] Atomic private ALEO Credits + USDCx purchases (ZK proof, no on-chain identity)
 - [x] Public purchase mode for auditable transactions
 - [x] Trustless escrow with 500-block (~8 hour) refund window
-- [x] Loyalty stamp system — claim, merge, prove tier without revealing score
-- [x] Privacy-preserving Send Loyalty Badge — merchants get `verified: true`, never your history
+- [x] Cart Merkle tree proofs — prove individual items without revealing the full cart
+- [x] On-chain merchant registration with MerchantLicense records
+- [x] Purchase history page with Merkle proof actions and support proofs
 - [x] Purchase support proof tokens + public verification helper
 - [x] Express API with PostgreSQL (prod) / JSON (dev) adapter
 - [x] React + Shield Wallet frontend with real-time TX tracker
@@ -330,17 +342,11 @@ VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 - [x] Merchant revenue analytics split by token type (ALEO / USDCx)
 - [x] Brand token icons (ALEO + USDCx) across all UI surfaces
 
-### 🏪 Multi-Merchant Platform
-- [ ] Merchant registration flow with on-chain commitment-keyed registry
-- [ ] Per-merchant product catalogs with category tagging
-- [ ] Merchant reputation score derived from loyalty badge counts
-
 ### 🔬 Advanced Privacy Primitives
-- [ ] Merkle root cart commitments — prove individual items without revealing the full cart
 - [ ] Partial category disclosure — prove purchase category, not specific product
 - [ ] Third-party escrow arbitration with ZK evidence submission
 - [ ] Recurring subscription receipts with time-locked on-chain commitments
-- [ ] Cross-merchant loyalty aggregation into a single global private score
+- [ ] Cross-merchant private reputation scoring
 
 ### 🌐 Ecosystem & Integrations
 - [ ] Verifier SDK (npm package) so any merchant can check loyalty badges in their own platform
@@ -352,7 +358,7 @@ VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 - [ ] Decentralized backend — replace Express with Aleo program records + IPFS metadata
 
 ### 🚀 Mainnet
-- [ ] Deploy `veilreceipt_v3.aleo` to Aleo Mainnet
+- [ ] Deploy `veilreceipt_v4.aleo` to Aleo Mainnet
 - [ ] Integrate mainnet USDCx / USDC.aleo stablecoin
 - [ ] Frontend + backend switch to mainnet RPC endpoints
 - [ ] Production hardening: rate limiting, monitoring, audit

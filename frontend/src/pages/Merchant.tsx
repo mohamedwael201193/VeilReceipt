@@ -27,13 +27,15 @@ import type { Product } from '@/lib/types';
 type MerchantTab = 'products' | 'analytics';
 
 const Merchant: FC = () => {
-  const { connected, address, authenticate, getMerchantReceipts } = useVeilWallet();
+  const { connected, address, authenticate, getMerchantReceipts, registerMerchant, getMerchantLicense } = useVeilWallet();
 
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [tab, setTab] = useState<MerchantTab>('products');
+  const [onChainRegistered, setOnChainRegistered] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
 
   // Product form
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -56,10 +58,28 @@ const Merchant: FC = () => {
       await authenticate('merchant');
       setAuthenticated(true);
       toast.success('Authenticated as merchant');
+      // Check on-chain registration
+      const license = await getMerchantLicense();
+      setOnChainRegistered(!!license);
     } catch (e: any) {
       toast.error(e.message || 'Authentication failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRegisterOnChain = async () => {
+    if (!address) return;
+    setRegisterLoading(true);
+    try {
+      // Hash the address as store name for now
+      const storeNameHash = address.slice(0, 20);
+      await registerMerchant(storeNameHash);
+      setOnChainRegistered(true);
+    } catch (e: any) {
+      toast.error(e.message || 'Registration failed');
+    } finally {
+      setRegisterLoading(false);
     }
   };
 
@@ -235,6 +255,45 @@ const Merchant: FC = () => {
               </Button>
             }
           />
+        </motion.div>
+
+        {/* On-Chain Registration */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-8"
+        >
+          <Card className={onChainRegistered ? 'border-emerald-500/15' : 'border-amber-500/15'}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className={`p-2 rounded-xl ${onChainRegistered ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
+                    <ShieldIcon size={18} className={onChainRegistered ? 'text-emerald-400' : 'text-amber-400'} />
+                  </div>
+                  <span className="text-white font-bold">On-Chain Registration</span>
+                  <Badge variant={onChainRegistered ? 'success' : 'warning'} dot>
+                    {onChainRegistered ? 'Registered' : 'Not Registered'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-white/40 leading-relaxed max-w-lg">
+                  {onChainRegistered
+                    ? 'Your merchant identity is registered on the Aleo blockchain. Customers can verify you are a legitimate seller.'
+                    : 'Register your merchant identity on-chain to unlock verified seller status. This creates a MerchantLicense record in your wallet.'}
+                </p>
+              </div>
+              {!onChainRegistered && (
+                <Button
+                  variant="glow"
+                  onClick={handleRegisterOnChain}
+                  loading={registerLoading}
+                  icon={<ShieldIcon size={16} />}
+                >
+                  Register on Chain
+                </Button>
+              )}
+            </div>
+          </Card>
         </motion.div>
 
         {/* Stats Grid */}
