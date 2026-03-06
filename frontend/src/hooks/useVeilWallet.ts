@@ -836,6 +836,29 @@ export function useVeilWallet() {
     setLoading(true);
 
     try {
+      // Public purchase uses transfer_public which requires public balance on-chain.
+      // Check if user has public balance by querying the mapping.
+      try {
+        const balanceUrl = `${RPC}/${ALEO_CONFIG.network}/program/credits.aleo/mapping/account/${address}`;
+        const resp = await fetch(balanceUrl);
+        if (resp.ok) {
+          const balText = await resp.text();
+          const balMatch = balText.match(/(\d+)u64/);
+          const publicBalance = balMatch ? parseInt(balMatch[1]) : 0;
+          if (publicBalance < totalMicrocredits) {
+            throw new Error(
+              `Insufficient public balance. You have ${(publicBalance / 1_000_000).toFixed(2)} ALEO public but need ${(totalMicrocredits / 1_000_000).toFixed(2)} ALEO. ` +
+              'Use "Private" mode instead, or convert credits to public using transfer_private_to_public.'
+            );
+          }
+        }
+      } catch (balErr: any) {
+        // If balance check itself throws our insufficient error, rethrow it
+        if (balErr.message?.includes('Insufficient public')) throw balErr;
+        // Otherwise just log and continue (RPC may be down)
+        console.warn('[VeilWallet] Could not check public balance:', balErr);
+      }
+
       const timestamp = getCurrentTimestamp();
       const salt = generateAleoScalar();
 
@@ -1269,7 +1292,12 @@ export function useVeilWallet() {
 
     try {
       if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
-      const salt = generateAleoScalar();
+      // Contract expects salt as field type, not scalar
+      const saltBytes = new Uint8Array(16);
+      crypto.getRandomValues(saltBytes);
+      let saltVal = 0n;
+      for (const b of saltBytes) saltVal = (saltVal << 8n) | BigInt(b);
+      const salt = `${saltVal}field`;
 
       const txId = await executeTransaction(
         PROGRAM_ID,

@@ -5,7 +5,7 @@ export type PaymentPrivacy = 'private' | 'public' | 'escrow';
 export type TokenType = 'credits' | 'usdcx';
 
 export const ALEO_CONFIG = {
-  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v4.aleo',
+  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v5.aleo',
   network: (import.meta.env.VITE_ALEO_NETWORK || 'testnet') as AleoNetwork,
   rpcUrl: import.meta.env.VITE_ALEO_RPC_URL || 'https://api.explorer.provable.com/v1',
   usdcxProgramId: 'test_usdcx_stablecoin.aleo',

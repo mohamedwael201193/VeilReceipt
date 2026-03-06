@@ -7,7 +7,7 @@
 import credits.aleo;
 import test_usdcx_stablecoin.aleo;
 
-program veilreceipt_v4.aleo {
+program veilreceipt_v5.aleo {
 
     // ========== Lifecycle ==========
     @noupgrade
@@ -270,7 +270,9 @@ program veilreceipt_v4.aleo {
         assert(total > 0u64);
         assert(merchant != self.signer);
 
-        let transfer_f: Future = credits.aleo/transfer_public(merchant, total);
+        // Must use transfer_public_as_signer (not transfer_public) because
+        // transfer_public uses self.caller which is the program address, not the user.
+        let transfer_f: Future = credits.aleo/transfer_public_as_signer(merchant, total);
 
         let data: PurchaseData = PurchaseData {
             merchant: merchant as field,
