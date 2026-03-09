@@ -14,11 +14,13 @@ import {
   CheckIcon,
   AlertIcon,
   ExternalLinkIcon,
+  FileIcon,
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, formatDate, computeReasonHash } from '@/lib/utils';
 import { formatCredits, formatUsdcx } from '@/lib/stablecoin';
 import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
+import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
 import { usePendingTxStore } from '@/stores/txStore';
 import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord } from '@/lib/types';
 
@@ -42,7 +44,9 @@ const Receipts: FC = () => {
   // Refund modal
   const [refundModalOpen, setRefundModalOpen] = useState(false);
   const [refundReason, setRefundReason] = useState('');
+  const [refundBlockHeight, setRefundBlockHeight] = useState('');
   const [selectedEscrow, setSelectedEscrow] = useState<EscrowReceiptRecord | null>(null);
+  const [currentBlock, setCurrentBlock] = useState(0);
 
   const pendingTxs = usePendingTxStore((s) => s.transactions);
   // Only show real on-chain at1 entries — hide shield_temp artifacts
@@ -72,14 +76,16 @@ const Receipts: FC = () => {
     if (!connected) return;
     setLoadingRecords(true);
     try {
-      const [r, mr, e] = await Promise.all([
+      const [r, mr, e, height] = await Promise.all([
         getBuyerReceipts(),
         getMerchantReceipts(),
         getEscrowReceipts(),
+        getCurrentBlockHeight(),
       ]);
       setReceipts(r);
       setMerchantReceipts(mr);
       setEscrows(e);
+      setCurrentBlock(height);
     } catch (err) {
       console.error('Failed to load records:', err);
       toast.error('Failed to load on-chain records');
@@ -106,12 +112,18 @@ const Receipts: FC = () => {
 
   const handleRefundEscrow = async () => {
     if (!selectedEscrow) return;
+    const blockNum = parseInt(refundBlockHeight, 10);
+    if (!blockNum || blockNum <= 0) {
+      toast.error('Please enter the block height when the escrow was created');
+      return;
+    }
     setActionLoading(selectedEscrow.purchase_commitment);
     try {
       const reasonHash = computeReasonHash(refundReason || 'General return');
-      await refundEscrow(selectedEscrow, reasonHash);
+      await refundEscrow(selectedEscrow, reasonHash, blockNum);
       setRefundModalOpen(false);
       setRefundReason('');
+      setRefundBlockHeight('');
       setSelectedEscrow(null);
     } catch (e: any) {
       toast.error(e.message || 'Failed to request refund');
@@ -134,6 +146,28 @@ const Receipts: FC = () => {
 
   const formatAmount = (amount: number, tokenType: number) => {
     return tokenType === 1 ? formatUsdcx(amount) : formatCredits(amount);
+  };
+
+  const exportReceipt = (receipt: BuyerReceiptRecord) => {
+    const data = {
+      type: 'VeilReceipt',
+      version: 'v6',
+      purchase_commitment: receipt.purchase_commitment,
+      merchant: receipt.merchant,
+      total: receipt.total,
+      token_type: receipt.token_type === 0 ? 'credits' : 'usdcx',
+      cart_commitment: receipt.cart_commitment,
+      timestamp: receipt.timestamp,
+      exported_at: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `veilreceipt_${receipt.purchase_commitment.slice(0, 12)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Receipt exported!');
   };
 
   const tabItems: { id: TabId; label: string; icon: any; count: number }[] = [
@@ -346,6 +380,14 @@ const Receipts: FC = () => {
                             >
                               Support Proof
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => exportReceipt(r)}
+                              icon={<FileIcon size={13} />}
+                            >
+                              Export
+                            </Button>
                           </div>
                         </div>
                       </Card>
@@ -476,6 +518,9 @@ const Receipts: FC = () => {
                               <div>
                                 <span className="text-xs text-white/30 uppercase tracking-wider">Window</span>
                                 <p className="text-amber-400 font-medium text-sm mt-1">{ESCROW_RETURN_WINDOW} blocks</p>
+                                {currentBlock > 0 && (
+                                  <p className="text-xs text-white/30 mt-0.5">Current block: {currentBlock.toLocaleString()}</p>
+                                )}
                               </div>
                             </div>
 
@@ -543,6 +588,17 @@ const Receipts: FC = () => {
             onChange={(e) => setRefundReason(e.target.value)}
             placeholder="e.g. Changed my mind, item not as described..."
           />
+          <Input
+            label="Escrow Creation Block Height"
+            value={refundBlockHeight}
+            onChange={(e) => setRefundBlockHeight(e.target.value.replace(/\D/g, ''))}
+            placeholder="Block height when escrow was created"
+          />
+          {currentBlock > 0 && (
+            <p className="text-xs text-white/30">
+              Current block: {currentBlock.toLocaleString()}. Refund window: {ESCROW_RETURN_WINDOW} blocks from creation.
+            </p>
+          )}
           <div className="flex gap-3 justify-end pt-1">
             <Button variant="ghost" onClick={() => setRefundModalOpen(false)}>Cancel</Button>
             <Button

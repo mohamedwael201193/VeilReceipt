@@ -1,6 +1,6 @@
 // Home — Clean dark landing page with hero + feature SVGs
 
-import { FC, ReactNode } from 'react';
+import { FC, ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
@@ -9,6 +9,7 @@ import {
   ShieldIcon,
   CartIcon,
 } from '@/components/icons/Icons';
+import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
 
 /* ── Inline SVG illustrations ─────────────────────────────── */
 
@@ -192,6 +193,13 @@ const steps = [
 
 const Home: FC = () => {
   const { connected } = useVeilWallet();
+  const [blockHeight, setBlockHeight] = useState(0);
+
+  useEffect(() => {
+    getCurrentBlockHeight().then(setBlockHeight);
+    const interval = setInterval(() => getCurrentBlockHeight().then(setBlockHeight), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="relative min-h-screen">
@@ -302,6 +310,33 @@ const Home: FC = () => {
 
         {/* Bottom gradient fade */}
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black to-transparent" />
+      </section>
+
+      {/* === LIVE STATS BAR === */}
+      <section className="relative py-12 border-y border-white/[0.04]">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {[
+              { label: 'Contract Version', value: 'v6', sub: 'veilreceipt_v6.aleo' },
+              { label: 'Transitions', value: '12', sub: 'On-chain functions' },
+              { label: 'Block Height', value: blockHeight > 0 ? blockHeight.toLocaleString() : '...', sub: 'Aleo Testnet' },
+              { label: 'Privacy Features', value: '6', sub: 'ZK proof types' },
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className="text-center"
+              >
+                <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums">{stat.value}</p>
+                <p className="text-sm text-white/50 mt-1">{stat.label}</p>
+                <p className="text-xs text-white/20 mt-0.5">{stat.sub}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* === FEATURES SECTION === */}

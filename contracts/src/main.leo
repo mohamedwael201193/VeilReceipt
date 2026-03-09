@@ -1,13 +1,14 @@
-// VeilReceipt v4 — Privacy-first commerce protocol on Aleo
+// VeilReceipt v6 — Privacy-first commerce protocol on Aleo
 // Atomic private payments (Credits + USDCx), escrow with refund window,
-// Cart Merkle proofs for selective item disclosure, and merchant registration.
+// Cart Merkle proofs for selective item disclosure, merchant registration,
+// receipt-gated access tokens, and anonymous verified reviews.
 // All commitments use BHP256::commit_to_field() with scalar randomizers.
 // Shield Wallet compatible (no private fee requirements).
 
 import credits.aleo;
 import test_usdcx_stablecoin.aleo;
 
-program veilreceipt_v5.aleo {
+program veilreceipt_v6.aleo {
 
     // ========== Lifecycle ==========
     @noupgrade
@@ -94,13 +95,35 @@ program veilreceipt_v5.aleo {
         nonce_seed: field
     }
 
+    // Receipt-gated access token — proves purchase to unlock content/perks
+    // without revealing payment details. Non-transferable proof.
+    record AccessToken {
+        owner: address,
+        merchant: address,
+        gate_commitment: field,
+        token_tier: u8,
+        nonce_seed: field
+    }
+
+    // Anonymous review token — proves review authenticity without
+    // linking reviewer identity to purchase. Rating included privately.
+    record ReviewToken {
+        owner: address,
+        product_hash: field,
+        rating: u8,
+        review_commitment: field,
+        nonce_seed: field
+    }
+
     // ========== Mappings (commitment-keyed, boolean-valued for privacy) ==========
 
     mapping purchase_exists: field => bool;
     mapping escrow_active: field => bool;
-    mapping escrow_timestamps: field => u64;
+    mapping escrow_timestamps: field => field;
     mapping return_processed: field => bool;
     mapping merchant_active: field => bool;
+    mapping review_submitted: field => bool;
+    mapping review_count: field => u64;
 
     // ================================================================
     //  1. ATOMIC PRIVATE PURCHASE — ALEO CREDITS
@@ -388,7 +411,9 @@ program veilreceipt_v5.aleo {
         assert(!exists);
         Mapping::set(purchase_exists, purchase_commitment, true);
         Mapping::set(escrow_active, purchase_commitment, true);
-        Mapping::set(escrow_timestamps, purchase_commitment, block.height as u64);
+        // Hash block height for privacy — raw height leaks timing info
+        let height_hash: field = BHP256::hash_to_field(block.height as field);
+        Mapping::set(escrow_timestamps, purchase_commitment, height_hash);
     }
 
     // ================================================================
@@ -430,7 +455,7 @@ program veilreceipt_v5.aleo {
         assert(active);
         transfer_f.await();
         Mapping::set(escrow_active, purchase_commitment, false);
-        Mapping::set(escrow_timestamps, purchase_commitment, 0u64);
+        Mapping::set(escrow_timestamps, purchase_commitment, 0field);
     }
 
     // ================================================================
@@ -442,7 +467,8 @@ program veilreceipt_v5.aleo {
 
     async transition refund_escrow(
         escrow: EscrowReceipt,
-        return_reason_hash: field
+        return_reason_hash: field,
+        created_block: u64
     ) -> (ReturnClaim, credits.aleo/credits, Future) {
         assert_eq(escrow.owner, self.signer);
 
@@ -462,21 +488,25 @@ program veilreceipt_v5.aleo {
             nonce_seed: return_nonce
         };
 
-        let f: Future = finalize_refund_escrow(escrow.purchase_commitment, transfer_f);
+        let f: Future = finalize_refund_escrow(escrow.purchase_commitment, created_block, transfer_f);
         return (claim, refund_credits, f);
     }
 
     async function finalize_refund_escrow(
         purchase_commitment: field,
+        created_block: u64,
         transfer_f: Future
     ) {
         let active: bool = Mapping::get_or_use(escrow_active, purchase_commitment, false);
         assert(active);
 
+        // Verify the claimed created_block matches stored hash
+        let stored_hash: field = Mapping::get(escrow_timestamps, purchase_commitment);
+        let expected_hash: field = BHP256::hash_to_field(created_block as field);
+        assert_eq(stored_hash, expected_hash);
+
         // Enforce return window (500 blocks ≈ 8 hours)
-        let created_at: u64 = Mapping::get(escrow_timestamps, purchase_commitment);
-        assert(created_at > 0u64);
-        assert((block.height as u64) < created_at + 500u64);
+        assert((block.height as u64) < created_block + 500u64);
 
         // Prevent double refund
         let returned: bool = Mapping::get_or_use(return_processed, purchase_commitment, false);
@@ -486,7 +516,7 @@ program veilreceipt_v5.aleo {
 
         Mapping::set(escrow_active, purchase_commitment, false);
         Mapping::set(return_processed, purchase_commitment, true);
-        Mapping::set(escrow_timestamps, purchase_commitment, 0u64);
+        Mapping::set(escrow_timestamps, purchase_commitment, 0field);
     }
 
     // ================================================================
@@ -625,5 +655,121 @@ program veilreceipt_v5.aleo {
         let exists: bool = Mapping::get_or_use(merchant_active, store_commitment, false);
         assert(!exists);
         Mapping::set(merchant_active, store_commitment, true);
+    }
+
+    // ================================================================
+    //  11. MINT ACCESS TOKEN — Receipt-gated access
+    //      Proves a purchase was made at a merchant and mints a
+    //      non-transferable access token. Unlocks content, perks,
+    //      or loyalty tiers without revealing payment details.
+    //      Receipt is preserved (non-consuming).
+    // ================================================================
+
+    transition mint_access_token(
+        receipt: BuyerReceipt,
+        gate_id: field,
+        tier: u8
+    ) -> (BuyerReceipt, AccessToken) {
+        assert_eq(receipt.owner, self.signer);
+
+        // Gate commitment binds token to purchase + gate
+        let gate_commitment: field = BHP256::hash_to_field(
+            receipt.purchase_commitment + gate_id
+        );
+
+        let token_nonce: field = BHP256::hash_to_field(
+            gate_commitment + self.signer as field
+        );
+
+        let access_token: AccessToken = AccessToken {
+            owner: self.signer,
+            merchant: receipt.merchant,
+            gate_commitment: gate_commitment,
+            token_tier: tier,
+            nonce_seed: token_nonce
+        };
+
+        // Preserve receipt
+        let refreshed: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: receipt.merchant,
+            total: receipt.total,
+            cart_commitment: receipt.cart_commitment,
+            timestamp: receipt.timestamp,
+            purchase_commitment: receipt.purchase_commitment,
+            token_type: receipt.token_type,
+            nonce_seed: BHP256::hash_to_field(receipt.nonce_seed + 6field)
+        };
+
+        return (refreshed, access_token);
+    }
+
+    // ================================================================
+    //  12. SUBMIT ANONYMOUS REVIEW — Privacy-preserving product reviews
+    //      Buyer proves purchase via receipt and submits a rating.
+    //      Nullifier prevents double-reviewing the same product.
+    //      Review is counted on-chain but reviewer identity stays private.
+    //      Rating is stored privately in the ReviewToken record only.
+    // ================================================================
+
+    async transition submit_anonymous_review(
+        receipt: BuyerReceipt,
+        product_hash: field,
+        rating: u8
+    ) -> (BuyerReceipt, ReviewToken, Future) {
+        assert_eq(receipt.owner, self.signer);
+        assert(rating >= 1u8);
+        assert(rating <= 5u8);
+
+        // Nullifier: hash(purchase_commitment + product_hash + signer)
+        // Prevents double reviews while hiding who reviewed what
+        let nullifier: field = BHP256::hash_to_field(
+            receipt.purchase_commitment + product_hash + self.signer as field
+        );
+
+        // Review commitment binds rating to purchase privately
+        let review_commitment: field = BHP256::hash_to_field(
+            nullifier + rating as field
+        );
+
+        let review_nonce: field = BHP256::hash_to_field(
+            review_commitment + self.signer as field
+        );
+
+        let review_token: ReviewToken = ReviewToken {
+            owner: self.signer,
+            product_hash: product_hash,
+            rating: rating,
+            review_commitment: review_commitment,
+            nonce_seed: review_nonce
+        };
+
+        // Preserve receipt
+        let refreshed: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: receipt.merchant,
+            total: receipt.total,
+            cart_commitment: receipt.cart_commitment,
+            timestamp: receipt.timestamp,
+            purchase_commitment: receipt.purchase_commitment,
+            token_type: receipt.token_type,
+            nonce_seed: BHP256::hash_to_field(receipt.nonce_seed + 7field)
+        };
+
+        return (refreshed, review_token, finalize_submit_review(nullifier, product_hash));
+    }
+
+    async function finalize_submit_review(
+        nullifier: field,
+        product_hash: field
+    ) {
+        // Prevent double review
+        let already: bool = Mapping::get_or_use(review_submitted, nullifier, false);
+        assert(!already);
+        Mapping::set(review_submitted, nullifier, true);
+
+        // Increment review count for product
+        let count: u64 = Mapping::get_or_use(review_count, product_hash, 0u64);
+        Mapping::set(review_count, product_hash, count + 1u64);
     }
 }

@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { ALEO_CONFIG, TRANSITIONS, DEFAULT_FEE, type PaymentPrivacy, type TokenType } from '@/lib/chain';
 import { buildUsdcxMerkleProofs } from '@/lib/stablecoin';
 import { getCurrentTimestamp, sleep, toAleoU64, toAleoField, generateAleoScalar } from '@/lib/utils';
+import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
 import { buildCartMerkleTree, skuToField, storeMerkleTree, loadMerkleTree, formatMerkleProofInput, formatCartItemInput, type MerkleCartItem } from '@/lib/merkle';
 import { useUserStore } from '@/stores/userStore';
 import { usePendingTxStore } from '@/stores/txStore';
@@ -1090,6 +1091,11 @@ export function useVeilWallet() {
           pendingTxStore.confirmTransaction(txId);
           toast.success('Escrow confirmed! You can release or refund within the return window.');
           storeMerkleTree(txId, merkleTree, address);
+          // Save block height for refund verification
+          try {
+            const blockHeight = await getCurrentBlockHeight();
+            localStorage.setItem(`escrow_block_${txId}`, String(blockHeight));
+          } catch { /* non-critical */ }
           try {
             await api.storeReceipt({
               txId,
@@ -1156,7 +1162,7 @@ export function useVeilWallet() {
     }
   }, [address, executeTransaction, pollTransaction]);
 
-  const refundEscrow = useCallback(async (escrowRecord: EscrowReceiptRecord, reasonHash: string) => {
+  const refundEscrow = useCallback(async (escrowRecord: EscrowReceiptRecord, reasonHash: string, createdBlock: number) => {
     if (!address) throw new Error('Wallet not connected');
     setLoading(true);
 
@@ -1166,7 +1172,7 @@ export function useVeilWallet() {
       const txId = await executeTransaction(
         PROGRAM_ID,
         TRANSITIONS.refund_escrow,
-        [escrowRecord._plaintext, toAleoField(reasonHash)],
+        [escrowRecord._plaintext, toAleoField(reasonHash), toAleoU64(createdBlock)],
       );
 
       pendingTxStore.addTransaction({
@@ -1313,6 +1319,135 @@ export function useVeilWallet() {
   }, [address, executeTransaction]);
 
   // ============================
+  // MINT ACCESS TOKEN — Receipt-gated access
+  // ============================
+  const mintAccessToken = useCallback(async (receiptRecord: BuyerReceiptRecord, gateId: string, tier: number = 1) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.mint_access_token,
+        [receiptRecord._plaintext, toAleoField(gateId), `${tier}u8`],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'proof',
+        data: { action: 'access_token', gateId, tier },
+      });
+
+      toast.success('Access token minting submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Access token minted — you can now unlock gated content!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Access token minting may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  // ============================
+  // SUBMIT ANONYMOUS REVIEW
+  // ============================
+  const submitAnonymousReview = useCallback(async (receiptRecord: BuyerReceiptRecord, productHash: string, rating: number) => {
+    if (!address) throw new Error('Wallet not connected');
+    if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5');
+    setLoading(true);
+
+    try {
+      if (!receiptRecord._plaintext) throw new Error('Missing receipt plaintext');
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.submit_anonymous_review,
+        [receiptRecord._plaintext, toAleoField(productHash), `${rating}u8`],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'proof',
+        data: { action: 'anonymous_review', productHash, rating },
+      });
+
+      toast.success('Anonymous review submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Review verified and counted on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Review submission may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  // ============================
+  // FETCH ACCESS TOKENS
+  // ============================
+  const getAccessTokens = useCallback(async () => {
+    const records = await fetchRawRecords(PROGRAM_ID);
+    const tokens: any[] = [];
+    for (const rec of records) {
+      const pt = rec.plaintext || rec._plaintext || (typeof rec === 'string' ? rec : '');
+      if (typeof pt === 'string' && pt.includes('gate_commitment') && pt.includes('token_tier')) {
+        const parsed = parseRecordPlaintext(pt);
+        tokens.push({
+          owner: parsed.owner || address,
+          merchant: parsed.merchant || '',
+          gate_commitment: stripSuffix(parsed.gate_commitment || ''),
+          token_tier: parseInt(stripSuffix(parsed.token_tier || '0'), 10),
+          nonce_seed: stripSuffix(parsed.nonce_seed || ''),
+          _plaintext: pt,
+          _fromWallet: true,
+        });
+      }
+    }
+    return tokens;
+  }, [fetchRawRecords, address]);
+
+  // ============================
+  // FETCH REVIEW TOKENS
+  // ============================
+  const getReviewTokens = useCallback(async () => {
+    const records = await fetchRawRecords(PROGRAM_ID);
+    const tokens: any[] = [];
+    for (const rec of records) {
+      const pt = rec.plaintext || rec._plaintext || (typeof rec === 'string' ? rec : '');
+      if (typeof pt === 'string' && pt.includes('review_commitment') && pt.includes('rating')) {
+        const parsed = parseRecordPlaintext(pt);
+        tokens.push({
+          owner: parsed.owner || address,
+          product_hash: stripSuffix(parsed.product_hash || ''),
+          rating: parseInt(stripSuffix(parsed.rating || '0'), 10),
+          review_commitment: stripSuffix(parsed.review_commitment || ''),
+          nonce_seed: stripSuffix(parsed.nonce_seed || ''),
+          _plaintext: pt,
+          _fromWallet: true,
+        });
+      }
+    }
+    return tokens;
+  }, [fetchRawRecords, address]);
+
+  // ============================
   // UNIFIED PURCHASE FUNCTION
   // ============================
   const purchase = useCallback(async (
@@ -1372,6 +1507,12 @@ export function useVeilWallet() {
 
     // Support proof
     provePurchaseSupport,
+
+    // Access tokens & reviews (v6)
+    mintAccessToken,
+    submitAnonymousReview,
+    getAccessTokens,
+    getReviewTokens,
 
     // Record access
     getBuyerReceipts,

@@ -11,14 +11,14 @@
 <br/>
 
 [![Aleo Testnet](https://img.shields.io/badge/Network-Aleo%20Testnet-6366f1?style=for-the-badge)](https://explorer.provable.com/testnet)
-[![Contract](https://img.shields.io/badge/Contract-veilreceipt__v4.aleo-8b5cf6?style=for-the-badge)](https://testnet.explorer.provable.com)
+[![Contract](https://img.shields.io/badge/Contract-veilreceipt__v6.aleo-8b5cf6?style=for-the-badge)](https://testnet.explorer.provable.com)
 [![Leo](https://img.shields.io/badge/Leo-Smart%20Contract-a855f7?style=for-the-badge)](https://leo-lang.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 
 <br/>
 
-**[🛒 Shop](frontend/src/pages/Checkout.tsx)** &nbsp;·&nbsp; **[🧾 Receipts](frontend/src/pages/Receipts.tsx)** &nbsp;·&nbsp; **[📊 Merchant](frontend/src/pages/Merchant.tsx)** &nbsp;·&nbsp; **[📜 Contract](contracts/src/main.leo)**
+**[🛒 Shop](frontend/src/pages/Checkout.tsx)** &nbsp;·&nbsp; **[🧾 Receipts](frontend/src/pages/Receipts.tsx)** &nbsp;·&nbsp; **[� Verify](frontend/src/pages/Verify.tsx)** &nbsp;·&nbsp; **[�📊 Merchant](frontend/src/pages/Merchant.tsx)** &nbsp;·&nbsp; **[📜 Contract](contracts/src/main.leo)**
 
 </div>
 
@@ -36,13 +36,15 @@ The protocol covers the full commerce lifecycle:
 |---|---|
 | 🔒 **Private Purchase** | ZK proof of payment — `BHP256::commit_to_field()` with scalar randomizers |
 | 🌐 **Public Purchase** | Auditable on-chain payment for compliance use cases |
-| 🔐 **Escrow** | Trustless fund lock with an enforced 500-block (~8h) refund window |
+| 🔐 **Escrow** | Trustless fund lock with hashed timestamps and 500-block (~8h) refund window |
 | 🌲 **Cart Merkle Proofs** | Prove individual cart items without revealing the rest of your purchase |
 | 🎤 **Support Proofs** | Selective-disclosure tokens for dispute resolution |
 | 📎 **Merchant Registration** | On-chain merchant identity with MerchantLicense records |
 | 💎 **USDCx Payments** | Private stablecoin purchases via `test_usdcx_stablecoin.aleo` |
+| 🎟️ **Access Tokens** | Receipt-gated access tokens — prove purchase without revealing details |
+| ⭐ **Anonymous Reviews** | Verified reviews with nullifier-based double-review prevention |
 
-Everything runs through a single Leo smart contract (`veilreceipt_v4.aleo`) deployed on Aleo Testnet, with a React frontend and Express API backend.
+Everything runs through a single Leo smart contract (`veilreceipt_v6.aleo`) deployed on Aleo Testnet, with a React frontend and Express API backend.
 
 ---
 
@@ -55,12 +57,12 @@ Everything runs through a single Leo smart contract (`veilreceipt_v4.aleo`) depl
 │  ┌──────────────────────────────────────────────────────┐    │
 │  │        React Frontend  (Vite + Tailwind CSS)          │    │
 │  │                                                       │    │
-│  │  🛒 Shop           🧾 Receipts     📊 Merchant        │    │
-│  │  ──────────        ────────────    ────────────       │    │
-│  │  Product cards     Buyer receipts  Revenue split      │    │
-│  │  Cart sidebar      Escrow mgmt     ALEO / USDCx       │    │
-│  Pay mode select   Support proofs  Sales history      │    │
-│  ALEO / USDCx      TX activity     On-chain register  │    │
+│  │  🛒 Shop       🧾 Receipts   🔐 Verify   📊 Merchant  │    │
+│  │  ──────────    ────────────  ──────────  ────────────  │    │
+│  │  Product cards Buyer rcpts   Access tkns Revenue split │    │
+│  │  Cart + modal  Escrow mgmt   Anon review ALEO / USDCx │    │
+│  Pay mode sel  JSON export   My tokens    Sales history │    │
+│  Category icons Block count   Star rating  On-chain reg │    │
 │  │                                                       │    │
 │  │        useVeilWallet hook  (Shield Wallet SDK)        │    │
 │  └──────────────┬─────────────────────┬──────────────────┘   │
@@ -78,7 +80,7 @@ Everything runs through a single Leo smart contract (`veilreceipt_v4.aleo`) depl
        ┌──────────▼──────────────────────▼──────────────┐
        │                 Aleo Testnet                    │
        │  ──────────────────────────────────────────    │
-       │  veilreceipt_v4.aleo      (10 transitions)     │
+       │  veilreceipt_v6.aleo      (12 transitions)     │
        │  test_usdcx_stablecoin.aleo                    │
        └─────────────────────┬──────────────────────────┘
                              │  metadata only
@@ -92,9 +94,9 @@ Everything runs through a single Leo smart contract (`veilreceipt_v4.aleo`) depl
 
 ---
 
-##  Smart Contract  `veilreceipt_v4.aleo`
+##  Smart Contract  `veilreceipt_v6.aleo`
 
-The entire protocol lives in one Leo program with **10 transitions**. All on-chain state uses **BHP256::commit_to_field** with scalar randomizers — raw addresses, amounts, and identities are never stored in any mapping.
+The entire protocol lives in one Leo program with **12 transitions**, **8 record types**, and **7 mappings**. All on-chain state uses **BHP256::commit_to_field** with scalar randomizers — raw addresses, amounts, and identities are never stored in any mapping.
 
 ### Record Types (Private  encrypted for owner)
 
@@ -104,36 +106,41 @@ The entire protocol lives in one Leo program with **10 transitions**. All on-cha
 | `MerchantReceipt` | Merchant | purchase_commitment, total, token_type | Merchant proof of sale |
 | `EscrowReceipt` | Buyer | merchant, total, purchase_commitment | Escrow lock claim |
 | `ReturnClaim` | Buyer | purchase_commitment, refund_amount, return_reason_hash | Refund receipt |
-| `LoyaltyStamp` | Buyer | score, total_spent, stamp_commitment | Accumulated loyalty |
-| `LoyaltyProof` | Verifier | prover_commitment, threshold, verified | ZK merchant badge |
+| `CartItemProof` | Verifier | item_hash, verified | Merkle inclusion proof |
+| `MerchantLicense` | Merchant | store_commitment, merchant_name_hash | On-chain registration |
+| `AccessToken` | Buyer | merchant, gate_commitment, token_tier, nonce_seed | **Receipt-gated access proof** |
+| `ReviewToken` | Buyer | product_hash, rating, review_commitment, nonce_seed | **Anonymous verified review** |
 
 ### On-Chain Mappings (Commitment-keyed, boolean-valued)
 
 ```leo
-mapping purchase_exists:    field => bool   // replay-attack prevention
-mapping escrow_active:      field => bool   // is escrow live?
-mapping escrow_timestamps:  field => u64    // block height at lock
-mapping return_processed:   field => bool   // double-refund prevention
-mapping loyalty_claimed:    field => bool   // per-receipt nullifier
+mapping purchase_exists:    field => bool    // replay-attack prevention
+mapping escrow_active:      field => bool    // is escrow live?
+mapping escrow_timestamps:  field => field   // hashed block height at lock (BHP256)
+mapping return_processed:   field => bool    // double-refund prevention
+mapping merchant_active:    field => bool    // merchant registration status
+mapping review_submitted:   field => bool    // nullifier for double-review prevention
+mapping review_count:       field => u64     // aggregate review count per product
 ```
 
-No raw merchant addresses, amounts, or buyer identities are stored  only BHP256 commitment hashes.
+No raw merchant addresses, amounts, buyer identities, or block heights are stored — only BHP256 commitment hashes and opaque nullifiers.
 
-### All 11 Transitions
+### All 12 Transitions
 
 | # | Transition | Type | Description |
 |---|-----------|------|-------------|
-| 1 | `purchase_private_credits` | async | Atomic private ALEO purchase  BuyerReceipt + MerchantReceipt |
+| 1 | `purchase_private_credits` | async | Atomic private ALEO purchase → BuyerReceipt + MerchantReceipt |
 | 2 | `purchase_private_usdcx` | async | Atomic private USDCx purchase + compliance record |
 | 3 | `purchase_public_credits` | async | Public ALEO purchase (amounts visible) + private receipts |
 | 4 | `purchase_escrow_credits` | async | Lock credits on-chain under program address + EscrowReceipt |
-| 5 | `complete_escrow` | async | Buyer releases locked funds  private credits to merchant |
-| 6 | `refund_escrow` | async | Buyer self-refunds within 500-block window (~8 hours) |
-| 7 | `claim_loyalty` | async | Mint first LoyaltyStamp from a receipt (nullifier prevents double-claim) |
-| 8 | `merge_loyalty` | async | Accumulate additional stamp into existing LoyaltyStamp |
-| 9 | `prove_loyalty_tier` | sync | ZK threshold badge  proves score  N without revealing exact score |
-| 10 | `prove_purchase_support` | sync | Generate selective-disclosure support token from receipt |
-| 11 | `verify_support_token` | sync | Public verification of a support token |
+| 5 | `complete_escrow` | async | Buyer releases locked funds → private credits to merchant |
+| 6 | `refund_escrow` | async | Buyer self-refunds within 500-block window (hash-verified) |
+| 7 | `prove_cart_item` | inline | Merkle proof for a specific cart item |
+| 8 | `prove_purchase_support` | inline | Selective-disclosure support proof token |
+| 9 | `verify_support_token` | inline | Public verification of a support token |
+| 10 | `register_merchant` | async | On-chain merchant registration with MerchantLicense |
+| 11 | `mint_access_token` | inline | **Receipt-gated access token minting** |
+| 12 | `submit_anonymous_review` | async | **Anonymous verified review with nullifier** |
 
 ---
 
@@ -167,11 +174,12 @@ Buyer pays with Escrow mode
 purchase_escrow_credits()
    Credits locked under veilreceipt_v4.aleo program address
    escrow_active[commitment]     = true
-   escrow_timestamps[commitment] = block.height
+   escrow_timestamps[commitment] = BHP256::hash(block.height)
    → BuyerReceipt + EscrowReceipt issued to buyer
          │
-         ├── Within 500 blocks (~8h) ──► refund_escrow()
-         │        assert block.height < created_at + 500
+         ├── Within 500 blocks (~8h) ──► refund_escrow(created_block)
+         │        assert hash(created_block) == stored_hash
+         │        assert block.height < created_block + 500
          │        assert !return_processed[commitment]
          │        Credits returned → buyer private record
          │        → ReturnClaim issued
@@ -222,7 +230,7 @@ Build depth-2 Merkle tree:
 VeilReceipt/
 │
 ├── 📜 contracts/
-│   ├── src/main.leo              ← Full protocol (10 transitions)
+│   ├── src/main.leo              ← Full protocol (12 transitions, 8 records, 7 mappings)
 │   └── build/                   ← Compiled .aleo bytecode
 │
 ├── 🖥️ backend/
@@ -242,11 +250,12 @@ VeilReceipt/
 └── 🎨 frontend/
     └── src/
         ├── pages/
-        │   ├── Home.tsx          ← Landing + wallet connect
-        │   ├── Checkout.tsx      ← Shop, cart, payment mode selector
+        │   ├── Home.tsx          ← Landing + wallet connect + live stats
+        │   ├── Checkout.tsx      ← Shop, cart, confirmation modal, pay
         │   ├── Purchases.tsx     ← Purchase history + Merkle cart proofs
         │   ├── Merchant.tsx      ← Revenue dashboard + on-chain registration
-        │   └── Receipts.tsx      ← Receipts, escrow, TX history
+        │   ├── Receipts.tsx      ← Receipts, escrow countdown, JSON export
+        │   └── Verify.tsx        ← Access tokens + anonymous reviews
         ├── hooks/
         │   └── useVeilWallet.ts  ← All wallet ops + ZK proof + TX polling
         ├── stores/
@@ -271,7 +280,19 @@ VeilReceipt/
 
 ### 🔑 BHP256::commit_to_field() Commitments
 
-Aleo mappings are **public state**. Instead of chaining multiple `hash_to_field()` calls with manual salts, VeilReceipt v4 uses proper `BHP256::commit_to_field(PurchaseData, scalar_salt)`. The `scalar` type provides a cryptographic randomizer that makes commitments binding and hiding — a blockchain observer sees only commitments, the purchase relationship is completely hidden.
+Aleo mappings are **public state**. Instead of chaining multiple `hash_to_field()` calls with manual salts, VeilReceipt v6 uses proper `BHP256::commit_to_field(PurchaseData, scalar_salt)`. The `scalar` type provides a cryptographic randomizer that makes commitments binding and hiding — a blockchain observer sees only commitments, the purchase relationship is completely hidden.
+
+### 🎟️ Receipt-Gated Access Tokens
+
+Buyers can mint an `AccessToken` from any purchase receipt. The token proves purchase from a specific merchant without revealing what was bought, how much was paid, or when. `gate_commitment = BHP256::hash_to_field(purchase_commitment + gate_id)` binds the token to a specific gate/purpose. The receipt is non-consuming — nonce_seed rotation prevents replay.
+
+### ⭐ Anonymous Verified Reviews
+
+Buyers submit reviews by proving they purchased a product (via receipt). A double-review nullifier `BHP256::hash_to_field(purchase_commitment + product_hash + signer)` prevents submitting multiple reviews for the same product from the same receipt. Ratings (1-5) are stored only in the private `ReviewToken` record — never on-chain. The `review_count` mapping shows aggregate popularity without any reviewer identity.
+
+### 🔒 Hashed Escrow Timestamps
+
+Escrow creation block heights are stored as `BHP256::hash_to_field(block.height)` instead of raw values. This prevents timing analysis that could deanonymize purchases. At refund time, the buyer provides the raw block height; finalize verifies the hash matches before checking the 500-block window.
 
 ### ⚛️ Atomic Dual-Record Issuance
 
@@ -318,7 +339,7 @@ npm run dev          # → http://localhost:5173
 ```env
 VITE_API_BASE_URL=http://localhost:3001
 VITE_ALEO_NETWORK=testnet
-VITE_ALEO_PROGRAM_ID=veilreceipt_v4.aleo
+VITE_ALEO_PROGRAM_ID=veilreceipt_v6.aleo
 VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 ```
 
@@ -326,16 +347,25 @@ VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 
 ## 🗺️ Roadmap
 
-### ✅ Shipped
-- [x] Leo smart contract with 10 transitions deployed on Aleo Testnet
+### ✅ Shipped (v6)
+- [x] Leo smart contract with 12 transitions, 8 record types, 7 mappings — deployed on Aleo Testnet
 - [x] Proper `BHP256::commit_to_field()` with scalar randomizers for all commitments
 - [x] Atomic private ALEO Credits + USDCx purchases (ZK proof, no on-chain identity)
 - [x] Public purchase mode for auditable transactions
-- [x] Trustless escrow with 500-block (~8 hour) refund window
+- [x] Trustless escrow with hashed timestamps and 500-block (~8 hour) refund window
 - [x] Cart Merkle tree proofs — prove individual items without revealing the full cart
 - [x] On-chain merchant registration with MerchantLicense records
 - [x] Purchase history page with Merkle proof actions and support proofs
 - [x] Purchase support proof tokens + public verification helper
+- [x] **Receipt-gated access tokens** — mint privacy-preserving access proofs from any receipt
+- [x] **Anonymous verified reviews** — nullifier-based double-review prevention + aggregate counting
+- [x] **Hashed escrow timestamps** — BHP256 hashed block heights for finalize privacy
+- [x] **Verify page** — mint access tokens, submit reviews, view all tokens
+- [x] **Order confirmation modal** — itemized cart summary before checkout
+- [x] **Receipt JSON export** — downloadable receipt data for record-keeping
+- [x] **Live stats dashboard** — contract version, transitions, block height, privacy features
+- [x] **Category icons** — per-category product card icons (Software, Service, Tools, etc.)
+- [x] **Escrow block countdown** — live block height + hash-verified refund flow
 - [x] Express API with PostgreSQL (prod) / JSON (dev) adapter
 - [x] React + Shield Wallet frontend with real-time TX tracker
 - [x] TX ID resolution: shield temp → real `at1` on-chain ID with RPC auto-confirm
@@ -349,16 +379,16 @@ VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 - [ ] Cross-merchant private reputation scoring
 
 ### 🌐 Ecosystem & Integrations
-- [ ] Verifier SDK (npm package) so any merchant can check loyalty badges in their own platform
+- [ ] Verifier SDK (npm package) so merchants can check access tokens/reviews in their own platform
 - [ ] Mobile wallet support (iOS / Android)
-- [ ] Private voucher records — merchant issues discount tokens to loyalty badge holders
+- [ ] Private voucher records — merchant issues discount tokens to access token holders
 - [ ] Gift card protocol — transferable credit records with merchant redemption
 - [ ] Private order tracking — shipping status committed on-chain, recipient address never revealed
 - [ ] B2B invoicing — dual-record private invoices with integrated escrow payment rails
 - [ ] Decentralized backend — replace Express with Aleo program records + IPFS metadata
 
 ### 🚀 Mainnet
-- [ ] Deploy `veilreceipt_v4.aleo` to Aleo Mainnet
+- [ ] Deploy `veilreceipt_v6.aleo` to Aleo Mainnet
 - [ ] Integrate mainnet USDCx / USDC.aleo stablecoin
 - [ ] Frontend + backend switch to mainnet RPC endpoints
 - [ ] Production hardening: rate limiting, monitoring, audit

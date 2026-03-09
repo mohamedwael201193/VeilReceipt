@@ -92,6 +92,28 @@ export interface MerchantReceiptRecord {
   _fromWallet?: boolean;
 }
 
+// AccessToken record from chain — receipt-gated access proof
+export interface AccessTokenRecord {
+  owner: AleoAddress;
+  merchant: AleoAddress;
+  gate_commitment: string;
+  token_tier: number;
+  nonce_seed: string;
+  _plaintext?: string;
+  _fromWallet?: boolean;
+}
+
+// ReviewToken record from chain — anonymous verified review proof
+export interface ReviewTokenRecord {
+  owner: AleoAddress;
+  product_hash: string;
+  rating: number;
+  review_commitment: string;
+  nonce_seed: string;
+  _plaintext?: string;
+  _fromWallet?: boolean;
+}
+
 // Receipt metadata from backend
 export interface ReceiptMeta {
   id: string;

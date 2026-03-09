@@ -16,12 +16,14 @@ import {
   HomeIcon,
   LogOutIcon,
   PackageIcon,
+  ShieldIcon,
 } from '@/components/icons/Icons';
 
 const navLinks = [
   { path: '/', label: 'Home', icon: HomeIcon },
   { path: '/checkout', label: 'Shop', icon: CartIcon },
   { path: '/purchases', label: 'Purchases', icon: PackageIcon },
+  { path: '/verify', label: 'Verify', icon: ShieldIcon },
   { path: '/merchant', label: 'Merchant', icon: StoreIcon },
   { path: '/receipts', label: 'Receipts', icon: ReceiptIcon },
 ];

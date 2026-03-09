@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
 import { useCartStore } from '@/stores/cartStore';
 import { api } from '@/lib/api';
-import { Button, Badge, EmptyState, Select } from '@/components/ui/Components';
+import { Button, Badge, EmptyState, Select, Modal } from '@/components/ui/Components';
 import { LoadingSpinner, TokenIcon } from '@/components/icons/Icons';
 import {
   CartIcon,
@@ -18,6 +18,10 @@ import {
   ClockIcon,
   PackageIcon,
   TagIcon,
+  ZapIcon,
+  SettingsIcon,
+  AwardIcon,
+  CardIcon,
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress } from '@/lib/utils';
@@ -45,6 +49,7 @@ const Checkout: FC = () => {
   const [privacy, setPrivacy] = useState<PaymentPrivacy>('private');
   const [checkingOut, setCheckingOut] = useState(false);
   const [showCart, setShowCart] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -95,12 +100,17 @@ const Checkout: FC = () => {
       toast.error('Escrow only supports Aleo credits');
       return;
     }
+    // Show confirmation modal before proceeding
+    setConfirmModalOpen(true);
+  };
 
+  const executeCheckout = async () => {
+    setConfirmModalOpen(false);
     setCheckingOut(true);
     try {
       const total = getTotal();
       const cartItems = items.map(i => ({ sku: i.product.sku, quantity: i.quantity }));
-      const txId = await purchase(merchantAddress, total, cartItems, privacy, tokenType);
+      const txId = await purchase(merchantAddress!, total, cartItems, privacy, tokenType);
       toast.success(`Transaction submitted: ${txId.slice(0, 12)}...`);
       clearCart();
       setShowCart(false);
@@ -393,8 +403,66 @@ const Checkout: FC = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Order Confirmation Modal */}
+      <Modal
+        isOpen={confirmModalOpen}
+        onClose={() => setConfirmModalOpen(false)}
+        title="Confirm Order"
+      >
+        <div className="space-y-4">
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-3">
+            {items.map((item, i) => (
+              <div key={i} className="flex justify-between text-sm">
+                <span className="text-white/60">{item.product.name} x{item.quantity}</span>
+                <span className="text-white font-medium">{formatPrice(item.product.price * item.quantity)}</span>
+              </div>
+            ))}
+            <div className="border-t border-white/[0.06] pt-3 flex justify-between">
+              <span className="text-white font-medium">Total</span>
+              <span className="text-white font-bold text-lg">{formatPrice(total)}</span>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant={privacy === 'private' ? 'info' : privacy === 'escrow' ? 'warning' : 'default'} dot>
+              {privacy === 'private' ? 'Private Payment' : privacy === 'escrow' ? 'Escrow (Refundable)' : 'Public Payment'}
+            </Badge>
+            <Badge variant="purple" dot>
+              {tokenType === 'usdcx' ? 'USDCx' : 'Aleo Credits'}
+            </Badge>
+          </div>
+          {privacy === 'escrow' && (
+            <p className="text-xs text-amber-400/70">
+              Funds will be locked on-chain with a 500-block (~8 hour) refund window.
+            </p>
+          )}
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="ghost" onClick={() => setConfirmModalOpen(false)}>Cancel</Button>
+            <Button
+              variant="glow"
+              onClick={executeCheckout}
+              icon={<ShieldIcon size={14} />}
+            >
+              Confirm & Pay
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
+};
+
+// Category icon mapping
+const categoryIcon = (category: string | undefined, isUsdcx: boolean) => {
+  const cls = isUsdcx ? 'text-emerald-400/80' : 'text-green-400/80';
+  switch (category?.toLowerCase()) {
+    case 'software': return <ShieldIcon size={24} className={cls} />;
+    case 'service': return <AwardIcon size={24} className={cls} />;
+    case 'tools': return <SettingsIcon size={24} className={cls} />;
+    case 'hardware': return <ZapIcon size={24} className={cls} />;
+    case 'subscription': return <CardIcon size={24} className={cls} />;
+    default: return <PackageIcon size={24} className={cls} />;
+  }
 };
 
 // Product Card Component
@@ -460,7 +528,7 @@ const ProductCard: FC<{
           {/* Product icon/visual area */}
           <div className="relative mb-4">
             <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${iconBgGradient} border border-white/[0.06] flex items-center justify-center`}>
-              <PackageIcon size={24} className={isUsdcx ? 'text-emerald-400/80' : 'text-green-400/80'} />
+              {categoryIcon(product.category, isUsdcx)}
             </div>
             {/* Decorative dot */}
             <div className={`absolute top-1 right-0 w-8 h-8 rounded-full bg-gradient-to-br ${iconBgGradient} blur-2xl opacity-60 group-hover:opacity-100 transition-opacity`} />

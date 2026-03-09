@@ -5,7 +5,7 @@ export type PaymentPrivacy = 'private' | 'public' | 'escrow';
 export type TokenType = 'credits' | 'usdcx';
 
 export const ALEO_CONFIG = {
-  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v5.aleo',
+  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v6.aleo',
   network: (import.meta.env.VITE_ALEO_NETWORK || 'testnet') as AleoNetwork,
   rpcUrl: import.meta.env.VITE_ALEO_RPC_URL || 'https://api.explorer.provable.com/v1',
   usdcxProgramId: 'test_usdcx_stablecoin.aleo',
@@ -20,7 +20,7 @@ export function getChainId(): string {
   return ALEO_CONFIG.network === 'mainnet' ? 'mainnet' : 'testnetbeta';
 }
 
-// Program transition names — v4
+// Program transition names — v6
 export const TRANSITIONS = {
   purchase_private_credits: 'purchase_private_credits',
   purchase_private_usdcx: 'purchase_private_usdcx',
@@ -32,6 +32,8 @@ export const TRANSITIONS = {
   prove_purchase_support: 'prove_purchase_support',
   verify_support_token: 'verify_support_token',
   register_merchant: 'register_merchant',
+  mint_access_token: 'mint_access_token',
+  submit_anonymous_review: 'submit_anonymous_review',
 } as const;
 
 // Default fee in microcredits (100,000 = 0.1 credit — reasonable for testnet)

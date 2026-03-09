@@ -10,6 +10,7 @@ import Checkout from '@/pages/Checkout';
 import Purchases from '@/pages/Purchases';
 import Receipts from '@/pages/Receipts';
 import Merchant from '@/pages/Merchant';
+import Verify from '@/pages/Verify';
 
 const App: FC = () => (
   <WalletProviderWrapper>
@@ -21,6 +22,7 @@ const App: FC = () => (
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/receipts" element={<Receipts />} />
+          <Route path="/verify" element={<Verify />} />
           <Route path="/merchant" element={<Merchant />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
