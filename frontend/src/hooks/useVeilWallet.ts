@@ -14,6 +14,7 @@ import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
 import { buildCartMerkleTree, skuToField, storeMerkleTree, loadMerkleTree, formatMerkleProofInput, formatCartItemInput, type MerkleCartItem } from '@/lib/merkle';
 import { useUserStore } from '@/stores/userStore';
 import { usePendingTxStore } from '@/stores/txStore';
+import { useTxStatusStore } from '@/stores/txStatusStore';
 import { api } from '@/lib/api';
 import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, MerchantLicenseRecord } from '@/lib/types';
 
@@ -639,6 +640,10 @@ export function useVeilWallet() {
 
     console.log(`[VeilWallet] Executing ${programId}/${functionName} with ${inputs.length} inputs, fee: ${fee}`);
 
+    // Start global TX toast
+    const txLabel = functionName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    useTxStatusStore.getState().start(txLabel);
+
     const options: TransactionOptions = {
       program: programId,
       function: functionName,
@@ -647,11 +652,18 @@ export function useVeilWallet() {
       privateFee: false,
     };
 
-    const result = await walletExecute(options);
-    if (!result?.transactionId) throw new Error('No transaction ID returned');
+    try {
+      useTxStatusStore.getState().setPhase('proving');
+      const result = await walletExecute(options);
+      if (!result?.transactionId) throw new Error('No transaction ID returned');
 
-    console.log(`[VeilWallet] Transaction submitted: ${result.transactionId}`);
-    return result.transactionId;
+      console.log(`[VeilWallet] Transaction submitted: ${result.transactionId}`);
+      useTxStatusStore.getState().setPhase('broadcasting', result.transactionId);
+      return result.transactionId;
+    } catch (err) {
+      useTxStatusStore.getState().setPhase('failed');
+      throw err;
+    }
   }, [walletExecute]);
 
   // ============================
@@ -664,6 +676,7 @@ export function useVeilWallet() {
    */
   const pollTransaction = useCallback(async (txId: string, maxAttempts: number = 120): Promise<boolean> => {
     let currentId = txId;
+    useTxStatusStore.getState().setPhase('confirming', currentId);
 
     for (let i = 0; i < maxAttempts; i++) {
       try {
@@ -679,15 +692,18 @@ export function useVeilWallet() {
           if (realTxId && realTxId !== currentId && realTxId.startsWith('at1')) {
             console.log(`[Poll] Real TX ID: ${realTxId}`);
             pendingTxStore.updateTransactionId(currentId, realTxId);
+            useTxStatusStore.getState().setPhase('confirming', realTxId);
             currentId = realTxId;
           }
 
           if (status === 'finalized' || status === 'completed' || status === 'accepted') {
             pendingTxStore.confirmTransaction(currentId);
+            useTxStatusStore.getState().setPhase('confirmed', currentId);
             return true;
           }
           if (status === 'failed' || status === 'rejected') {
             pendingTxStore.failTransaction(currentId);
+            useTxStatusStore.getState().setPhase('failed', currentId);
             return false;
           }
         }
@@ -705,6 +721,7 @@ export function useVeilWallet() {
                 if (resp.ok) {
                   console.log(`[Poll] Confirmed via RPC: ${currentId}`);
                   pendingTxStore.confirmTransaction(currentId);
+                  useTxStatusStore.getState().setPhase('confirmed', currentId);
                   return true;
                 }
               } catch { /* try next */ }
@@ -1311,6 +1328,8 @@ export function useVeilWallet() {
         [receiptRecord._plaintext, toAleoField(productHash), salt],
       );
 
+      // Inline transition — mark confirmed immediately
+      useTxStatusStore.getState().setPhase('confirmed', txId);
       toast.success('Support proof submitted!');
       return txId;
     } finally {

@@ -3,6 +3,7 @@
 import { FC } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import TransactionToast from '@/components/ui/TransactionToast';
 import { WalletProviderWrapper } from '@/components/providers/WalletProvider';
 import Header from '@/components/layout/Header';
 import Home from '@/pages/Home';
@@ -41,6 +42,7 @@ const App: FC = () => (
             error: { iconTheme: { primary: '#f87171', secondary: '#fff' } },
           }}
         />
+        <TransactionToast />
       </div>
     </BrowserRouter>
   </WalletProviderWrapper>
