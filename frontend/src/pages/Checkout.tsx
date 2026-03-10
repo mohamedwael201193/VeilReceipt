@@ -26,7 +26,7 @@ import {
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, toAleoField } from '@/lib/utils';
-import { formatUsdcx, formatCredits } from '@/lib/stablecoin';
+import { formatUsdcx, formatCredits, formatUsad } from '@/lib/stablecoin';
 import { getReviewCount } from '@/lib/aleoNetwork';
 import type { Product } from '@/lib/types';
 import type { PaymentPrivacy, TokenType } from '@/lib/chain';
@@ -40,6 +40,7 @@ const PRIVACY_OPTIONS = [
 const TOKEN_OPTIONS = [
   { value: 'credits', label: 'Aleo Credits' },
   { value: 'usdcx', label: 'USDCx Stablecoin' },
+  { value: 'usad', label: 'USAD Stablecoin' },
 ];
 
 const Checkout: FC = () => {
@@ -116,6 +117,10 @@ const Checkout: FC = () => {
       toast.error('USDCx only supports private transfers');
       return;
     }
+    if (tokenType === 'usad' && privacy !== 'private') {
+      toast.error('USAD only supports private transfers');
+      return;
+    }
     if (privacy === 'escrow' && tokenType !== 'credits') {
       toast.error('Escrow only supports Aleo credits');
       return;
@@ -151,6 +156,7 @@ const Checkout: FC = () => {
 
   const formatPrice = (microcredits: number) => {
     if (tokenType === 'usdcx') return formatUsdcx(microcredits);
+    if (tokenType === 'usad') return formatUsad(microcredits);
     return formatCredits(microcredits);
   };
 
@@ -279,7 +285,7 @@ const Checkout: FC = () => {
                           >
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-white truncate">{item.product.name}</p>
-                              <p className="text-xs text-white/30 mt-0.5">{item.product.price_type === 'usdcx' ? formatUsdcx(item.product.price) : formatCredits(item.product.price)} each</p>
+                              <p className="text-xs text-white/30 mt-0.5">{item.product.price_type === 'usdcx' ? formatUsdcx(item.product.price) : item.product.price_type === 'usad' ? formatUsad(item.product.price) : formatCredits(item.product.price)} each</p>
                             </div>
                             <div className="flex items-center gap-1.5 ml-3">
                               <button
@@ -313,7 +319,7 @@ const Checkout: FC = () => {
                           value={tokenType}
                           onChange={(e) => {
                             setTokenType(e.target.value as TokenType);
-                            if (e.target.value === 'usdcx') setPrivacy('private');
+                            if (e.target.value === 'usdcx' || e.target.value === 'usad') setPrivacy('private');
                           }}
                           options={TOKEN_OPTIONS}
                         />
@@ -328,7 +334,7 @@ const Checkout: FC = () => {
                           </label>
                           <div className="grid grid-cols-3 gap-2">
                             {PRIVACY_OPTIONS.map((opt) => {
-                              const disabled = (tokenType === 'usdcx' && opt.value !== 'private') ||
+                              const disabled = ((tokenType === 'usdcx' || tokenType === 'usad') && opt.value !== 'private') ||
                                                (opt.value === 'escrow' && tokenType !== 'credits');
                               return (
                                 <button
@@ -382,7 +388,7 @@ const Checkout: FC = () => {
                             {privacy === 'private' ? 'Private' : privacy === 'escrow' ? 'Escrow' : 'Public'}
                           </Badge>
                           <Badge variant="purple" dot>
-                            {tokenType === 'usdcx' ? 'USDCx' : 'Credits'}
+                            {tokenType === 'usdcx' ? 'USDCx' : tokenType === 'usad' ? 'USAD' : 'Credits'}
                           </Badge>
                           {privacy === 'escrow' && (
                             <Badge variant="warning">500-block refund window</Badge>
@@ -449,7 +455,7 @@ const Checkout: FC = () => {
               {privacy === 'private' ? 'Private Payment' : privacy === 'escrow' ? 'Escrow (Refundable)' : 'Public Payment'}
             </Badge>
             <Badge variant="purple" dot>
-              {tokenType === 'usdcx' ? 'USDCx' : 'Aleo Credits'}
+              {tokenType === 'usdcx' ? 'USDCx' : tokenType === 'usad' ? 'USAD' : 'Aleo Credits'}
             </Badge>
           </div>
           {privacy === 'escrow' && (
@@ -474,8 +480,8 @@ const Checkout: FC = () => {
 };
 
 // Category icon mapping
-const categoryIcon = (category: string | undefined, isUsdcx: boolean) => {
-  const cls = isUsdcx ? 'text-emerald-400/80' : 'text-green-400/80';
+const categoryIcon = (category: string | undefined, isStablecoin: boolean) => {
+  const cls = isStablecoin ? 'text-emerald-400/80' : 'text-green-400/80';
   switch (category?.toLowerCase()) {
     case 'software': return <ShieldIcon size={24} className={cls} />;
     case 'service': return <AwardIcon size={24} className={cls} />;
@@ -494,23 +500,23 @@ const ProductCard: FC<{
   reviewCount?: number;
 }> = ({ product, onAdd, reviewCount }) => {
   // Use product's OWN price_type for display, not the global cart selection
-  const displayPrice = product.price_type === 'usdcx' ? formatUsdcx(product.price) : formatCredits(product.price);
-  const isUsdcx = product.price_type === 'usdcx';
+  const displayPrice = product.price_type === 'usdcx' ? formatUsdcx(product.price) : product.price_type === 'usad' ? formatUsad(product.price) : formatCredits(product.price);
+  const isStablecoin = product.price_type === 'usdcx' || product.price_type === 'usad';
 
   // Generate a gradient based on category/price_type
-  const iconBgGradient = isUsdcx
+  const iconBgGradient = isStablecoin
     ? 'from-emerald-500/20 to-teal-500/10'
     : 'from-green-500/20 to-emerald-500/10';
-  const priceGradient = isUsdcx
+  const priceGradient = isStablecoin
     ? 'from-emerald-400 via-teal-400 to-cyan-400'
     : 'from-green-400 via-emerald-400 to-teal-400';
-  const borderHover = isUsdcx
+  const borderHover = isStablecoin
     ? 'hover:border-emerald-500/25'
     : 'hover:border-green-500/25';
-  const shadowHover = isUsdcx
+  const shadowHover = isStablecoin
     ? 'hover:shadow-emerald-500/[0.08]'
     : 'hover:shadow-green-500/[0.08]';
-  const buttonBg = isUsdcx
+  const buttonBg = isStablecoin
     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 group-hover:shadow-emerald-500/20'
     : 'bg-green-500/10 border-green-500/20 text-green-400 group-hover:bg-green-500/20 group-hover:border-green-500/40 group-hover:shadow-green-500/20';
 
@@ -528,7 +534,7 @@ const ProductCard: FC<{
         className={`relative group cursor-pointer overflow-hidden rounded-2xl bg-white/[0.03] border border-white/[0.08] ${borderHover} ${shadowHover} shadow-xl transition-all duration-500`}
       >
         {/* Ambient glow effect on hover */}
-        <div className={`absolute -inset-1 bg-gradient-to-r ${isUsdcx ? 'from-emerald-500/[0.07] via-teal-500/[0.05] to-cyan-500/[0.07]' : 'from-green-500/[0.07] via-emerald-500/[0.05] to-teal-500/[0.07]'} rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl -z-10`} />
+        <div className={`absolute -inset-1 bg-gradient-to-r ${isStablecoin ? 'from-emerald-500/[0.07] via-teal-500/[0.05] to-cyan-500/[0.07]' : 'from-green-500/[0.07] via-emerald-500/[0.05] to-teal-500/[0.07]'} rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl -z-10`} />
 
         {/* Top accent line */}
         <div className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r ${priceGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
@@ -537,20 +543,20 @@ const ProductCard: FC<{
           {/* Header: Category + Token badge */}
           <div className="flex items-center justify-between mb-4">
             {product.category ? (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider ${isUsdcx ? 'bg-emerald-500/[0.08] text-emerald-400 border border-emerald-500/[0.12]' : 'bg-green-500/[0.08] text-green-400 border border-green-500/[0.12]'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${isUsdcx ? 'bg-emerald-400' : 'bg-green-400'}`} />
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider ${isStablecoin ? 'bg-emerald-500/[0.08] text-emerald-400 border border-emerald-500/[0.12]' : 'bg-green-500/[0.08] text-green-400 border border-green-500/[0.12]'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isStablecoin ? 'bg-emerald-400' : 'bg-green-400'}`} />
                 {product.category}
               </span>
             ) : <span />}
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${isUsdcx ? 'bg-emerald-500/[0.06] text-emerald-500/60 border border-emerald-500/10' : 'bg-green-500/[0.06] text-green-500/60 border border-green-500/10'}`}>
-              {isUsdcx ? '$ USDCx' : '◈ ALEO'}
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${isStablecoin ? 'bg-emerald-500/[0.06] text-emerald-500/60 border border-emerald-500/10' : 'bg-green-500/[0.06] text-green-500/60 border border-green-500/10'}`}>
+              {product.price_type === 'usad' ? '$ USAD' : product.price_type === 'usdcx' ? '$ USDCx' : '◈ ALEO'}
             </span>
           </div>
 
           {/* Product icon/visual area */}
           <div className="relative mb-4">
             <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${iconBgGradient} border border-white/[0.06] flex items-center justify-center`}>
-              {categoryIcon(product.category, isUsdcx)}
+              {categoryIcon(product.category, isStablecoin)}
             </div>
             {/* Decorative dot */}
             <div className={`absolute top-1 right-0 w-8 h-8 rounded-full bg-gradient-to-br ${iconBgGradient} blur-2xl opacity-60 group-hover:opacity-100 transition-opacity`} />
@@ -572,7 +578,7 @@ const ProductCard: FC<{
             <div>
               <p className="text-[10px] text-white/20 uppercase tracking-widest font-medium mb-1">Price</p>
               <div className="flex items-center gap-2">
-                <TokenIcon type={product.price_type === 'usdcx' ? 'usdcx' : 'credits'} size={22} />
+                <TokenIcon type={product.price_type === 'usad' ? 'usad' : product.price_type === 'usdcx' ? 'usdcx' : 'credits'} size={22} />
                 <p className={`text-2xl font-extrabold bg-gradient-to-r ${priceGradient} bg-clip-text text-transparent leading-none`}>
                   {displayPrice}
                 </p>

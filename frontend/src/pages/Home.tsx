@@ -317,8 +317,8 @@ const Home: FC = () => {
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { label: 'Contract Version', value: 'v6', sub: 'veilreceipt_v6.aleo' },
-              { label: 'Transitions', value: '12', sub: 'On-chain functions' },
+              { label: 'Contract Version', value: 'v7', sub: 'veilreceipt_v7.aleo' },
+              { label: 'Transitions', value: '13', sub: 'On-chain functions' },
               { label: 'Block Height', value: blockHeight > 0 ? blockHeight.toLocaleString() : '...', sub: 'Aleo Testnet' },
               { label: 'Privacy Features', value: '6', sub: 'ZK proof types' },
             ].map((stat, i) => (

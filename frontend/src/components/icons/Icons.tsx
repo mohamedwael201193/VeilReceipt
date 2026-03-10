@@ -153,13 +153,25 @@ export const PulseIndicator: FC<{ color?: string }> = ({ color = 'bg-yellow-400'
 );
 
 // ── Token Icon ────────────────────────────────────────────────────────────────
-// Shows the real USDCx or Aleo brand icon as a round badge
-export const TokenIcon: FC<{ type: 'credits' | 'usdcx' | 0 | 1; size?: number; className?: string }> = ({
+// Shows the real USDCx, USAD, or Aleo brand icon as a round badge
+export const TokenIcon: FC<{ type: 'credits' | 'usdcx' | 'usad' | 0 | 1 | 2; size?: number; className?: string }> = ({
   type,
   size = 18,
   className = '',
 }) => {
   const isUsdcx = type === 'usdcx' || type === 1;
+  const isUsad = type === 'usad' || type === 2;
+  if (isUsad) {
+    return (
+      <img
+        src="/USAD.svg"
+        alt="USAD"
+        width={size}
+        height={size}
+        className={`rounded-full object-cover flex-shrink-0 ${className}`}
+      />
+    );
+  }
   return isUsdcx ? (
     <img
       src="/usdcx.svg"
@@ -183,11 +195,12 @@ export const TokenIcon: FC<{ type: 'credits' | 'usdcx' | 0 | 1; size?: number; c
 // Inline icon + formatted amount with colour
 export const TokenAmount: FC<{
   amount: string;
-  type: 'credits' | 'usdcx' | 0 | 1;
+  type: 'credits' | 'usdcx' | 'usad' | 0 | 1 | 2;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }> = ({ amount, type, size = 'md', className = '' }) => {
   const isUsdcx = type === 'usdcx' || type === 1;
+  const isUsad = type === 'usad' || type === 2;
   const sizeMap = { sm: 14, md: 17, lg: 20, xl: 24 };
   const textMap = {
     sm: 'text-sm',
@@ -195,10 +208,11 @@ export const TokenAmount: FC<{
     lg: 'text-lg font-bold',
     xl: 'text-2xl font-extrabold',
   };
+  const colorClass = isUsad ? 'text-violet-300' : isUsdcx ? 'text-emerald-300' : 'text-sky-300';
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
       <TokenIcon type={type} size={sizeMap[size]} />
-      <span className={`${textMap[size]} ${isUsdcx ? 'text-emerald-300' : 'text-sky-300'} leading-none`}>
+      <span className={`${textMap[size]} ${colorClass} leading-none`}>
         {amount}
       </span>
     </span>

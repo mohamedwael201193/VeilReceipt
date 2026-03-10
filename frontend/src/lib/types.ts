@@ -12,7 +12,7 @@ export interface Product {
   name: string;
   description: string;
   price: number;
-  price_type: 'credits' | 'usdcx';
+  price_type: 'credits' | 'usdcx' | 'usad';
   sku: string;
   image_url?: string;
   category?: string;
@@ -34,7 +34,7 @@ export interface BuyerReceiptRecord {
   cart_commitment: string;
   timestamp: number;
   purchase_commitment: string;
-  token_type: number; // 0 = Credits, 1 = USDCx
+  token_type: number; // 0 = Credits, 1 = USDCx, 2 = USAD
   nonce_seed: string;
   // Wallet metadata
   _plaintext?: string;
@@ -86,7 +86,7 @@ export interface MerchantReceiptRecord {
   owner: AleoAddress;
   purchase_commitment: string;
   total: number;
-  token_type: number; // 0 = Credits, 1 = USDCx
+  token_type: number; // 0 = Credits, 1 = USDCx, 2 = USAD
   nonce_seed: string;
   _plaintext?: string;
   _fromWallet?: boolean;

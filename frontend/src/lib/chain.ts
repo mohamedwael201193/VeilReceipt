@@ -1,14 +1,15 @@
-// Aleo Network Configuration for VeilReceipt v4
+// Aleo Network Configuration for VeilReceipt v7
 
 export type AleoNetwork = 'mainnet' | 'testnet';
 export type PaymentPrivacy = 'private' | 'public' | 'escrow';
-export type TokenType = 'credits' | 'usdcx';
+export type TokenType = 'credits' | 'usdcx' | 'usad';
 
 export const ALEO_CONFIG = {
-  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v6.aleo',
+  programId: import.meta.env.VITE_ALEO_PROGRAM_ID || 'veilreceipt_v7.aleo',
   network: (import.meta.env.VITE_ALEO_NETWORK || 'testnet') as AleoNetwork,
   rpcUrl: import.meta.env.VITE_ALEO_RPC_URL || 'https://api.explorer.provable.com/v1',
   usdcxProgramId: 'test_usdcx_stablecoin.aleo',
+  usadProgramId: 'test_usad_stablecoin.aleo',
   creditsProgramId: 'credits.aleo',
 };
 
@@ -20,10 +21,11 @@ export function getChainId(): string {
   return ALEO_CONFIG.network === 'mainnet' ? 'mainnet' : 'testnetbeta';
 }
 
-// Program transition names — v6
+// Program transition names — v7
 export const TRANSITIONS = {
   purchase_private_credits: 'purchase_private_credits',
   purchase_private_usdcx: 'purchase_private_usdcx',
+  purchase_private_usad: 'purchase_private_usad',
   purchase_public_credits: 'purchase_public_credits',
   purchase_escrow_credits: 'purchase_escrow_credits',
   complete_escrow: 'complete_escrow',

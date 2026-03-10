@@ -18,7 +18,7 @@ import {
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, formatDate, computeReasonHash } from '@/lib/utils';
-import { formatCredits, formatUsdcx } from '@/lib/stablecoin';
+import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
 import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
 import { usePendingTxStore } from '@/stores/txStore';
@@ -155,13 +155,13 @@ const Receipts: FC = () => {
   };
 
   const formatAmount = (amount: number, tokenType: number) => {
-    return tokenType === 1 ? formatUsdcx(amount) : formatCredits(amount);
+    return tokenType === 1 ? formatUsdcx(amount) : tokenType === 2 ? formatUsad(amount) : formatCredits(amount);
   };
 
   const exportReceipt = (receipt: BuyerReceiptRecord) => {
     const data = {
       type: 'VeilReceipt',
-      version: 'v6',
+      version: 'v7',
       purchase_commitment: receipt.purchase_commitment,
       merchant: receipt.merchant,
       total: receipt.total,
@@ -354,9 +354,9 @@ const Receipts: FC = () => {
                                 <ReceiptIcon size={14} className="text-green-400" />
                               </div>
                               <span className="text-white font-medium text-sm">Purchase Receipt</span>
-                              <Badge variant={r.token_type === 1 ? 'info' : 'purple'} dot>
-                                <TokenIcon type={r.token_type as 0|1} size={11} className="inline mr-0.5" />
-                                {r.token_type === 1 ? 'USDCx' : 'Credits'}
+                              <Badge variant={r.token_type === 1 ? 'info' : r.token_type === 2 ? 'warning' : 'purple'} dot>
+                                <TokenIcon type={r.token_type as 0|1|2} size={11} className="inline mr-0.5" />
+                                {r.token_type === 1 ? 'USDCx' : r.token_type === 2 ? 'USAD' : 'Credits'}
                               </Badge>
                             </div>
 
@@ -449,6 +449,10 @@ const Receipts: FC = () => {
                         <div>
                           <span className="text-xs text-white/30 uppercase tracking-wider">USDCx Revenue</span>
                           <div className="mt-1"><TokenAmount amount={formatUsdcx(merchantReceipts.filter(r => r.token_type === 1).reduce((sum, r) => sum + r.total, 0))} type="usdcx" size="lg" /></div>
+                        </div>
+                        <div>
+                          <span className="text-xs text-white/30 uppercase tracking-wider">USAD Revenue</span>
+                          <div className="mt-1"><TokenAmount amount={formatUsad(merchantReceipts.filter(r => r.token_type === 2).reduce((sum, r) => sum + r.total, 0))} type="usad" size="lg" /></div>
                         </div>
                       </div>
                     </Card>

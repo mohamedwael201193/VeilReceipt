@@ -13,7 +13,7 @@ import {
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, formatDate } from '@/lib/utils';
-import { formatCredits, formatUsdcx } from '@/lib/stablecoin';
+import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { listStoredPurchases } from '@/lib/merkle';
 import type { BuyerReceiptRecord } from '@/lib/types';
 
@@ -88,7 +88,7 @@ const Purchases: FC = () => {
   };
 
   const formatAmount = (amount: number, tokenType: number) => {
-    return tokenType === 1 ? formatUsdcx(amount) : formatCredits(amount);
+    return tokenType === 1 ? formatUsdcx(amount) : tokenType === 2 ? formatUsad(amount) : formatCredits(amount);
   };
 
   if (!connected) {
@@ -210,9 +210,9 @@ const Purchases: FC = () => {
                           <PackageIcon size={14} className="text-green-400" />
                         </div>
                         <span className="text-white font-medium text-sm">Purchase</span>
-                        <Badge variant={r.token_type === 1 ? 'info' : 'success'} dot>
-                          <TokenIcon type={r.token_type as 0|1} size={11} className="inline mr-0.5" />
-                          {r.token_type === 1 ? 'USDCx' : 'Credits'}
+                        <Badge variant={r.token_type === 1 ? 'info' : r.token_type === 2 ? 'purple' : 'success'} dot>
+                          <TokenIcon type={r.token_type as 0|1|2} size={11} className="inline mr-0.5" />
+                          {r.token_type === 1 ? 'USDCx' : r.token_type === 2 ? 'USAD' : 'Credits'}
                         </Badge>
                         {hasMerkleData(r) && (
                           <Badge variant="info" dot>Merkle</Badge>

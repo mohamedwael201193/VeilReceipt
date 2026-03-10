@@ -46,7 +46,7 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'VeilReceipt API',
     version: '4.0.0',
-    program: 'veilreceipt_v6.aleo',
+    program: 'veilreceipt_v7.aleo',
     description: 'Privacy-first commerce protocol — atomic payments, escrow refund, Merkle cart proofs',
     endpoints: {
       auth: '/auth',
@@ -127,7 +127,7 @@ async function start() {
   ╔══════════════════════════════════════════════════╗
   ║     VeilReceipt v4 Backend                       ║
   ║     Port: ${String(PORT).padEnd(10)}                          ║
-  ║     Program: veilreceipt_v6.aleo                 ║
+  ║     Program: veilreceipt_v7.aleo                 ║
   ╚══════════════════════════════════════════════════╝
       `);
     });

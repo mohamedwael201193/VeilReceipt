@@ -1,7 +1,7 @@
 {
-  "program": "veilreceipt_v6.aleo",
+  "program": "veilreceipt_v7.aleo",
   "version": "0.3.0",
-  "description": "Privacy-first commerce protocol: atomic private payments, escrow, Cart Merkle proofs, receipt-gated access tokens, anonymous verified reviews",
+  "description": "Privacy-first commerce protocol: atomic private payments (Credits + USDCx + USAD), escrow, Cart Merkle proofs, receipt-gated access tokens, anonymous verified reviews",
   "license": "MIT",
   "leo": "3.4.0",
   "dependencies": [
@@ -12,6 +12,11 @@
     },
     {
       "name": "test_usdcx_stablecoin.aleo",
+      "location": "network",
+      "network": "testnet"
+    },
+    {
+      "name": "test_usad_stablecoin.aleo",
       "location": "network",
       "network": "testnet"
     }

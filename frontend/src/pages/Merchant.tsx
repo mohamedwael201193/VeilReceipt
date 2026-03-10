@@ -21,7 +21,7 @@ import {
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress } from '@/lib/utils';
-import { formatUsdcx, formatCredits } from '@/lib/stablecoin';
+import { formatUsdcx, formatCredits, formatUsad } from '@/lib/stablecoin';
 import type { Product } from '@/lib/types';
 
 type MerchantTab = 'products' | 'analytics';
@@ -43,7 +43,7 @@ const Merchant: FC = () => {
     name: '',
     description: '',
     price: '',
-    price_type: 'credits' as 'credits' | 'usdcx',
+    price_type: 'credits' as 'credits' | 'usdcx' | 'usad',
     sku: '',
     category: '',
   });
@@ -103,8 +103,10 @@ const Merchant: FC = () => {
       // Split revenue by token type from on-chain records
       const creditsReceipts = onChainReceipts.filter((r: any) => r.token_type === 0);
       const usdcxReceipts = onChainReceipts.filter((r: any) => r.token_type === 1);
+      const usadReceipts = onChainReceipts.filter((r: any) => r.token_type === 2);
       const creditsRevenue = creditsReceipts.reduce((sum: number, r: any) => sum + (r.total || 0), 0);
       const usdcxRevenue = usdcxReceipts.reduce((sum: number, r: any) => sum + (r.total || 0), 0);
+      const usadRevenue = usadReceipts.reduce((sum: number, r: any) => sum + (r.total || 0), 0);
 
       setStats({
         ...statsRes,
@@ -112,6 +114,7 @@ const Merchant: FC = () => {
         totalRevenue: Math.max(backendRevenue, onChainRevenue),
         creditsRevenue,
         usdcxRevenue,
+        usadRevenue,
         onChainSales: onChainCount,
         onChainRevenue,
         // ALL on-chain merchant receipts are private (private + public purchases both produce private records)
@@ -311,6 +314,7 @@ const Merchant: FC = () => {
             { label: 'Total Sales', value: stats?.totalReceipts ?? 0, icon: <ReceiptIcon size={22} /> },
             { label: 'Credits Revenue', value: <TokenAmount amount={stats?.creditsRevenue != null ? formatCredits(stats.creditsRevenue) : (stats?.totalRevenue ? formatCredits(stats.totalRevenue) : '0.00 ALEO')} type="credits" size="lg" />, icon: <DollarIcon size={22} /> },
             { label: 'USDCx Revenue', value: <TokenAmount amount={stats?.usdcxRevenue != null ? formatUsdcx(stats.usdcxRevenue) : '$0.00'} type="usdcx" size="lg" />, icon: <TrendingIcon size={22} /> },
+            { label: 'USAD Revenue', value: <TokenAmount amount={stats?.usadRevenue != null ? formatUsad(stats.usadRevenue) : '$0.00'} type="usad" size="lg" />, icon: <TrendingIcon size={22} /> },
           ].map((stat) => (
             <motion.div
               key={stat.label}
@@ -396,8 +400,8 @@ const Merchant: FC = () => {
                       </div>
                       <div className="mt-4 flex items-end justify-between pt-3 border-t border-white/[0.05]">
                         <TokenAmount
-                          amount={p.price_type === 'usdcx' ? formatUsdcx(p.price) : formatCredits(p.price)}
-                          type={p.price_type === 'usdcx' ? 'usdcx' : 'credits'}
+                          amount={p.price_type === 'usdcx' ? formatUsdcx(p.price) : p.price_type === 'usad' ? formatUsad(p.price) : formatCredits(p.price)}
+                          type={p.price_type === 'usad' ? 'usad' : p.price_type === 'usdcx' ? 'usdcx' : 'credits'}
                           size="lg"
                         />
                         <div className="flex items-center gap-2">
@@ -490,14 +494,15 @@ const Merchant: FC = () => {
           <Select
             label="Price Currency"
             value={productForm.price_type}
-            onChange={(e) => setProductForm({ ...productForm, price_type: e.target.value as 'credits' | 'usdcx' })}
+            onChange={(e) => setProductForm({ ...productForm, price_type: e.target.value as 'credits' | 'usdcx' | 'usad' })}
             options={[
               { value: 'credits', label: 'Aleo Credits' },
               { value: 'usdcx', label: 'USDCx Stablecoin' },
+              { value: 'usad', label: 'USAD Stablecoin' },
             ]}
           />
           <Input
-            label={productForm.price_type === 'usdcx' ? 'Price (in USDCx, e.g. 5.00)' : 'Price (in Aleo Credits, e.g. 5.00)'}
+            label={productForm.price_type === 'usdcx' ? 'Price (in USDCx, e.g. 5.00)' : productForm.price_type === 'usad' ? 'Price (in USAD, e.g. 5.00)' : 'Price (in Aleo Credits, e.g. 5.00)'}
             type="number"
             step="0.01"
             value={productForm.price}

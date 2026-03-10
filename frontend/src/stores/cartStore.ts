@@ -27,7 +27,7 @@ export const useCartStore = create<CartState>()(
       tokenType: 'credits',
 
       addItem: (product) => set((state) => {
-        const tokenForProduct = product.price_type === 'usdcx' ? 'usdcx' : 'credits';
+        const tokenForProduct = product.price_type === 'usdcx' ? 'usdcx' : product.price_type === 'usad' ? 'usad' : 'credits';
         if (state.merchantAddress && state.merchantAddress !== product.merchant_address) {
           return { items: [{ product, quantity: 1 }], merchantAddress: product.merchant_address, tokenType: tokenForProduct };
         }

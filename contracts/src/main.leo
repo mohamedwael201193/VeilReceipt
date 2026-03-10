@@ -1,5 +1,5 @@
-// VeilReceipt v6 — Privacy-first commerce protocol on Aleo
-// Atomic private payments (Credits + USDCx), escrow with refund window,
+// VeilReceipt v7 — Privacy-first commerce protocol on Aleo
+// Atomic private payments (Credits + USDCx + USAD), escrow with refund window,
 // Cart Merkle proofs for selective item disclosure, merchant registration,
 // receipt-gated access tokens, and anonymous verified reviews.
 // All commitments use BHP256::commit_to_field() with scalar randomizers.
@@ -7,8 +7,9 @@
 
 import credits.aleo;
 import test_usdcx_stablecoin.aleo;
+import test_usad_stablecoin.aleo;
 
-program veilreceipt_v6.aleo {
+program veilreceipt_v7.aleo {
 
     // ========== Lifecycle ==========
     @noupgrade
@@ -268,6 +269,88 @@ program veilreceipt_v6.aleo {
     }
 
     async function finalize_priv_usdcx(
+        purchase_commitment: field,
+        transfer_f: Future
+    ) {
+        transfer_f.await();
+        let exists: bool = Mapping::get_or_use(purchase_exists, purchase_commitment, false);
+        assert(!exists);
+        Mapping::set(purchase_exists, purchase_commitment, true);
+    }
+
+    // ================================================================
+    //  2b. ATOMIC PRIVATE PURCHASE — USAD STABLECOIN
+    //      Single transaction: USAD transfer_private + dual receipts.
+    //      Requires MerkleProof pair for compliance verification.
+    //      token_type = 2 for USAD.
+    // ================================================================
+
+    async transition purchase_private_usad(
+        payment: test_usad_stablecoin.aleo/Token,
+        merchant: address,
+        amount: u128,
+        cart_commitment: field,
+        timestamp: u64,
+        salt: scalar,
+        private proofs: [MerkleProof; 2]
+    ) -> (
+        BuyerReceipt,
+        MerchantReceipt,
+        test_usad_stablecoin.aleo/ComplianceRecord,
+        test_usad_stablecoin.aleo/Token,
+        test_usad_stablecoin.aleo/Token,
+        Future
+    ) {
+        let amount_u64: u64 = amount as u64;
+        assert(amount_u64 > 0u64);
+        assert(merchant != self.signer);
+
+        // Atomic USAD private transfer
+        let (compliance, token_merchant, token_change, transfer_f): (
+            test_usad_stablecoin.aleo/ComplianceRecord,
+            test_usad_stablecoin.aleo/Token,
+            test_usad_stablecoin.aleo/Token,
+            Future
+        ) = test_usad_stablecoin.aleo/transfer_private(merchant, amount, payment, proofs);
+
+        // Proper cryptographic commitment
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: amount_u64,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
+
+        let nonce_buyer: field = BHP256::hash_to_field(
+            purchase_commitment + self.signer as field
+        );
+        let nonce_merchant: field = BHP256::hash_to_field(
+            purchase_commitment + merchant as field
+        );
+
+        let buyer_receipt: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: amount_u64,
+            cart_commitment: cart_commitment,
+            timestamp: timestamp,
+            purchase_commitment: purchase_commitment,
+            token_type: 2u8,
+            nonce_seed: nonce_buyer
+        };
+
+        let merchant_receipt: MerchantReceipt = MerchantReceipt {
+            owner: merchant,
+            purchase_commitment: purchase_commitment,
+            total: amount_u64,
+            token_type: 2u8,
+            nonce_seed: nonce_merchant
+        };
+
+        let f: Future = finalize_priv_usad(purchase_commitment, transfer_f);
+        return (buyer_receipt, merchant_receipt, compliance, token_merchant, token_change, f);
+    }
+
+    async function finalize_priv_usad(
         purchase_commitment: field,
         transfer_f: Future
     ) {

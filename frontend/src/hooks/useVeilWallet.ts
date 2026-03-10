@@ -8,7 +8,7 @@ import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import type { TransactionOptions } from '@provablehq/aleo-types';
 import toast from 'react-hot-toast';
 import { ALEO_CONFIG, TRANSITIONS, DEFAULT_FEE, type PaymentPrivacy, type TokenType } from '@/lib/chain';
-import { buildUsdcxMerkleProofs } from '@/lib/stablecoin';
+import { buildUsdcxMerkleProofs, buildUsadMerkleProofs } from '@/lib/stablecoin';
 import { getCurrentTimestamp, sleep, toAleoU64, toAleoField, generateAleoScalar } from '@/lib/utils';
 import { getCurrentBlockHeight, getReviewCount as fetchReviewCount, getMappingValue as fetchMappingValue } from '@/lib/aleoNetwork';
 import { buildCartMerkleTree, skuToField, storeMerkleTree, loadMerkleTree, formatMerkleProofInput, formatCartItemInput, type MerkleCartItem } from '@/lib/merkle';
@@ -22,6 +22,7 @@ import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord, Me
 const PROGRAM_ID = ALEO_CONFIG.programId;
 const CREDITS_PROGRAM = ALEO_CONFIG.creditsProgramId;
 const USDCX_PROGRAM = ALEO_CONFIG.usdcxProgramId;
+const USAD_PROGRAM = ALEO_CONFIG.usadProgramId;
 const RPC = ALEO_CONFIG.rpcUrl;
 
 /**
@@ -343,6 +344,51 @@ export function useVeilWallet() {
   }, [fetchRawRecords, decryptRecord]);
 
   /**
+   * Find a USAD Token record with sufficient balance.
+   * Token records have { owner: address, amount: u128 }.
+   * Returns plaintext string.
+   */
+  const findUsadTokenRecord = useCallback(async (minAmount: bigint): Promise<string | null> => {
+    const records = await fetchRawRecords(USAD_PROGRAM);
+    console.log(`[findUsadTokenRecord] Found ${records.length} USAD records, need ${minAmount}`);
+
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+
+      let plaintext: string | null = null;
+      let amount = BigInt(0);
+
+      if (typeof record.plaintext === 'string' && record.plaintext.includes('{')) {
+        plaintext = record.plaintext;
+      }
+
+      if (!plaintext) {
+        plaintext = await decryptRecord(record);
+      }
+
+      if (!plaintext) continue;
+
+      const amountMatch = plaintext.match(/amount\s*:\s*([\d_]+)u128/);
+      if (amountMatch) {
+        amount = BigInt(amountMatch[1].replace(/_/g, ''));
+      }
+
+      if (amount === BigInt(0)) {
+        amount = parseTokenAmount(record);
+      }
+
+      if (amount >= minAmount) {
+        console.log(`[findUsadTokenRecord] ✓ Found USAD record with ${amount} (need ${minAmount})`);
+        return plaintext;
+      }
+    }
+
+    console.warn('[findUsadTokenRecord] No USAD record with sufficient balance');
+    return null;
+  }, [fetchRawRecords, decryptRecord]);
+
+  /**
    * Find a record from the main program by metadata criteria.
    * Used for BuyerReceipt, EscrowReceipt, CartItemProof etc.
    */
@@ -612,6 +658,41 @@ export function useVeilWallet() {
       }
 
       console.log(`[VeilWallet] USDCx record: ${amt} micro`);
+      results.push({
+        ...record,
+        amount: amt,
+        _plaintext: plaintext || '',
+        owner: record.owner || address,
+      });
+    }
+    return results;
+  }, [fetchRawRecords, decryptRecord, address]);
+
+  /**
+   * Get USAD token records with parsed amounts.
+   */
+  const getUsadTokens = useCallback(async () => {
+    const records = await fetchRawRecords(USAD_PROGRAM);
+    console.log('[VeilWallet] Raw USAD records:', records.length);
+
+    const results: any[] = [];
+    for (const record of records) {
+      if (!record || typeof record !== 'object') continue;
+      if (record.spent === true) continue;
+
+      const plaintext = await decryptRecord(record);
+      let amt = BigInt(0);
+
+      if (plaintext) {
+        const match = plaintext.match(/amount\s*:\s*([\d_]+)u128/);
+        if (match) amt = BigInt(match[1].replace(/_/g, ''));
+      }
+
+      if (amt === BigInt(0)) {
+        amt = parseTokenAmount(record);
+      }
+
+      console.log(`[VeilWallet] USAD record: ${amt} micro`);
       results.push({
         ...record,
         amount: amt,
@@ -1037,6 +1118,104 @@ export function useVeilWallet() {
       setLoading(false);
     }
   }, [address, findTokenRecord, fetchRawRecords, executeTransaction, pollTransaction]);
+
+  /**
+   * Private purchase with USAD stablecoin.
+   * Finds a USAD Token record via wallet.decrypt(), builds MerkleProofs,
+   * and executes the private transfer.
+   */
+  const purchasePrivateUsad = useCallback(async (
+    merchantAddress: string,
+    amountMicro: number,
+    cartItems: { sku: string; quantity: number }[],
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const tokenRecord = await findUsadTokenRecord(BigInt(amountMicro));
+
+      if (!tokenRecord) {
+        const rawRecords = await fetchRawRecords(USAD_PROGRAM);
+        const unspent = rawRecords.filter((r: any) => r.spent !== true);
+
+        if (unspent.length === 0) {
+          throw new Error(
+            'No private USAD token records found. Please ensure you have USAD tokens in your wallet.'
+          );
+        }
+
+        throw new Error(
+          `Insufficient USAD balance. Need ${(amountMicro / 1_000_000).toFixed(2)} USAD. ` +
+          `Found ${unspent.length} record(s) but none with sufficient balance.`
+        );
+      }
+
+      const timestamp = getCurrentTimestamp();
+      const salt = generateAleoScalar();
+      const proofs = buildUsadMerkleProofs();
+
+      // Build Merkle tree for cart items
+      const merkleItems: MerkleCartItem[] = cartItems.map(ci => ({
+        product_id: skuToField(ci.sku),
+        quantity: ci.quantity,
+        price: 0,
+      }));
+      const merkleTree = buildCartMerkleTree(merkleItems);
+      const merkleRoot = merkleTree.root;
+
+      const inputs = [
+        tokenRecord,
+        merchantAddress,
+        `${amountMicro}u128`,
+        toAleoField(merkleRoot),
+        toAleoU64(timestamp),
+        salt,
+        proofs,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_private_usad,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { merchant: merchantAddress, total: amountMicro, tokenType: 'usad', privacy: 'private' },
+      });
+
+      toast.success('Private USAD purchase submitted!');
+
+      pollTransaction(txId).then(async (confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('USAD purchase confirmed!');
+          storeMerkleTree(txId, merkleTree, address);
+          try {
+            await api.storeReceipt({
+              txId,
+              merchantAddress,
+              buyerAddress: address,
+              total: amountMicro,
+              tokenType: 'usad',
+              purchaseType: 'private',
+              cartCommitment: merkleRoot,
+              timestamp,
+            });
+          } catch { /* non-critical */ }
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Transaction may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findUsadTokenRecord, fetchRawRecords, executeTransaction, pollTransaction]);
 
   /**
    * Escrow purchase with Aleo Credits.
@@ -1503,6 +1682,9 @@ export function useVeilWallet() {
     if (tokenType === 'usdcx' && privacy === 'private') {
       return purchasePrivateUsdcx(merchantAddress, totalMicro, cartItems);
     }
+    if (tokenType === 'usad' && privacy === 'private') {
+      return purchasePrivateUsad(merchantAddress, totalMicro, cartItems);
+    }
     if (privacy === 'escrow') {
       return purchaseEscrowCredits(merchantAddress, totalMicro, cartItems);
     }
@@ -1511,7 +1693,7 @@ export function useVeilWallet() {
     }
     // Default: private credits
     return purchasePrivateCredits(merchantAddress, totalMicro, cartItems);
-  }, [purchasePrivateCredits, purchasePrivateUsdcx, purchasePublicCredits, purchaseEscrowCredits]);
+  }, [purchasePrivateCredits, purchasePrivateUsdcx, purchasePrivateUsad, purchasePublicCredits, purchaseEscrowCredits]);
 
   // Cleanup
   useEffect(() => {
@@ -1535,6 +1717,7 @@ export function useVeilWallet() {
     purchase,
     purchasePrivateCredits,
     purchasePrivateUsdcx,
+    purchasePrivateUsad,
     purchasePublicCredits,
     purchaseEscrowCredits,
 
@@ -1569,6 +1752,7 @@ export function useVeilWallet() {
     getMerchantLicense,
     getCreditRecords,
     getUsdcxTokens,
+    getUsadTokens,
 
     // Advanced record access
     findRecord,
@@ -1576,6 +1760,7 @@ export function useVeilWallet() {
     findRecordWithRetry,
     findCreditsRecord,
     findTokenRecord,
+    findUsadTokenRecord,
 
     // State
     loading,

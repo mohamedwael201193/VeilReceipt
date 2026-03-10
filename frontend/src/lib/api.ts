@@ -98,7 +98,7 @@ class ApiClient {
     return this.request<{ product: any }>(`/products/${id}`);
   }
 
-  async createProduct(data: { name: string; description: string; price: number; price_type: 'credits' | 'usdcx'; sku: string; imageUrl?: string; category?: string }) {
+  async createProduct(data: { name: string; description: string; price: number; price_type: 'credits' | 'usdcx' | 'usad'; sku: string; imageUrl?: string; category?: string }) {
     return this.request<{ product: any }>('/products', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -202,7 +202,7 @@ class ApiClient {
     merchantAddress: string;
     buyerAddress: string;
     total: number;
-    tokenType?: 'credits' | 'usdcx';
+    tokenType?: 'credits' | 'usdcx' | 'usad';
     purchaseType?: 'private' | 'public' | 'escrow';
     status?: 'confirmed' | 'escrowed';
     cartCommitment?: string;
