@@ -165,7 +165,7 @@ const Receipts: FC = () => {
       purchase_commitment: receipt.purchase_commitment,
       merchant: receipt.merchant,
       total: receipt.total,
-      token_type: receipt.token_type === 0 ? 'credits' : 'usdcx',
+      token_type: receipt.token_type === 0 ? 'credits' : receipt.token_type === 1 ? 'usdcx' : 'usad',
       cart_commitment: receipt.cart_commitment,
       timestamp: receipt.timestamp,
       exported_at: new Date().toISOString(),
@@ -363,7 +363,7 @@ const Receipts: FC = () => {
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mt-4">
                               <div>
                                 <span className="text-xs text-white/30 uppercase tracking-wider">Amount</span>
-                                <div className="mt-1"><TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1} size="lg" /></div>
+                                <div className="mt-1"><TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1 | 2} size="lg" /></div>
                               </div>
                               <div>
                                 <span className="text-xs text-white/30 uppercase tracking-wider">Merchant</span>
@@ -472,9 +472,9 @@ const Receipts: FC = () => {
                                   <ReceiptIcon size={14} className="text-emerald-400" />
                                 </div>
                                 <span className="text-white font-medium text-sm">Sale Receipt</span>
-                                <Badge variant={r.token_type === 1 ? 'info' : 'purple'} dot>
-                                  <TokenIcon type={r.token_type as 0|1} size={11} className="inline mr-0.5" />
-                                  {r.token_type === 1 ? 'USDCx' : 'Credits'}
+                                <Badge variant={r.token_type === 1 ? 'info' : r.token_type === 2 ? 'warning' : 'purple'} dot>
+                                  <TokenIcon type={r.token_type as 0|1|2} size={11} className="inline mr-0.5" />
+                                  {r.token_type === 1 ? 'USDCx' : r.token_type === 2 ? 'USAD' : 'Credits'}
                                 </Badge>
                                 <Badge variant="success" dot>Received</Badge>
                               </div>
@@ -482,11 +482,11 @@ const Receipts: FC = () => {
                               <div className="grid grid-cols-2 gap-5 mt-4">
                                 <div>
                                   <span className="text-xs text-white/30 uppercase tracking-wider">Amount</span>
-                                  <div className="mt-1"><TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1} size="lg" /></div>
+                                  <div className="mt-1"><TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1 | 2} size="lg" /></div>
                                 </div>
                                 <div>
                                   <span className="text-xs text-white/30 uppercase tracking-wider">Type</span>
-                                  <p className="text-white/60 text-sm mt-1">{r.token_type === 1 ? 'USDCx Stablecoin' : 'Aleo Credits'}</p>
+                                  <p className="text-white/60 text-sm mt-1">{r.token_type === 1 ? 'USDCx Stablecoin' : r.token_type === 2 ? 'USAD Stablecoin' : 'Aleo Credits'}</p>
                                 </div>
                               </div>
 

@@ -18,7 +18,7 @@ import {
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, copyToClipboard } from '@/lib/utils';
-import { formatCredits } from '@/lib/stablecoin';
+import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { ALEO_CONFIG } from '@/lib/chain';
 import type { BuyerReceiptRecord } from '@/lib/types';
 
@@ -314,13 +314,13 @@ const Verify: FC = () => {
                               <span className="text-xs font-mono text-white/40">
                                 {truncateAddress(r.purchase_commitment)}
                               </span>
-                              <Badge variant={r.token_type === 0 ? 'default' : 'info'}>
-                                {r.token_type === 0 ? 'Credits' : 'USDCx'}
+                              <Badge variant={r.token_type === 0 ? 'default' : r.token_type === 2 ? 'warning' : 'info'}>
+                                {r.token_type === 0 ? 'Credits' : r.token_type === 2 ? 'USAD' : 'USDCx'}
                               </Badge>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <span className="text-white/60">
-                                Total: <span className="text-white font-medium">{formatCredits(r.total)}</span>
+                                Total: <span className="text-white font-medium">{r.token_type === 1 ? formatUsdcx(r.total) : r.token_type === 2 ? formatUsad(r.total) : formatCredits(r.total)}</span>
                               </span>
                               <span className="text-white/40">
                                 Merchant: {truncateAddress(r.merchant)}
@@ -399,7 +399,7 @@ const Verify: FC = () => {
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <span className="text-white/60">
-                                Total: <span className="text-white font-medium">{formatCredits(r.total)}</span>
+                                Total: <span className="text-white font-medium">{r.token_type === 1 ? formatUsdcx(r.total) : r.token_type === 2 ? formatUsad(r.total) : formatCredits(r.total)}</span>
                               </span>
                               <span className="text-white/40">
                                 {truncateAddress(r.merchant)}
@@ -682,7 +682,7 @@ const Verify: FC = () => {
                   {truncateAddress(selectedReceipt.purchase_commitment)}
                 </p>
                 <p className="text-xs text-white/40 mt-1">
-                  {formatCredits(selectedReceipt.total)} to {truncateAddress(selectedReceipt.merchant)}
+                  {selectedReceipt.token_type === 1 ? formatUsdcx(selectedReceipt.total) : selectedReceipt.token_type === 2 ? formatUsad(selectedReceipt.total) : formatCredits(selectedReceipt.total)} to {truncateAddress(selectedReceipt.merchant)}
                 </p>
               </div>
             )}
