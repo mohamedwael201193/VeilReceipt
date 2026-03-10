@@ -22,10 +22,12 @@ import {
   SettingsIcon,
   AwardIcon,
   CardIcon,
+  LoyaltyIcon,
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
-import { truncateAddress } from '@/lib/utils';
+import { truncateAddress, toAleoField } from '@/lib/utils';
 import { formatUsdcx, formatCredits } from '@/lib/stablecoin';
+import { getReviewCount } from '@/lib/aleoNetwork';
 import type { Product } from '@/lib/types';
 import type { PaymentPrivacy, TokenType } from '@/lib/chain';
 
@@ -50,6 +52,7 @@ const Checkout: FC = () => {
   const [checkingOut, setCheckingOut] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -71,6 +74,23 @@ const Checkout: FC = () => {
     };
     fetchProducts();
   }, []);
+
+  // Fetch on-chain review counts for products
+  useEffect(() => {
+    if (products.length === 0) return;
+    const fetchCounts = async () => {
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        products.map(async (p) => {
+          const fieldKey = toAleoField(p.sku);
+          const count = await getReviewCount(fieldKey);
+          if (count > 0) counts[p.sku] = count;
+        })
+      );
+      setReviewCounts(counts);
+    };
+    fetchCounts();
+  }, [products]);
 
   // Detect self-purchase (buyer === merchant)
   const isSelfPurchase = connected && address && merchantAddress && address === merchantAddress;
@@ -219,6 +239,7 @@ const Checkout: FC = () => {
                     product={product}
                     onAdd={() => addItem(product)}
                     formatPrice={formatPrice}
+                    reviewCount={reviewCounts[product.sku]}
                   />
                 ))}
               </motion.div>
@@ -470,7 +491,8 @@ const ProductCard: FC<{
   product: Product;
   onAdd: () => void;
   formatPrice: (n: number) => string;
-}> = ({ product, onAdd }) => {
+  reviewCount?: number;
+}> = ({ product, onAdd, reviewCount }) => {
   // Use product's OWN price_type for display, not the global cart selection
   const displayPrice = product.price_type === 'usdcx' ? formatUsdcx(product.price) : formatCredits(product.price);
   const isUsdcx = product.price_type === 'usdcx';
@@ -570,6 +592,13 @@ const ProductCard: FC<{
           <div className="mt-4 flex items-center gap-1.5 text-[11px] text-white/15">
             <TagIcon size={10} />
             <span className="font-mono">{product.sku}</span>
+            {reviewCount !== undefined && reviewCount > 0 && (
+              <span className="ml-auto flex items-center gap-1 text-yellow-400/70">
+                <LoyaltyIcon size={10} className="fill-yellow-400/70" />
+                <span className="font-medium">{reviewCount}</span>
+                <span className="text-white/20">verified</span>
+              </span>
+            )}
           </div>
         </div>
       </motion.div>

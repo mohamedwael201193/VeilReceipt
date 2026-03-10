@@ -180,6 +180,45 @@ export async function fetchReceiptsFromNetwork(
 }
 
 /**
+ * Read a mapping value from an on-chain program.
+ * Returns the raw value string (e.g. "42u64") or null if not found.
+ */
+export async function getMappingValue(
+  mappingName: string,
+  key: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${ALEO_API_URL}/${ALEO_CONFIG.network}/program/${ALEO_CONFIG.programId}/mapping/${mappingName}/${key}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data !== null && data !== undefined ? String(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read review_count for a product hash from on-chain mapping.
+ * Returns the count as a number, or 0 if not found.
+ */
+export async function getReviewCount(productHashField: string): Promise<number> {
+  const val = await getMappingValue('review_count', productHashField);
+  if (!val) return 0;
+  const num = val.replace(/u64$/, '');
+  return parseInt(num, 10) || 0;
+}
+
+/**
+ * Check if a review has been submitted (nullifier check).
+ */
+export async function isReviewSubmitted(nullifierField: string): Promise<boolean> {
+  const val = await getMappingValue('review_submitted', nullifierField);
+  return val === 'true';
+}
+
+/**
  * Alternative: Use the SDK's AleoNetworkClient if available
  * This requires the user's view key to decrypt records
  */

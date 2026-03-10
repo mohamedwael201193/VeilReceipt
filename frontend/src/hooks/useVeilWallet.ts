@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import { ALEO_CONFIG, TRANSITIONS, DEFAULT_FEE, type PaymentPrivacy, type TokenType } from '@/lib/chain';
 import { buildUsdcxMerkleProofs } from '@/lib/stablecoin';
 import { getCurrentTimestamp, sleep, toAleoU64, toAleoField, generateAleoScalar } from '@/lib/utils';
-import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
+import { getCurrentBlockHeight, getReviewCount as fetchReviewCount, getMappingValue as fetchMappingValue } from '@/lib/aleoNetwork';
 import { buildCartMerkleTree, skuToField, storeMerkleTree, loadMerkleTree, formatMerkleProofInput, formatCartItemInput, type MerkleCartItem } from '@/lib/merkle';
 import { useUserStore } from '@/stores/userStore';
 import { usePendingTxStore } from '@/stores/txStore';
@@ -1480,6 +1480,17 @@ export function useVeilWallet() {
   }, [findAllRecords, address]);
 
   // ============================
+  // ON-CHAIN MAPPING READS
+  // ============================
+  const getReviewCount = useCallback(async (productHashField: string): Promise<number> => {
+    return fetchReviewCount(productHashField);
+  }, []);
+
+  const readMappingValue = useCallback(async (mappingName: string, key: string): Promise<string | null> => {
+    return fetchMappingValue(mappingName, key);
+  }, []);
+
+  // ============================
   // UNIFIED PURCHASE FUNCTION
   // ============================
   const purchase = useCallback(async (
@@ -1545,6 +1556,10 @@ export function useVeilWallet() {
     submitAnonymousReview,
     getAccessTokens,
     getReviewTokens,
+
+    // On-chain mapping reads
+    getReviewCount,
+    readMappingValue,
 
     // Record access
     getBuyerReceipts,

@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { initDatabase } from './services/database';
-import { getTransactionStatus, getLatestBlockHeight } from './services/aleo';
+import { getTransactionStatus, getLatestBlockHeight, getMappingValue } from './services/aleo';
 import authRoutes from './routes/auth';
 import productRoutes from './routes/products';
 import merchantRoutes from './routes/merchant';
@@ -84,6 +84,23 @@ app.get('/chain/height', async (_req: Request, res: Response) => {
     res.json({ height });
   } catch {
     res.status(500).json({ error: 'Failed to fetch block height' });
+  }
+});
+
+// On-chain mapping value endpoint
+app.get('/chain/mapping/:name/:key', async (req: Request, res: Response) => {
+  try {
+    const { name, key } = req.params;
+    // Only allow reading from known safe mappings
+    const allowedMappings = ['purchase_exists', 'review_count', 'review_submitted', 'merchant_active', 'escrow_active'];
+    if (!allowedMappings.includes(name)) {
+      res.status(400).json({ error: 'Invalid mapping name' });
+      return;
+    }
+    const value = await getMappingValue(name, key);
+    res.json({ mapping: name, key, value });
+  } catch {
+    res.status(500).json({ error: 'Failed to read mapping' });
   }
 });
 
