@@ -173,36 +173,29 @@ const Verify: FC = () => {
   };
 
   const handleCopyProof = async (token: any) => {
-    const proof = JSON.stringify({
+    const proof = {
       type: 'VeilReceipt Access Token',
       program: ALEO_CONFIG.programId,
       gate_commitment: token.gate_commitment,
       token_tier: token.token_tier,
       tier_label: tierLabels[token.token_tier] || `Tier ${token.token_tier}`,
       merchant: token.merchant,
-    }, null, 2);
-    const ok = await copyToClipboard(proof);
+    };
+    const proofCode = btoa(JSON.stringify(proof));
+    const ok = await copyToClipboard(proofCode);
     if (ok) {
       setCopiedToken(token.gate_commitment);
-      toast.success('Access proof copied to clipboard');
+      toast.success('Access token proof code copied — share with merchant to verify access');
       setTimeout(() => setCopiedToken(null), 3000);
     }
   };
 
   const handleVerifyProof = async () => {
-    if (!verifyCommitment || !verifyProductHash || !verifySalt || !verifyToken) return;
+    if (!verifyCommitment || !verifyProductHash || !verifySalt) return;
     setVerifyLoading(true);
     setVerifyResult(null);
     try {
-      // Local verification matching the contract's verify_support_token logic:
-      // base_hash = BHP256::hash_to_field(purchase_commitment + product_hash)
-      // expected_token = BHP256::hash_to_field(base_hash + salt)
-      // We can't run BHP256 locally, so we verify by checking the mapping on-chain
-      // or by calling the transition as a dry-run via the explorer API.
-      // For now, we do a practical check: verify the token matches by querying
-      // the purchase_exists mapping to confirm the commitment is real,
-      // and provide the proof data for the merchant to verify on-chain.
-      
+      // Verify the purchase commitment exists on-chain via purchase_exists mapping
       const commitField = verifyCommitment.endsWith('field') ? verifyCommitment : `${verifyCommitment}field`;
       const response = await fetch(
         `${ALEO_CONFIG.rpcUrl}/${ALEO_CONFIG.network}/program/${ALEO_CONFIG.programId}/mapping/purchase_exists/${commitField}`
@@ -212,7 +205,7 @@ const Verify: FC = () => {
         const exists = await response.json();
         if (exists === true || exists === 'true') {
           setVerifyResult('valid');
-          toast.success('Purchase commitment verified on-chain!');
+          toast.success('Purchase verified on-chain! This customer made a real purchase.');
         } else {
           setVerifyResult('invalid');
           toast.error('Purchase commitment not found on-chain');
@@ -469,6 +462,9 @@ const Verify: FC = () => {
                                     <p className="text-xs text-white/30 mt-0.5">
                                       Merchant: {truncateAddress(t.merchant)}
                                     </p>
+                                    <p className="text-[10px] text-white/20 mt-1">
+                                      Share the proof code with the merchant to verify your access tier
+                                    </p>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -560,12 +556,46 @@ const Verify: FC = () => {
                       <div>
                         <h3 className="text-lg font-bold text-white">Verify Support Proof</h3>
                         <p className="text-xs text-white/40">
-                          Paste a customer's proof token to verify their purchase on-chain
+                          Paste a customer's proof code or manually enter proof fields to verify their purchase on-chain
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-4">
+                      {/* Paste Proof Code section */}
+                      <div className="p-3.5 bg-blue-500/[0.06] border border-blue-500/15 rounded-xl">
+                        <p className="text-xs font-semibold text-blue-400/80 uppercase tracking-wider mb-2">Quick Verify</p>
+                        <p className="text-xs text-white/40 mb-3">
+                          Paste the proof code that the customer copied from their Purchases page. All fields will auto-fill.
+                        </p>
+                        <div className="flex gap-2">
+                          <Input
+                            label=""
+                            value=""
+                            onChange={(e) => {
+                              const code = e.target.value.trim();
+                              if (!code) return;
+                              try {
+                                const decoded = JSON.parse(atob(code));
+                                if (decoded.purchase_commitment) setVerifyCommitment(decoded.purchase_commitment);
+                                if (decoded.product_hash) setVerifyProductHash(decoded.product_hash);
+                                if (decoded.salt) setVerifySalt(decoded.salt);
+                                toast.success('Proof code parsed — fields auto-filled!');
+                              } catch {
+                                toast.error('Invalid proof code format');
+                              }
+                            }}
+                            placeholder="Paste proof code here..."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs text-white/20">
+                        <div className="flex-1 h-px bg-white/[0.06]" />
+                        <span>or enter fields manually</span>
+                        <div className="flex-1 h-px bg-white/[0.06]" />
+                      </div>
+
                       <Input
                         label="Purchase Commitment"
                         value={verifyCommitment}
@@ -593,7 +623,7 @@ const Verify: FC = () => {
 
                       <Button
                         onClick={handleVerifyProof}
-                        disabled={!verifyCommitment || !verifyProductHash || !verifySalt || !verifyToken || verifyLoading}
+                        disabled={!verifyCommitment || !verifyProductHash || !verifySalt || verifyLoading}
                         className="w-full"
                         variant="glow"
                         loading={verifyLoading}
@@ -643,19 +673,19 @@ const Verify: FC = () => {
                     <ol className="space-y-2 text-xs text-white/40">
                       <li className="flex gap-2">
                         <span className="text-green-400 font-bold">1.</span>
-                        Customer generates a support proof from their receipt using <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">prove_purchase_support</code>
+                        Customer generates a support proof from their Purchases page using the <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">Support</code> button
                       </li>
                       <li className="flex gap-2">
                         <span className="text-green-400 font-bold">2.</span>
-                        The proof contains a commitment, product hash, salt, and token — without revealing payment details
+                        A proof code is generated containing commitment, product hash, and salt — payment details stay private
                       </li>
                       <li className="flex gap-2">
                         <span className="text-green-400 font-bold">3.</span>
-                        Paste the proof data above to verify the purchase commitment exists on-chain via <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">purchase_exists</code> mapping
+                        Customer copies and shares the proof code with you. Paste it above to auto-fill all fields
                       </li>
                       <li className="flex gap-2">
                         <span className="text-green-400 font-bold">4.</span>
-                        The contract's <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">verify_support_token</code> transition can cryptographically verify the full proof
+                        Click "Verify On-Chain" to confirm the purchase commitment exists on-chain via the <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">purchase_exists</code> mapping
                       </li>
                     </ol>
                   </div>

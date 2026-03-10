@@ -1502,16 +1502,30 @@ export function useVeilWallet() {
       for (const b of saltBytes) saltVal = (saltVal << 8n) | BigInt(b);
       const salt = `${saltVal}field`;
 
+      const productField = toAleoField(productHash);
+      const purchaseCommitment = receiptRecord.purchase_commitment;
+
       const txId = await executeTransaction(
         PROGRAM_ID,
         TRANSITIONS.prove_purchase_support,
-        [receiptRecord._plaintext, toAleoField(productHash), salt],
+        [receiptRecord._plaintext, productField, salt],
       );
+
+      // Build proof data for the user to share with merchants/support
+      const proofData = {
+        type: 'VeilReceipt Support Proof',
+        program: PROGRAM_ID,
+        purchase_commitment: purchaseCommitment,
+        product_hash: productField,
+        salt,
+        merchant: receiptRecord.merchant,
+        timestamp: Date.now(),
+      };
 
       pendingTxStore.addTransaction({
         txId,
         type: 'proof',
-        data: { action: 'support_proof' },
+        data: { action: 'support_proof', proofData },
       });
 
       toast.success('Support proof submitted!');
@@ -1526,7 +1540,7 @@ export function useVeilWallet() {
         }
       });
 
-      return txId;
+      return { txId, proofData };
     } finally {
       setLoading(false);
     }

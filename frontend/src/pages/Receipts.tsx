@@ -139,11 +139,11 @@ const Receipts: FC = () => {
     setActionLoading(key);
     try {
       const productHash = receipt.cart_commitment;
-      const txId = await provePurchaseSupport(receipt, productHash);
+      const result = await provePurchaseSupport(receipt, productHash);
       // Mark as proven permanently (until page navigation)
       setProvenReceipts(prev => new Set(prev).add(receipt.purchase_commitment));
       toast.success(
-        `Support proof generated! TX: ${txId?.slice(0, 16)}...`,
+        `Support proof generated! TX: ${result?.txId?.slice(0, 16)}...`,
         { duration: 6000 }
       );
     } catch (e: any) {
