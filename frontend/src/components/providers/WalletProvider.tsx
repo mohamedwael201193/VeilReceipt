@@ -14,6 +14,7 @@ const PROGRAM_PERMISSIONS = [
   ALEO_CONFIG.programId,
   ALEO_CONFIG.creditsProgramId,
   ALEO_CONFIG.usdcxProgramId,
+  ALEO_CONFIG.usadProgramId,
 ];
 
 const NETWORK: Network = ALEO_CONFIG.network === 'mainnet' ? Network.MAINNET : Network.TESTNET;
