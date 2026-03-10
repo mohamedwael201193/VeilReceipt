@@ -1328,14 +1328,29 @@ export function useVeilWallet() {
         [receiptRecord._plaintext, toAleoField(productHash), salt],
       );
 
-      // Inline transition — mark confirmed immediately
-      useTxStatusStore.getState().setPhase('confirmed', txId);
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'proof',
+        data: { action: 'support_proof' },
+      });
+
       toast.success('Support proof submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Support proof verified on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Support proof may have failed.');
+        }
+      });
+
       return txId;
     } finally {
       setLoading(false);
     }
-  }, [address, executeTransaction]);
+  }, [address, executeTransaction, pollTransaction]);
 
   // ============================
   // MINT ACCESS TOKEN — Receipt-gated access
@@ -1422,49 +1437,47 @@ export function useVeilWallet() {
   // FETCH ACCESS TOKENS
   // ============================
   const getAccessTokens = useCallback(async () => {
-    const records = await fetchRawRecords(PROGRAM_ID);
-    const tokens: any[] = [];
-    for (const rec of records) {
-      const pt = rec.plaintext || rec._plaintext || (typeof rec === 'string' ? rec : '');
-      if (typeof pt === 'string' && pt.includes('gate_commitment') && pt.includes('token_tier')) {
-        const parsed = parseRecordPlaintext(pt);
-        tokens.push({
-          owner: parsed.owner || address,
-          merchant: parsed.merchant || '',
-          gate_commitment: stripSuffix(parsed.gate_commitment || ''),
-          token_tier: parseInt(stripSuffix(parsed.token_tier || '0'), 10),
-          nonce_seed: stripSuffix(parsed.nonce_seed || ''),
-          _plaintext: pt,
-          _fromWallet: true,
-        });
-      }
-    }
-    return tokens;
-  }, [fetchRawRecords, address]);
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('gate_commitment') && pt.includes('token_tier') && !pt.includes('cart_commitment'),
+    );
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address,
+        merchant: parsed.merchant || '',
+        gate_commitment: stripSuffix(parsed.gate_commitment || ''),
+        token_tier: parseInt(stripSuffix(parsed.token_tier || '0'), 10),
+        nonce_seed: stripSuffix(parsed.nonce_seed || ''),
+        _plaintext: pt,
+        _fromWallet: true,
+      };
+    });
+  }, [findAllRecords, address]);
 
   // ============================
   // FETCH REVIEW TOKENS
   // ============================
   const getReviewTokens = useCallback(async () => {
-    const records = await fetchRawRecords(PROGRAM_ID);
-    const tokens: any[] = [];
-    for (const rec of records) {
-      const pt = rec.plaintext || rec._plaintext || (typeof rec === 'string' ? rec : '');
-      if (typeof pt === 'string' && pt.includes('review_commitment') && pt.includes('rating')) {
-        const parsed = parseRecordPlaintext(pt);
-        tokens.push({
-          owner: parsed.owner || address,
-          product_hash: stripSuffix(parsed.product_hash || ''),
-          rating: parseInt(stripSuffix(parsed.rating || '0'), 10),
-          review_commitment: stripSuffix(parsed.review_commitment || ''),
-          nonce_seed: stripSuffix(parsed.nonce_seed || ''),
-          _plaintext: pt,
-          _fromWallet: true,
-        });
-      }
-    }
-    return tokens;
-  }, [fetchRawRecords, address]);
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('review_commitment') && pt.includes('rating') && !pt.includes('cart_commitment'),
+    );
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address,
+        product_hash: stripSuffix(parsed.product_hash || ''),
+        rating: parseInt(stripSuffix(parsed.rating || '0'), 10),
+        review_commitment: stripSuffix(parsed.review_commitment || ''),
+        nonce_seed: stripSuffix(parsed.nonce_seed || ''),
+        _plaintext: pt,
+        _fromWallet: true,
+      };
+    });
+  }, [findAllRecords, address]);
 
   // ============================
   // UNIFIED PURCHASE FUNCTION

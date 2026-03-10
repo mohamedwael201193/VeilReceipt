@@ -99,7 +99,10 @@ const Verify: FC = () => {
       setAccessModalOpen(false);
       setGateId('');
       setTier(1);
-      setTimeout(loadRecords, 3000);
+      toast.success('Access token minting in progress — check My Tokens shortly');
+      // Auto-refresh + switch to tokens tab after wallet syncs
+      setTimeout(() => { loadRecords(); setTab('tokens'); }, 8000);
+      setTimeout(loadRecords, 20000);
     } catch (err: any) {
       toast.error(err.message || 'Failed to mint access token');
     } finally {
@@ -115,7 +118,10 @@ const Verify: FC = () => {
       setReviewModalOpen(false);
       setProductHash('');
       setRating(5);
-      setTimeout(loadRecords, 3000);
+      toast.success('Review submitted — check My Tokens shortly');
+      // Auto-refresh + switch to tokens tab after wallet syncs
+      setTimeout(() => { loadRecords(); setTab('tokens'); }, 8000);
+      setTimeout(loadRecords, 20000);
     } catch (err: any) {
       toast.error(err.message || 'Failed to submit review');
     } finally {
