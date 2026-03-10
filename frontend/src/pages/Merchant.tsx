@@ -4,6 +4,7 @@ import { FC, useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
+import { useUserStore } from '@/stores/userStore';
 import { api } from '@/lib/api';
 import { Button, Card, Badge, Input, EmptyState, StatCard, Modal, PillNav, SectionHeader, Select } from '@/components/ui/Components';
 import { LoadingSpinner, TokenAmount } from '@/components/icons/Icons';
@@ -28,6 +29,7 @@ type MerchantTab = 'products' | 'analytics';
 
 const Merchant: FC = () => {
   const { connected, address, authenticate, getMerchantReceipts, registerMerchant, getMerchantLicense } = useVeilWallet();
+  const { isMerchant, token } = useUserStore();
 
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,17 @@ const Merchant: FC = () => {
     sku: '',
     category: '',
   });
+
+  // Restore auth from persisted store on mount
+  useEffect(() => {
+    if (connected && address && (isMerchant || token || api.getToken())) {
+      setAuthenticated(true);
+      // Check on-chain registration
+      getMerchantLicense().then(license => {
+        setOnChainRegistered(!!license);
+      }).catch(() => {});
+    }
+  }, [connected, address, isMerchant, token, getMerchantLicense]);
 
   const handleAuth = async () => {
     if (!connected) {
