@@ -132,20 +132,22 @@ const Receipts: FC = () => {
     }
   };
 
-  const [supportSuccess, setSupportSuccess] = useState<string | null>(null);
+  const [provenReceipts, setProvenReceipts] = useState<Set<string>>(new Set());
 
   const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
-    setActionLoading(`support_${receipt.purchase_commitment}`);
+    const key = `support_${receipt.purchase_commitment}`;
+    setActionLoading(key);
     try {
       const productHash = receipt.cart_commitment;
       const txId = await provePurchaseSupport(receipt, productHash);
-      setSupportSuccess(receipt.purchase_commitment);
+      // Mark as proven permanently (until page navigation)
+      setProvenReceipts(prev => new Set(prev).add(receipt.purchase_commitment));
       toast.success(
-        `Support proof generated! TX: ${txId?.slice(0, 16)}... — A SupportProofToken was sent to your wallet.`,
-        { duration: 8000 }
+        `Support proof generated! TX: ${txId?.slice(0, 16)}...`,
+        { duration: 6000 }
       );
-      setTimeout(() => setSupportSuccess(null), 10000);
     } catch (e: any) {
+      console.error('Support proof error:', e);
       toast.error(e.message || 'Failed to generate proof');
     } finally {
       setActionLoading(null);
@@ -379,11 +381,15 @@ const Receipts: FC = () => {
                           </div>
 
                           <div className="flex flex-col gap-2">
-                            {supportSuccess === r.purchase_commitment ? (
-                              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-lg">
+                            {provenReceipts.has(r.purchase_commitment) ? (
+                              <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-lg"
+                              >
                                 <CheckIcon size={13} className="text-green-400" />
-                                <span className="text-xs text-green-400 font-medium">Proof Generated</span>
-                              </div>
+                                <span className="text-xs text-green-400 font-medium">Proof Sent</span>
+                              </motion.div>
                             ) : (
                             <Button
                               variant="ghost"
