@@ -162,8 +162,15 @@ export function toAleoU8(value: number): string {
 }
 
 export function toAleoField(value: string | number): string {
-  const cleaned = String(value).replace(/field$/i, '');
-  return `${cleaned}field`;
+  const s = String(value).replace(/field$/i, '');
+  // If already a valid numeric string, use directly
+  if (/^\d+$/.test(s)) return `${s}field`;
+  // Otherwise hash the string into a deterministic numeric field value
+  let hash = 0n;
+  for (let i = 0; i < s.length; i++) {
+    hash = (hash * 31n + BigInt(s.charCodeAt(i))) % (2n ** 128n);
+  }
+  return `${hash}field`;
 }
 
 /**

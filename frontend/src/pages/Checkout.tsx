@@ -22,6 +22,7 @@ import {
   SettingsIcon,
   AwardIcon,
   CardIcon,
+  CheckIcon,
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress } from '@/lib/utils';
@@ -104,17 +105,27 @@ const Checkout: FC = () => {
     setConfirmModalOpen(true);
   };
 
+  const [txStatus, setTxStatus] = useState<'idle' | 'signing' | 'proving' | 'broadcasting' | 'confirming' | 'done' | 'error'>('idle');
+
   const executeCheckout = async () => {
     setConfirmModalOpen(false);
     setCheckingOut(true);
+    setTxStatus('signing');
     try {
+      setTimeout(() => setTxStatus('proving'), 3000);
+      setTimeout(() => setTxStatus('broadcasting'), 12000);
       const total = getTotal();
       const cartItems = items.map(i => ({ sku: i.product.sku, quantity: i.quantity }));
       const txId = await purchase(merchantAddress!, total, cartItems, privacy, tokenType);
+      setTxStatus('confirming');
       toast.success(`Transaction submitted: ${txId.slice(0, 12)}...`);
       clearCart();
       setShowCart(false);
+      setTxStatus('done');
+      setTimeout(() => setTxStatus('idle'), 4000);
     } catch (e: any) {
+      setTxStatus('error');
+      setTimeout(() => setTxStatus('idle'), 3000);
       console.error('Checkout error:', e);
       const msg = e.message || 'Checkout failed';
       if (msg.includes('rejected') || msg.includes('Rejected')) {
@@ -137,10 +148,81 @@ const Checkout: FC = () => {
   const total = getTotal();
   const itemCount = getItemCount();
 
+  const TX_STEPS = {
+    signing: { label: 'Awaiting Wallet Signature', sub: 'Approve the transaction in your Shield wallet', pct: 15 },
+    proving: { label: 'Generating ZK Proof', sub: 'Building zero-knowledge proof — this takes a moment', pct: 40 },
+    broadcasting: { label: 'Broadcasting Transaction', sub: 'Sending to Aleo network...', pct: 70 },
+    confirming: { label: 'Transaction Submitted', sub: 'Waiting for on-chain confirmation', pct: 90 },
+    done: { label: 'Purchase Complete!', sub: 'Your receipt has been generated', pct: 100 },
+    error: { label: 'Transaction Failed', sub: 'Check the error and try again', pct: 0 },
+  };
+
   return (
     <div className="relative min-h-screen pt-24 pb-16">
       {/* Background */}
       <GridBackground className="opacity-30" />
+
+      {/* Transaction Processing Overlay */}
+      <AnimatePresence>
+        {txStatus !== 'idle' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0d1117] border border-white/10 rounded-2xl p-8 max-w-md w-full mx-4 text-center"
+            >
+              {txStatus === 'done' ? (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                  className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-500/20 border-2 border-green-400 flex items-center justify-center"
+                >
+                  <CheckIcon size={32} className="text-green-400" />
+                </motion.div>
+              ) : txStatus === 'error' ? (
+                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-500/20 border-2 border-red-400 flex items-center justify-center">
+                  <span className="text-red-400 text-3xl">!</span>
+                </div>
+              ) : (
+                <div className="w-20 h-20 mx-auto mb-6 relative">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    className="w-full h-full rounded-full border-2 border-transparent border-t-green-400 border-r-green-400/30"
+                  />
+                  <ShieldIcon size={28} className="text-green-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+              )}
+              <h3 className="text-xl font-bold text-white mb-2">
+                {TX_STEPS[txStatus as keyof typeof TX_STEPS]?.label}
+              </h3>
+              <p className="text-white/50 text-sm mb-6">
+                {TX_STEPS[txStatus as keyof typeof TX_STEPS]?.sub}
+              </p>
+              {txStatus !== 'done' && txStatus !== 'error' && (
+                <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full"
+                    initial={{ width: '0%' }}
+                    animate={{ width: `${TX_STEPS[txStatus as keyof typeof TX_STEPS]?.pct || 0}%` }}
+                    transition={{ duration: 1.5, ease: 'easeOut' }}
+                  />
+                </div>
+              )}
+              {txStatus === 'done' && (
+                <p className="text-green-400/70 text-xs mt-2">Check your receipts page for the new receipt</p>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Page Header */}

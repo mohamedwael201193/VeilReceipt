@@ -132,11 +132,19 @@ const Receipts: FC = () => {
     }
   };
 
+  const [supportSuccess, setSupportSuccess] = useState<string | null>(null);
+
   const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
     setActionLoading(`support_${receipt.purchase_commitment}`);
     try {
       const productHash = receipt.cart_commitment;
-      await provePurchaseSupport(receipt, productHash);
+      const txId = await provePurchaseSupport(receipt, productHash);
+      setSupportSuccess(receipt.purchase_commitment);
+      toast.success(
+        `Support proof generated! TX: ${txId?.slice(0, 16)}... — A SupportProofToken was sent to your wallet.`,
+        { duration: 8000 }
+      );
+      setTimeout(() => setSupportSuccess(null), 10000);
     } catch (e: any) {
       toast.error(e.message || 'Failed to generate proof');
     } finally {
@@ -371,6 +379,12 @@ const Receipts: FC = () => {
                           </div>
 
                           <div className="flex flex-col gap-2">
+                            {supportSuccess === r.purchase_commitment ? (
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <CheckIcon size={13} className="text-green-400" />
+                                <span className="text-xs text-green-400 font-medium">Proof Generated</span>
+                              </div>
+                            ) : (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -380,6 +394,7 @@ const Receipts: FC = () => {
                             >
                               Support Proof
                             </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
