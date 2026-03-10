@@ -1455,10 +1455,11 @@ export function useVeilWallet() {
     setLoading(true);
 
     try {
+      const salt = generateAleoScalar();
       const txId = await executeTransaction(
         PROGRAM_ID,
         TRANSITIONS.register_merchant,
-        [toAleoField(storeNameHash)],
+        [toAleoField(storeNameHash), salt],
       );
 
       pendingTxStore.addTransaction({

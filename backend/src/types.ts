@@ -24,7 +24,7 @@ export interface Product {
   name: string;
   description: string;
   price: number; // microcredits
-  price_type: 'credits' | 'usdcx'; // credits = Aleo Credits, usdcx = USDCx Stablecoin
+  price_type: 'credits' | 'usdcx' | 'usad'; // credits = Aleo Credits, usdcx = USDCx Stablecoin, usad = USAD Stablecoin
   sku: string;
   image_url: string;
   category: string;
@@ -38,7 +38,7 @@ export interface ReceiptMeta {
   buyer_address_hash: string;
   merchant_address_hash: string;
   total: number;
-  token_type: number; // 0 = Credits, 1 = USDCx
+  token_type: number; // 0 = Credits, 1 = USDCx, 2 = USAD
   cart_commitment: string;
   tx_id: string;
   status: 'confirmed' | 'escrowed' | 'refunded' | 'completed';
@@ -114,7 +114,7 @@ export const CreateReceiptSchema = z.object({
   buyer_address_hash: z.string(),
   merchant_address_hash: z.string(),
   total: z.number(),
-  token_type: z.number().min(0).max(1),
+  token_type: z.number().min(0).max(2),
   cart_commitment: z.string(),
   tx_id: z.string(),
   status: z.enum(['confirmed', 'escrowed']).default('confirmed'),
@@ -155,7 +155,7 @@ export const CreateProductSchema = z.object({
   name: z.string().min(1),
   description: z.string(),
   price: z.number().positive(),
-  price_type: z.enum(['credits', 'usdcx']).default('credits'),
+  price_type: z.enum(['credits', 'usdcx', 'usad']).default('credits'),
   sku: z.string(),
   image_url: z.string().optional().default(''),
   category: z.string().optional().default('general'),
