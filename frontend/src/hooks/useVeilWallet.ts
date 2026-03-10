@@ -557,7 +557,7 @@ export function useVeilWallet() {
     const plaintexts = await findAllRecords(
       {},
       PROGRAM_ID,
-      (pt) => pt.includes('store_name_hash') && !pt.includes('purchase_commitment'),
+      (pt) => pt.includes('store_commitment') && !pt.includes('purchase_commitment'),
     );
 
     if (plaintexts.length === 0) return null;
