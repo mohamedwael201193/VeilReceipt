@@ -643,6 +643,16 @@ const Receipts: FC = () => {
                               size="sm"
                               onClick={() => {
                                 setSelectedEscrow(e);
+                                // Auto-fill block height from localStorage
+                                try {
+                                  const escrowBlocks = JSON.parse(localStorage.getItem('veil_escrow_blocks') || '{}');
+                                  const key = `${e.merchant}_${e.total}`;
+                                  if (escrowBlocks[key]) {
+                                    setRefundBlockHeight(String(escrowBlocks[key]));
+                                  } else {
+                                    setRefundBlockHeight('');
+                                  }
+                                } catch { setRefundBlockHeight(''); }
                                 setRefundModalOpen(true);
                               }}
                               icon={<AlertIcon size={13} />}
@@ -689,11 +699,16 @@ const Receipts: FC = () => {
             label="Escrow Creation Block Height"
             value={refundBlockHeight}
             onChange={(e) => setRefundBlockHeight(e.target.value.replace(/\D/g, ''))}
-            placeholder="Block height when escrow was created"
+            placeholder="Auto-filled from your purchase"
+            disabled={!!refundBlockHeight}
           />
-          {currentBlock > 0 && (
-            <p className="text-xs text-white/30">
-              Current block: {currentBlock.toLocaleString()}. Refund window: {ESCROW_RETURN_WINDOW} blocks from creation.
+          {refundBlockHeight ? (
+            <p className="text-xs text-green-400/60">
+              Block height auto-filled from your escrow purchase record.
+            </p>
+          ) : (
+            <p className="text-xs text-amber-400/60">
+              Could not auto-detect. Enter the block height when the escrow was created (check your transaction history).
             </p>
           )}
           <div className="flex gap-3 justify-end pt-1">

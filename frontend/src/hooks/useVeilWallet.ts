@@ -748,8 +748,12 @@ export function useVeilWallet() {
       console.log(`[VeilWallet] Transaction submitted: ${result.transactionId}`);
       useTxStatusStore.getState().setPhase('broadcasting', result.transactionId);
       return result.transactionId;
-    } catch (err) {
+    } catch (err: any) {
       useTxStatusStore.getState().setPhase('failed');
+      // Shield wallet sometimes fails on first interaction — provide helpful message
+      if (err?.message?.includes('No response') || err?.message?.includes('does not exist')) {
+        throw new Error('Wallet connection timed out. Please try again — the wallet needs a moment to connect.');
+      }
       throw err;
     }
   }, [walletExecute]);
@@ -1298,6 +1302,13 @@ export function useVeilWallet() {
           try {
             const blockHeight = await getCurrentBlockHeight();
             localStorage.setItem(`escrow_block_${txId}`, String(blockHeight));
+            // Also store in escrow_blocks map so Refund modal can auto-fill
+            // Key by merchant+total+timestamp as a fallback identifier
+            try {
+              const escrowBlocks = JSON.parse(localStorage.getItem('veil_escrow_blocks') || '{}');
+              escrowBlocks[`${merchantAddress}_${totalMicrocredits}`] = blockHeight;
+              localStorage.setItem('veil_escrow_blocks', JSON.stringify(escrowBlocks));
+            } catch { /* non-critical */ }
           } catch { /* non-critical */ }
           try {
             await api.storeReceipt({
