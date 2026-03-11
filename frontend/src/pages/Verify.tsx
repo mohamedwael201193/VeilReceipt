@@ -20,6 +20,7 @@ import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, copyToClipboard } from '@/lib/utils';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { ALEO_CONFIG } from '@/lib/chain';
+import { api } from '@/lib/api';
 import type { BuyerReceiptRecord } from '@/lib/types';
 
 type TabId = 'access' | 'reviews' | 'tokens' | 'verify';
@@ -88,6 +89,14 @@ const Verify: FC = () => {
   const [reviewReceipt, setReviewReceipt] = useState<BuyerReceiptRecord | null>(null);
   const [productHash, setProductHash] = useState('');
   const [rating, setRating] = useState(5);
+  const [products, setProducts] = useState<{ sku: string; name: string }[]>([]);
+
+  // Fetch products for review SKU selection
+  useEffect(() => {
+    api.getProducts({ inStock: true }).then(res => {
+      if (res?.products) setProducts(res.products.map((p: any) => ({ sku: p.sku, name: p.name })));
+    }).catch(() => {});
+  }, []);
 
   // Verify proof state
   const [verifyCommitment, setVerifyCommitment] = useState('');
@@ -410,7 +419,7 @@ const Verify: FC = () => {
                             variant="secondary"
                             onClick={() => {
                               setReviewReceipt(r);
-                              setProductHash(r.cart_commitment);
+                              setProductHash('');
                               setReviewModalOpen(true);
                             }}
                             disabled={!!actionLoading}
@@ -788,6 +797,26 @@ const Verify: FC = () => {
               onChange={(e) => setProductHash(e.target.value)}
               placeholder="e.g. product SKU hash"
             />
+            {products.length > 0 && (
+              <div>
+                <label className="block text-xs text-white/40 mb-1.5">Or select a product:</label>
+                <div className="flex flex-wrap gap-2">
+                  {products.map(p => (
+                    <button
+                      key={p.sku}
+                      onClick={() => setProductHash(p.sku)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                        productHash === p.sku
+                          ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30'
+                          : 'bg-white/[0.03] text-white/40 border-white/[0.06] hover:border-white/15'
+                      }`}
+                    >
+                      {p.name} ({p.sku})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-white/60 mb-2">Rating</label>
               <div className="flex gap-1">

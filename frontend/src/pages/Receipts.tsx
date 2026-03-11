@@ -463,14 +463,22 @@ const Receipts: FC = () => {
                             >
                               Export
                             </Button>
-                            {provenReceipts.has(r.purchase_commitment) && getStoredProofCode(r.purchase_commitment) && (
+                            {provenReceipts.has(r.purchase_commitment) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleCopyStoredProof(r.purchase_commitment)}
+                                onClick={() => {
+                                  const code = getStoredProofCode(r.purchase_commitment);
+                                  if (code) {
+                                    handleCopyStoredProof(r.purchase_commitment);
+                                  } else {
+                                    handleSupportProof(r);
+                                  }
+                                }}
+                                loading={actionLoading === `support_${r.purchase_commitment}`}
                                 icon={copiedReceipt === r.purchase_commitment ? <CheckIcon size={13} className="text-green-400" /> : <CopyIcon size={13} />}
                               >
-                                {copiedReceipt === r.purchase_commitment ? 'Copied!' : 'Copy Code'}
+                                {copiedReceipt === r.purchase_commitment ? 'Copied!' : getStoredProofCode(r.purchase_commitment) ? 'Copy Code' : 'Get Code'}
                               </Button>
                             )}
                           </div>
