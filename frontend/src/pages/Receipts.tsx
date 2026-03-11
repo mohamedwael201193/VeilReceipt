@@ -133,10 +133,23 @@ const Receipts: FC = () => {
     }
   };
 
-  const [provenReceipts, setProvenReceipts] = useState<Set<string>>(new Set());
+  const [provenReceipts, setProvenReceipts] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('veil_proven_receipts');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
   const [supportProofData, setSupportProofData] = useState<any>(null);
   const [supportProofModalOpen, setSupportProofModalOpen] = useState(false);
   const [copiedProof, setCopiedProof] = useState(false);
+
+  const markProven = (commitment: string) => {
+    setProvenReceipts(prev => {
+      const next = new Set(prev).add(commitment);
+      localStorage.setItem('veil_proven_receipts', JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
     const key = `support_${receipt.purchase_commitment}`;
@@ -144,8 +157,7 @@ const Receipts: FC = () => {
     try {
       const productHash = receipt.cart_commitment;
       const result = await provePurchaseSupport(receipt, productHash);
-      // Mark as proven permanently (until page navigation)
-      setProvenReceipts(prev => new Set(prev).add(receipt.purchase_commitment));
+      markProven(receipt.purchase_commitment);
       if (result?.proofData) {
         setSupportProofData(result.proofData);
         setSupportProofModalOpen(true);
