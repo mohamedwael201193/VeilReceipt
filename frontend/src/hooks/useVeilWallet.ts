@@ -182,16 +182,23 @@ export function useVeilWallet() {
   const fetchRawRecords = useCallback(async (programId: string): Promise<any[]> => {
     if (!connected || !address) return [];
 
-    try {
-      if (requestRecords) {
-        const records = await requestRecords(programId, true);
-        console.log(`[VeilWallet] requestRecords(${programId}):`, records?.length ?? 0, 'records');
-        if (Array.isArray(records) && records.length > 0) {
-          return records;
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (requestRecords) {
+          const records = await requestRecords(programId, true);
+          console.log(`[VeilWallet] requestRecords(${programId}) attempt ${attempt}:`, records?.length ?? 0, 'records');
+          if (Array.isArray(records) && records.length > 0) {
+            return records;
+          }
+        }
+        break; // Got empty array without error — no need to retry
+      } catch (e) {
+        console.warn(`[VeilWallet] requestRecords(${programId}) attempt ${attempt} failed:`, e);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
         }
       }
-    } catch (e) {
-      console.warn(`[VeilWallet] requestRecords(${programId}) failed:`, e);
     }
 
     return [];
