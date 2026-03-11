@@ -158,37 +158,106 @@ const SupportProofSVG: FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+const AccessTokenSVG: FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    {/* Ticket / Pass shape */}
+    <rect x="80" y="80" width="240" height="140" rx="16" stroke="white" strokeWidth="2" opacity="0.7" fill="white" fillOpacity="0.02"/>
+    {/* Perforation line */}
+    {[0,1,2,3,4,5,6,7,8].map(i => (
+      <line key={i} x1="230" y1={88 + i * 14} x2="230" y2={94 + i * 14} stroke="white" strokeWidth="1.5" opacity="0.2" strokeLinecap="round"/>
+    ))}
+    {/* Left side — receipt info */}
+    <rect x="100" y="105" width="80" height="6" rx="3" fill="white" opacity="0.2"/>
+    <rect x="100" y="120" width="55" height="4" rx="2" fill="white" opacity="0.1"/>
+    <rect x="100" y="134" width="65" height="4" rx="2" fill="white" opacity="0.1"/>
+    {/* Right side — access badge */}
+    <circle cx="280" cy="140" r="30" stroke="#22c55e" strokeWidth="2" opacity="0.6" fill="#22c55e" fillOpacity="0.06"/>
+    <path d="M268 140 l8 8 16-16" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8"/>
+    {/* Tier stars */}
+    {[0,1,2,3,4].map(i => (
+      <circle key={i} cx={255 + i * 12} cy="185" r="3" fill="#22c55e" opacity={0.3 + i * 0.1}/>
+    ))}
+    {/* Key icon */}
+    <g transform="translate(110, 155)" opacity="0.3">
+      <circle cx="8" cy="8" r="6" stroke="#22c55e" strokeWidth="1.5"/>
+      <line x1="14" y1="8" x2="28" y2="8" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="24" y1="8" x2="24" y2="13" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
+    </g>
+  </svg>
+);
+
+const ReviewsSVG: FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    {/* Stars row */}
+    {[0,1,2,3,4].map(i => {
+      const cx = 120 + i * 42;
+      return (
+        <g key={i} transform={`translate(${cx}, 100)`}>
+          <polygon
+            points="16,0 20.5,11 32,12.8 23.5,20.5 25.8,32 16,26.5 6.2,32 8.5,20.5 0,12.8 11.5,11"
+            stroke="#22c55e" strokeWidth="1.5" fill="#22c55e"
+            opacity={i < 4 ? 0.6 : 0.15}
+          />
+        </g>
+      );
+    })}
+    {/* Review card */}
+    <rect x="100" y="155" width="200" height="90" rx="12" stroke="white" strokeWidth="1.5" opacity="0.5" fill="white" fillOpacity="0.02"/>
+    <rect x="120" y="175" width="100" height="5" rx="2.5" fill="white" opacity="0.15"/>
+    <rect x="120" y="188" width="70" height="4" rx="2" fill="white" opacity="0.08"/>
+    {/* Anonymous badge */}
+    <circle cx="280" cy="200" r="16" stroke="#22c55e" strokeWidth="1.5" opacity="0.4" fill="#22c55e" fillOpacity="0.06"/>
+    <text x="280" y="205" fill="#22c55e" fontSize="12" fontWeight="700" textAnchor="middle" opacity="0.6">?</text>
+    {/* Nullifier lock */}
+    <g transform="translate(120, 205)" opacity="0.25">
+      <rect x="0" y="6" width="16" height="12" rx="3" stroke="#22c55e" strokeWidth="1.5"/>
+      <path d="M3 6 V3 A5 5 0 0 1 13 3 V6" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
+    </g>
+    <text x="145" y="218" fill="white" fontSize="9" opacity="0.15" fontFamily="Inter">nullifier</text>
+  </svg>
+);
+
 const featureIllustrations: ReactNode[] = [
   <PrivatePaymentsSVG className="w-full h-auto" />,
   <DualReceiptsSVG className="w-full h-auto" />,
   <EscrowSVG className="w-full h-auto" />,
   <SupportProofSVG className="w-full h-auto" />,
+  <AccessTokenSVG className="w-full h-auto" />,
+  <ReviewsSVG className="w-full h-auto" />,
 ];
 
 const features = [
   {
     title: 'Private Payments',
-    desc: 'Atomic private transfers using Aleo credits or USDCx stablecoins. Purchase details stay encrypted on-chain.',
+    desc: 'Atomic private transfers using Aleo Credits, USDCx, or USAD stablecoins. All purchase details stay encrypted — only BHP256 commitments are stored on-chain.',
   },
   {
     title: 'Dual Receipts',
-    desc: 'Buyer and merchant both receive encrypted receipts in one atomic transaction. Zero data leaks.',
+    desc: 'Buyer and merchant both receive encrypted receipts in one atomic transaction. Cart items form a Merkle tree — prove any single item without revealing the rest.',
   },
   {
     title: 'Escrow & Refunds',
-    desc: 'Lock funds on-chain with a 500-block return window. Self-refund or release to merchant — no intermediary.',
+    desc: 'Lock funds on-chain with a 500-block return window. Block heights are BHP256-hashed to prevent timing analysis. Self-refund or release — no intermediary.',
   },
   {
-    title: 'Purchase Support',
-    desc: 'Generate non-consuming proof tokens for customer support without revealing full receipt details.',
+    title: 'Support Proofs',
+    desc: 'Generate shareable proof codes from any receipt. Merchants paste the code to instantly verify a purchase on-chain — without seeing amounts, items, or identity.',
+  },
+  {
+    title: 'Access Tokens',
+    desc: 'Mint receipt-gated access tokens that prove you purchased from a merchant — without revealing what you bought or how much you paid. Five tiers from Bronze to Diamond.',
+  },
+  {
+    title: 'Anonymous Reviews',
+    desc: 'Submit verified product reviews using zero-knowledge proofs. Nullifiers prevent double-reviews. Star ratings stay private — only aggregate counts appear on-chain.',
   },
 ];
 
 const steps = [
-  { num: '01', title: 'Connect Wallet', desc: 'Link your Leo or Shield wallet with auto-decrypt permissions for seamless transactions.' },
-  { num: '02', title: 'Choose Payment Mode', desc: 'Select private credits, USDCx stablecoin, public transfer, or escrow with refund protection.' },
-  { num: '03', title: 'Checkout Atomically', desc: 'One transaction: payment + encrypted buyer receipt + encrypted merchant receipt.' },
-  { num: '04', title: 'Manage & Prove', desc: 'View private receipts, track purchases, request escrow refunds, or prove purchase history.' },
+  { num: '01', title: 'Connect Wallet', desc: 'Link your Shield wallet with auto-decrypt permissions for seamless zero-knowledge transactions.' },
+  { num: '02', title: 'Choose Payment', desc: 'Select privacy mode (Private, Public, Escrow) and token (Aleo Credits, USDCx, or USAD stablecoin).' },
+  { num: '03', title: 'Checkout Atomically', desc: 'One transaction: payment + encrypted buyer receipt + encrypted merchant receipt. Cart Merkle tree built automatically.' },
+  { num: '04', title: 'Prove & Review', desc: 'Generate support proofs, mint access tokens, submit anonymous reviews, or request escrow refunds — all on-chain.' },
 ];
 
 const Home: FC = () => {
@@ -242,8 +311,8 @@ const Home: FC = () => {
                 transition={{ delay: 0.5, duration: 0.7 }}
                 className="mt-8 text-base sm:text-lg text-white/50 max-w-md leading-relaxed"
               >
-                Atomic private payments, on-chain escrow with refunds, USDCx stablecoins,
-                and zero-knowledge proofs — all in one protocol.
+                Atomic private payments with three tokens, on-chain escrow, shareable support proofs,
+                receipt-gated access tokens, and anonymous verified reviews — all powered by zero-knowledge proofs.
               </motion.p>
 
               {/* CTA buttons */}
@@ -320,7 +389,7 @@ const Home: FC = () => {
               { label: 'Contract Version', value: 'v7', sub: 'veilreceipt_v7.aleo' },
               { label: 'Transitions', value: '13', sub: 'On-chain functions' },
               { label: 'Block Height', value: blockHeight > 0 ? blockHeight.toLocaleString() : '...', sub: 'Aleo Testnet' },
-              { label: 'Privacy Features', value: '6', sub: 'ZK proof types' },
+              { label: 'Privacy Features', value: '8', sub: 'ZK proof types' },
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
