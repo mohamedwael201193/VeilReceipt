@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import { ALEO_CONFIG, TRANSITIONS, DEFAULT_FEE, type PaymentPrivacy, type TokenType } from '@/lib/chain';
 import { buildUsdcxMerkleProofs, buildUsadMerkleProofs } from '@/lib/stablecoin';
 import { getCurrentTimestamp, sleep, toAleoU64, toAleoField, generateAleoScalar } from '@/lib/utils';
-import { getCurrentBlockHeight, getReviewCount as fetchReviewCount, getMappingValue as fetchMappingValue } from '@/lib/aleoNetwork';
+import { getCurrentBlockHeight, getTransactionBlockHeight, getReviewCount as fetchReviewCount, getMappingValue as fetchMappingValue } from '@/lib/aleoNetwork';
 import { buildCartMerkleTree, skuToField, storeMerkleTree, loadMerkleTree, formatMerkleProofInput, formatCartItemInput, type MerkleCartItem } from '@/lib/merkle';
 import { useUserStore } from '@/stores/userStore';
 import { usePendingTxStore } from '@/stores/txStore';
@@ -742,7 +742,21 @@ export function useVeilWallet() {
 
     try {
       useTxStatusStore.getState().setPhase('proving');
-      const result = await walletExecute(options);
+
+      // Shield wallet can fail on first interaction ("No response") before the
+      // extension connection is fully established. Retry once after a brief pause.
+      let result: any;
+      try {
+        result = await walletExecute(options);
+      } catch (firstErr: any) {
+        if (firstErr?.message?.includes('No response') || firstErr?.message?.includes('does not exist')) {
+          console.warn('[VeilWallet] First attempt failed (wallet warmup), retrying in 1.5s...');
+          await new Promise(r => setTimeout(r, 1500));
+          result = await walletExecute(options);
+        } else {
+          throw firstErr;
+        }
+      }
       if (!result?.transactionId) throw new Error('No transaction ID returned');
 
       console.log(`[VeilWallet] Transaction submitted: ${result.transactionId}`);
@@ -750,7 +764,6 @@ export function useVeilWallet() {
       return result.transactionId;
     } catch (err: any) {
       useTxStatusStore.getState().setPhase('failed');
-      // Shield wallet sometimes fails on first interaction — provide helpful message
       if (err?.message?.includes('No response') || err?.message?.includes('does not exist')) {
         throw new Error('Wallet connection timed out. Please try again — the wallet needs a moment to connect.');
       }
@@ -1298,15 +1311,26 @@ export function useVeilWallet() {
           pendingTxStore.confirmTransaction(txId);
           toast.success('Escrow confirmed! You can release or refund within the return window.');
           storeMerkleTree(txId, merkleTree, address);
-          // Save block height for refund verification
+          // Save exact block height for refund verification
           try {
-            const blockHeight = await getCurrentBlockHeight();
+            // Get the exact block height from the confirmed transaction
+            let blockHeight = await getTransactionBlockHeight(txId);
+            if (!blockHeight) {
+              // Fallback: use current block height (approximate)
+              blockHeight = await getCurrentBlockHeight();
+              console.warn('[Escrow] Could not get exact TX block height, using current:', blockHeight);
+            }
             localStorage.setItem(`escrow_block_${txId}`, String(blockHeight));
-            // Also store in escrow_blocks map so Refund modal can auto-fill
-            // Key by merchant+total+timestamp as a fallback identifier
+            // Re-fetch escrow records to get the purchase_commitment for this escrow
             try {
+              const freshEscrows = await getEscrowReceipts();
+              // Store block height keyed by purchase_commitment for each escrow
               const escrowBlocks = JSON.parse(localStorage.getItem('veil_escrow_blocks') || '{}');
-              escrowBlocks[`${merchantAddress}_${totalMicrocredits}`] = blockHeight;
+              for (const esc of freshEscrows) {
+                if (!escrowBlocks[esc.purchase_commitment]) {
+                  escrowBlocks[esc.purchase_commitment] = blockHeight;
+                }
+              }
               localStorage.setItem('veil_escrow_blocks', JSON.stringify(escrowBlocks));
             } catch { /* non-critical */ }
           } catch { /* non-critical */ }
@@ -1333,7 +1357,7 @@ export function useVeilWallet() {
     } finally {
       setLoading(false);
     }
-  }, [address, findCreditsRecord, fetchRawRecords, executeTransaction, pollTransaction]);
+  }, [address, findCreditsRecord, fetchRawRecords, executeTransaction, pollTransaction, getEscrowReceipts]);
 
   // ============================
   // ESCROW OPERATIONS

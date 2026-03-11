@@ -643,12 +643,11 @@ const Receipts: FC = () => {
                               size="sm"
                               onClick={() => {
                                 setSelectedEscrow(e);
-                                // Auto-fill block height from localStorage
+                                // Auto-fill block height from localStorage (keyed by purchase_commitment)
                                 try {
                                   const escrowBlocks = JSON.parse(localStorage.getItem('veil_escrow_blocks') || '{}');
-                                  const key = `${e.merchant}_${e.total}`;
-                                  if (escrowBlocks[key]) {
-                                    setRefundBlockHeight(String(escrowBlocks[key]));
+                                  if (escrowBlocks[e.purchase_commitment]) {
+                                    setRefundBlockHeight(String(escrowBlocks[e.purchase_commitment]));
                                   } else {
                                     setRefundBlockHeight('');
                                   }

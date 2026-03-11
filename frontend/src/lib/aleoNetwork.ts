@@ -72,6 +72,48 @@ export async function getCurrentBlockHeight(): Promise<number> {
 }
 
 /**
+ * Get the block height at which a transaction was confirmed.
+ * Queries the Aleo API to find the exact finalize block.
+ */
+export async function getTransactionBlockHeight(txId: string): Promise<number | null> {
+  try {
+    // Try the confirmed transaction endpoint which includes block info
+    const response = await fetch(
+      `${ALEO_API_URL}/testnet/transaction/confirmed/${txId}`
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.block?.header?.metadata?.height) {
+        return Number(data.block.header.metadata.height);
+      }
+    }
+  } catch { /* fall through */ }
+
+  try {
+    // Fallback: find block hash for transaction, then get block height
+    const hashResp = await fetch(
+      `${ALEO_API_URL}/testnet/find/blockHash/${txId}`
+    );
+    if (hashResp.ok) {
+      const blockHash = await hashResp.json();
+      if (blockHash) {
+        const blockResp = await fetch(
+          `${ALEO_API_URL}/testnet/block/${blockHash}`
+        );
+        if (blockResp.ok) {
+          const block = await blockResp.json();
+          if (block?.header?.metadata?.height) {
+            return Number(block.header.metadata.height);
+          }
+        }
+      }
+    }
+  } catch { /* fall through */ }
+
+  return null;
+}
+
+/**
  * Parse receipt data from transaction outputs
  * Records are encrypted, but we can extract basic info from the transaction
  */
