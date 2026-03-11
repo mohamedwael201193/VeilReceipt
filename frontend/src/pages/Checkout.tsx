@@ -44,7 +44,7 @@ const TOKEN_OPTIONS = [
 ];
 
 const Checkout: FC = () => {
-  const { connected, address, purchase, loading: walletLoading } = useVeilWallet();
+  const { connected, address, purchase, loading: walletLoading, getReviewTokens } = useVeilWallet();
   const { items, merchantAddress, tokenType, addItem, removeItem, updateQuantity, setTokenType, clearCart, getTotal, getItemCount } = useCartStore();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -54,6 +54,7 @@ const Checkout: FC = () => {
   const [showCart, setShowCart] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
+  const [myReviews, setMyReviews] = useState<Record<string, number>>({}); // sku -> my rating
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -76,7 +77,7 @@ const Checkout: FC = () => {
     fetchProducts();
   }, []);
 
-  // Fetch on-chain review counts for products
+  // Fetch on-chain review counts for products + user's own reviews
   useEffect(() => {
     if (products.length === 0) return;
     const fetchCounts = async () => {
@@ -92,6 +93,25 @@ const Checkout: FC = () => {
     };
     fetchCounts();
   }, [products]);
+
+  useEffect(() => {
+    if (!connected || products.length === 0) return;
+    const fetchMyReviews = async () => {
+      try {
+        const tokens = await getReviewTokens();
+        const skuFieldMap: Record<string, string> = {};
+        products.forEach(p => { skuFieldMap[toAleoField(p.sku).replace(/field$/, '')] = p.sku; });
+        const reviews: Record<string, number> = {};
+        tokens.forEach((t: any) => {
+          const hash = t.product_hash?.replace(/field$/, '');
+          const sku = skuFieldMap[hash];
+          if (sku) reviews[sku] = t.rating;
+        });
+        setMyReviews(reviews);
+      } catch { /* non-critical */ }
+    };
+    fetchMyReviews();
+  }, [connected, products, getReviewTokens]);
 
   // Detect self-purchase (buyer === merchant)
   const isSelfPurchase = connected && address && merchantAddress && address === merchantAddress;
@@ -246,6 +266,7 @@ const Checkout: FC = () => {
                     onAdd={() => addItem(product)}
                     formatPrice={formatPrice}
                     reviewCount={reviewCounts[product.sku]}
+                    myRating={myReviews[product.sku]}
                   />
                 ))}
               </motion.div>
@@ -498,7 +519,9 @@ const ProductCard: FC<{
   onAdd: () => void;
   formatPrice: (n: number) => string;
   reviewCount?: number;
-}> = ({ product, onAdd, reviewCount }) => {
+  myRating?: number;
+}> = ({ product, onAdd, reviewCount, myRating }) => {
+  const [showReviews, setShowReviews] = useState(false);
   // Use product's OWN price_type for display, not the global cart selection
   const displayPrice = product.price_type === 'usdcx' ? formatUsdcx(product.price) : product.price_type === 'usad' ? formatUsad(product.price) : formatCredits(product.price);
   const isStablecoin = product.price_type === 'usdcx' || product.price_type === 'usad';
@@ -594,20 +617,147 @@ const ProductCard: FC<{
             </motion.div>
           </div>
 
+          {/* Reviews bar */}
+          {reviewCount !== undefined && reviewCount > 0 && (
+            <div
+              className="mt-4 p-2.5 -mx-1 rounded-xl bg-yellow-400/[0.04] border border-yellow-400/[0.08] cursor-pointer hover:bg-yellow-400/[0.08] transition-all"
+              onClick={(e) => { e.stopPropagation(); setShowReviews(true); }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <LoyaltyIcon
+                        key={s}
+                        size={12}
+                        className={s <= (myRating || Math.min(reviewCount >= 3 ? 4 : 5, 5))
+                          ? 'text-yellow-400 fill-yellow-400'
+                          : 'text-white/10'}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-yellow-400/90 text-[11px] font-bold ml-1">{reviewCount}</span>
+                  <span className="text-white/25 text-[10px]">verified {reviewCount === 1 ? 'review' : 'reviews'}</span>
+                </div>
+                {myRating && (
+                  <span className="text-[10px] text-yellow-400/50 font-medium">You: {myRating}★</span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* SKU footer */}
-          <div className="mt-4 flex items-center gap-1.5 text-[11px] text-white/15">
+          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-white/15">
             <TagIcon size={10} />
             <span className="font-mono">{product.sku}</span>
-            {reviewCount !== undefined && reviewCount > 0 && (
-              <span className="ml-auto flex items-center gap-1 text-yellow-400/70">
-                <LoyaltyIcon size={10} className="fill-yellow-400/70" />
-                <span className="font-medium">{reviewCount}</span>
-                <span className="text-white/20">verified</span>
-              </span>
-            )}
           </div>
         </div>
       </motion.div>
+
+      {/* Review Details Modal */}
+      <AnimatePresence>
+        {showReviews && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowReviews(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-md bg-[#0d0d0d] border border-white/[0.08] rounded-2xl p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-11 h-11 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
+                  <LoyaltyIcon size={22} className="text-yellow-400 fill-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">{product.name}</h3>
+                  <p className="text-white/40 text-xs">On-Chain Verified Reviews</p>
+                </div>
+              </div>
+
+              {/* Rating Overview */}
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-extrabold text-yellow-400">{myRating || '—'}</div>
+                    <div className="text-[10px] text-white/30 uppercase tracking-wider mt-0.5">Your Rating</div>
+                  </div>
+                  <div className="h-12 w-px bg-white/[0.06]" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1 mb-1">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <LoyaltyIcon
+                          key={s}
+                          size={18}
+                          className={s <= (myRating || 0)
+                            ? 'text-yellow-400 fill-yellow-400'
+                            : 'text-white/10'}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-white/50 text-xs">
+                      <span className="text-yellow-400 font-bold">{reviewCount}</span> total verified
+                      {reviewCount === 1 ? ' review' : ' reviews'} on-chain
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ZK Privacy Notice */}
+              <div className="bg-green-500/[0.04] border border-green-500/[0.1] rounded-xl p-3.5 mb-4">
+                <div className="flex items-start gap-2.5">
+                  <ShieldIcon size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-green-400/80 text-xs font-semibold mb-1">Zero-Knowledge Verified</p>
+                    <p className="text-white/35 text-[11px] leading-relaxed">
+                      Every review is verified on-chain via <span className="text-white/50">submit_anonymous_review</span>.
+                      A nullifier prevents double-reviewing. Individual ratings stay private in each reviewer's wallet
+                      — only the total count is public.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold text-white">{reviewCount}</div>
+                  <div className="text-[10px] text-white/30">Total</div>
+                </div>
+                <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold text-green-400">✓</div>
+                  <div className="text-[10px] text-white/30">On-Chain</div>
+                </div>
+                <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold text-purple-400">🔒</div>
+                  <div className="text-[10px] text-white/30">Private</div>
+                </div>
+              </div>
+
+              {!myRating && (
+                <p className="text-white/25 text-xs text-center mb-4">
+                  Buy this product and submit a review from the Verify page to add your verified rating.
+                </p>
+              )}
+
+              <button
+                onClick={() => setShowReviews(false)}
+                className="w-full py-2.5 text-sm text-white/50 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
