@@ -15,9 +15,10 @@ import {
   AlertIcon,
   ExternalLinkIcon,
   FileIcon,
+  CopyIcon,
 } from '@/components/icons/Icons';
 import { GridBackground } from '@/components/effects/CosmicBackground';
-import { truncateAddress, formatDate, computeReasonHash } from '@/lib/utils';
+import { truncateAddress, formatDate, computeReasonHash, copyToClipboard } from '@/lib/utils';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
 import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
@@ -133,6 +134,9 @@ const Receipts: FC = () => {
   };
 
   const [provenReceipts, setProvenReceipts] = useState<Set<string>>(new Set());
+  const [supportProofData, setSupportProofData] = useState<any>(null);
+  const [supportProofModalOpen, setSupportProofModalOpen] = useState(false);
+  const [copiedProof, setCopiedProof] = useState(false);
 
   const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
     const key = `support_${receipt.purchase_commitment}`;
@@ -142,15 +146,26 @@ const Receipts: FC = () => {
       const result = await provePurchaseSupport(receipt, productHash);
       // Mark as proven permanently (until page navigation)
       setProvenReceipts(prev => new Set(prev).add(receipt.purchase_commitment));
-      toast.success(
-        `Support proof generated! TX: ${result?.txId?.slice(0, 16)}...`,
-        { duration: 6000 }
-      );
+      if (result?.proofData) {
+        setSupportProofData(result.proofData);
+        setSupportProofModalOpen(true);
+      }
     } catch (e: any) {
       console.error('Support proof error:', e);
       toast.error(e.message || 'Failed to generate proof');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleCopyProofCode = async () => {
+    if (!supportProofData) return;
+    const proofCode = btoa(JSON.stringify(supportProofData));
+    const ok = await copyToClipboard(proofCode);
+    if (ok) {
+      setCopiedProof(true);
+      toast.success('Proof code copied! Share it with the merchant to verify your purchase.');
+      setTimeout(() => setCopiedProof(false), 3000);
     }
   };
 
@@ -635,6 +650,55 @@ const Receipts: FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Support Proof Result Modal */}
+      <Modal
+        isOpen={supportProofModalOpen}
+        onClose={() => { setSupportProofModalOpen(false); setSupportProofData(null); setCopiedProof(false); }}
+        title="Support Proof Generated"
+      >
+        {supportProofData && (
+          <div className="space-y-5">
+            <div className="p-3.5 bg-green-500/[0.06] border border-green-500/15 rounded-xl">
+              <p className="text-xs font-semibold text-green-400/80 uppercase tracking-wider mb-2">Proof Ready</p>
+              <p className="text-xs text-white/45 leading-relaxed">
+                Your support proof has been submitted on-chain. Copy the proof code below and
+                share it with the merchant — they can paste it on the Verify page to confirm your purchase.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <span className="text-xs text-white/30 uppercase tracking-wider">Purchase Commitment</span>
+                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.purchase_commitment}</p>
+              </div>
+              <div>
+                <span className="text-xs text-white/30 uppercase tracking-wider">Product Hash</span>
+                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.product_hash}</p>
+              </div>
+              <div>
+                <span className="text-xs text-white/30 uppercase tracking-wider">Salt</span>
+                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.salt}</p>
+              </div>
+              <div>
+                <span className="text-xs text-white/30 uppercase tracking-wider">Merchant</span>
+                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.merchant}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-1">
+              <Button variant="ghost" onClick={() => { setSupportProofModalOpen(false); setSupportProofData(null); setCopiedProof(false); }}>Close</Button>
+              <Button
+                variant="glow"
+                onClick={handleCopyProofCode}
+                icon={copiedProof ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+              >
+                {copiedProof ? 'Copied!' : 'Copy Proof Code'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
     </div>
