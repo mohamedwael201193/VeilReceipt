@@ -21,7 +21,7 @@ import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, formatDate, computeReasonHash, copyToClipboard } from '@/lib/utils';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { ESCROW_RETURN_WINDOW } from '@/lib/chain';
-import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
+import { getCurrentBlockHeight, getTransactionBlockHeight } from '@/lib/aleoNetwork';
 import { usePendingTxStore } from '@/stores/txStore';
 import type { BuyerReceiptRecord, MerchantReceiptRecord, EscrowReceiptRecord } from '@/lib/types';
 
@@ -48,6 +48,7 @@ const Receipts: FC = () => {
   const [refundBlockHeight, setRefundBlockHeight] = useState('');
   const [selectedEscrow, setSelectedEscrow] = useState<EscrowReceiptRecord | null>(null);
   const [currentBlock, setCurrentBlock] = useState(0);
+  const [escrowBlockMap, setEscrowBlockMap] = useState<Record<string, number>>({});
 
   const pendingTxs = usePendingTxStore((s) => s.transactions);
   // Only show real on-chain at1 entries — hide shield_temp artifacts
@@ -87,6 +88,49 @@ const Receipts: FC = () => {
       setMerchantReceipts(mr);
       setEscrows(e);
       setCurrentBlock(height);
+
+      // Resolve escrow block heights from localStorage + pending TX store
+      if (e.length > 0) {
+        const stored = JSON.parse(localStorage.getItem('veil_escrow_blocks') || '{}');
+        const missing = e.filter(esc => !stored[esc.purchase_commitment]);
+        if (missing.length > 0) {
+          // Try to find escrow TXs in pending store and look up their block heights
+          const escrowTxs = usePendingTxStore.getState().transactions.filter(
+            tx => tx.type === 'escrow' && tx.txId.startsWith('at1') && tx.status === 'confirmed'
+          );
+          for (const tx of escrowTxs) {
+            // Skip if we already resolved block height for all missing
+            if (missing.every(m => stored[m.purchase_commitment])) break;
+            // Check if we have a cached block height for this TX
+            const cachedBlock = localStorage.getItem(`escrow_block_${tx.txId}`);
+            if (cachedBlock) {
+              // Assign to any missing escrow that doesn't have a block yet
+              for (const m of missing) {
+                if (!stored[m.purchase_commitment]) {
+                  stored[m.purchase_commitment] = Number(cachedBlock);
+                  break; // one TX -> one escrow
+                }
+              }
+              continue;
+            }
+            // Fetch from API
+            try {
+              const blockH = await getTransactionBlockHeight(tx.txId);
+              if (blockH) {
+                localStorage.setItem(`escrow_block_${tx.txId}`, String(blockH));
+                for (const m of missing) {
+                  if (!stored[m.purchase_commitment]) {
+                    stored[m.purchase_commitment] = blockH;
+                    break;
+                  }
+                }
+              }
+            } catch { /* non-critical */ }
+          }
+          localStorage.setItem('veil_escrow_blocks', JSON.stringify(stored));
+        }
+        setEscrowBlockMap(stored);
+      }
     } catch (err) {
       console.error('Failed to load records:', err);
       toast.error('Failed to load on-chain records');
@@ -615,9 +659,11 @@ const Receipts: FC = () => {
                               <div>
                                 <span className="text-xs text-white/30 uppercase tracking-wider">Window</span>
                                 <p className="text-amber-400 font-medium text-sm mt-1">{ESCROW_RETURN_WINDOW} blocks</p>
-                                {currentBlock > 0 && (
-                                  <p className="text-xs text-white/30 mt-0.5">Current block: {currentBlock.toLocaleString()}</p>
-                                )}
+                                {escrowBlockMap[e.purchase_commitment] ? (
+                                  <p className="text-xs text-green-400/60 mt-0.5">Created: {escrowBlockMap[e.purchase_commitment].toLocaleString()}</p>
+                                ) : currentBlock > 0 ? (
+                                  <p className="text-xs text-white/30 mt-0.5">Current: {currentBlock.toLocaleString()}</p>
+                                ) : null}
                               </div>
                             </div>
 
@@ -643,15 +689,9 @@ const Receipts: FC = () => {
                               size="sm"
                               onClick={() => {
                                 setSelectedEscrow(e);
-                                // Auto-fill block height from localStorage (keyed by purchase_commitment)
-                                try {
-                                  const escrowBlocks = JSON.parse(localStorage.getItem('veil_escrow_blocks') || '{}');
-                                  if (escrowBlocks[e.purchase_commitment]) {
-                                    setRefundBlockHeight(String(escrowBlocks[e.purchase_commitment]));
-                                  } else {
-                                    setRefundBlockHeight('');
-                                  }
-                                } catch { setRefundBlockHeight(''); }
+                                // Auto-fill block height from resolved map
+                                const block = escrowBlockMap[e.purchase_commitment];
+                                setRefundBlockHeight(block ? String(block) : '');
                                 setRefundModalOpen(true);
                               }}
                               icon={<AlertIcon size={13} />}
