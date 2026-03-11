@@ -54,25 +54,29 @@ const Merchant: FC = () => {
   useEffect(() => {
     const storedToken = api.getToken();
     if (connected && address && (isMerchant || token || storedToken)) {
-      // Check if JWT is expired by decoding the payload
       const t = storedToken || token;
-      if (t) {
-        try {
-          const payload = JSON.parse(atob(t.split('.')[1]));
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            // Token expired — clear stale state
-            api.setToken(null);
-            useUserStore.getState().setToken(null);
-            setAuthenticated(false);
-            return;
-          }
-        } catch {
+      // No token at all — cannot be authenticated
+      if (!t) {
+        setAuthenticated(false);
+        return;
+      }
+      // Check if JWT is expired by decoding the payload
+      try {
+        const payload = JSON.parse(atob(t.split('.')[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
           api.setToken(null);
           useUserStore.getState().setToken(null);
           setAuthenticated(false);
           return;
         }
+      } catch {
+        api.setToken(null);
+        useUserStore.getState().setToken(null);
+        setAuthenticated(false);
+        return;
       }
+      // Token exists and is not expired — restore session
+      api.setToken(t);
       setAuthenticated(true);
       getMerchantLicense().then(license => {
         setOnChainRegistered(!!license);
