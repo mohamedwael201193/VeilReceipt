@@ -331,6 +331,12 @@ const Verify: FC = () => {
                             <AwardIcon size={14} />
                             <span className="ml-1.5">Mint Token</span>
                           </Button>
+                          {accessTokens.some(t => t.merchant === r.merchant) && (
+                            <Badge variant="success">
+                              <CheckIcon size={10} className="mr-1" />
+                              Token Minted
+                            </Badge>
+                          )}
                         </div>
                       </Card>
                     ))}
@@ -404,6 +410,7 @@ const Verify: FC = () => {
                             variant="secondary"
                             onClick={() => {
                               setReviewReceipt(r);
+                              setProductHash(r.cart_commitment);
                               setReviewModalOpen(true);
                             }}
                             disabled={!!actionLoading}

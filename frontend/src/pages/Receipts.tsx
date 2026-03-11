@@ -143,12 +143,39 @@ const Receipts: FC = () => {
   const [supportProofModalOpen, setSupportProofModalOpen] = useState(false);
   const [copiedProof, setCopiedProof] = useState(false);
 
-  const markProven = (commitment: string) => {
+  const markProven = (commitment: string, proofData?: any) => {
     setProvenReceipts(prev => {
       const next = new Set(prev).add(commitment);
       localStorage.setItem('veil_proven_receipts', JSON.stringify([...next]));
       return next;
     });
+    if (proofData) {
+      const stored = JSON.parse(localStorage.getItem('veil_proof_data') || '{}');
+      stored[commitment] = proofData;
+      localStorage.setItem('veil_proof_data', JSON.stringify(stored));
+    }
+  };
+
+  const getStoredProofCode = (commitment: string): string | null => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('veil_proof_data') || '{}');
+      if (stored[commitment]) return btoa(JSON.stringify(stored[commitment]));
+      return null;
+    } catch { return null; }
+  };
+
+  const [copiedReceipt, setCopiedReceipt] = useState<string | null>(null);
+
+  const handleCopyStoredProof = async (commitment: string) => {
+    const code = getStoredProofCode(commitment);
+    if (code) {
+      const ok = await copyToClipboard(code);
+      if (ok) {
+        setCopiedReceipt(commitment);
+        toast.success('Proof code copied!');
+        setTimeout(() => setCopiedReceipt(null), 3000);
+      }
+    }
   };
 
   const handleSupportProof = async (receipt: BuyerReceiptRecord) => {
@@ -157,7 +184,7 @@ const Receipts: FC = () => {
     try {
       const productHash = receipt.cart_commitment;
       const result = await provePurchaseSupport(receipt, productHash);
-      markProven(receipt.purchase_commitment);
+      markProven(receipt.purchase_commitment, result?.proofData);
       if (result?.proofData) {
         setSupportProofData(result.proofData);
         setSupportProofModalOpen(true);
@@ -436,6 +463,16 @@ const Receipts: FC = () => {
                             >
                               Export
                             </Button>
+                            {provenReceipts.has(r.purchase_commitment) && getStoredProofCode(r.purchase_commitment) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCopyStoredProof(r.purchase_commitment)}
+                                icon={copiedReceipt === r.purchase_commitment ? <CheckIcon size={13} className="text-green-400" /> : <CopyIcon size={13} />}
+                              >
+                                {copiedReceipt === r.purchase_commitment ? 'Copied!' : 'Copy Code'}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </Card>
