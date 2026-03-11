@@ -52,18 +52,31 @@ const Merchant: FC = () => {
 
   // Restore auth from persisted store on mount — validate token is still valid
   useEffect(() => {
-    if (connected && address && (isMerchant || token || api.getToken())) {
-      api.getMe().then(() => {
-        setAuthenticated(true);
-        getMerchantLicense().then(license => {
-          setOnChainRegistered(!!license);
-        }).catch(() => {});
-      }).catch(() => {
-        // Token expired or invalid — clear stale state
-        api.setToken(null);
-        useUserStore.getState().setToken(null);
-        setAuthenticated(false);
-      });
+    const storedToken = api.getToken();
+    if (connected && address && (isMerchant || token || storedToken)) {
+      // Check if JWT is expired by decoding the payload
+      const t = storedToken || token;
+      if (t) {
+        try {
+          const payload = JSON.parse(atob(t.split('.')[1]));
+          if (payload.exp && payload.exp * 1000 < Date.now()) {
+            // Token expired — clear stale state
+            api.setToken(null);
+            useUserStore.getState().setToken(null);
+            setAuthenticated(false);
+            return;
+          }
+        } catch {
+          api.setToken(null);
+          useUserStore.getState().setToken(null);
+          setAuthenticated(false);
+          return;
+        }
+      }
+      setAuthenticated(true);
+      getMerchantLicense().then(license => {
+        setOnChainRegistered(!!license);
+      }).catch(() => {});
     }
   }, [connected, address, isMerchant, token, getMerchantLicense]);
 
