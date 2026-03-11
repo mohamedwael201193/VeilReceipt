@@ -50,14 +50,20 @@ const Merchant: FC = () => {
     category: '',
   });
 
-  // Restore auth from persisted store on mount
+  // Restore auth from persisted store on mount — validate token is still valid
   useEffect(() => {
     if (connected && address && (isMerchant || token || api.getToken())) {
-      setAuthenticated(true);
-      // Check on-chain registration
-      getMerchantLicense().then(license => {
-        setOnChainRegistered(!!license);
-      }).catch(() => {});
+      api.getMe().then(() => {
+        setAuthenticated(true);
+        getMerchantLicense().then(license => {
+          setOnChainRegistered(!!license);
+        }).catch(() => {});
+      }).catch(() => {
+        // Token expired or invalid — clear stale state
+        api.setToken(null);
+        useUserStore.getState().setToken(null);
+        setAuthenticated(false);
+      });
     }
   }, [connected, address, isMerchant, token, getMerchantLicense]);
 

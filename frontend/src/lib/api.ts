@@ -50,6 +50,10 @@ class ApiClient {
     const data = await response.json();
 
     if (!response.ok) {
+      // Auto-clear expired/invalid token on 401
+      if (response.status === 401 && this.token) {
+        this.setToken(null);
+      }
       throw new Error((data as ApiError).error || 'Request failed');
     }
 
