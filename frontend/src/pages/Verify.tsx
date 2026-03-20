@@ -16,7 +16,6 @@ import {
   CopyIcon,
   AlertIcon,
 } from '@/components/icons/Icons';
-import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, copyToClipboard } from '@/lib/utils';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { ALEO_CONFIG } from '@/lib/chain';
@@ -233,11 +232,10 @@ const Verify: FC = () => {
 
   if (!connected) {
     return (
-      <div className="relative min-h-screen pt-28 pb-16">
-        <GridBackground />
+      <div className="relative min-h-screen pt-4 pb-16">
         <div className="relative z-10 max-w-4xl mx-auto px-6">
           <EmptyState
-            icon={<ShieldIcon size={48} className="text-white/20" />}
+            icon={<ShieldIcon size={48} className="text-[#c9c6c5]/25" />}
             title="Connect your wallet"
             description="Connect your Shield wallet to access verification features"
           />
@@ -254,8 +252,7 @@ const Verify: FC = () => {
   ];
 
   return (
-    <div className="relative min-h-screen pt-28 pb-16">
-      <GridBackground />
+    <div className="relative min-h-screen pt-4 pb-16">
       <div className="relative z-10 max-w-5xl mx-auto px-6">
         <SectionHeader
           title="Verify & Review"
@@ -281,7 +278,7 @@ const Verify: FC = () => {
 
         {loadingRecords && (
           <div className="flex justify-center py-20">
-            <LoadingSpinner size={32} className="text-white/40" />
+            <LoadingSpinner size={32} className="text-[#c9c6c5]/60" />
           </div>
         )}
 
@@ -298,13 +295,13 @@ const Verify: FC = () => {
               >
                 {receipts.length === 0 ? (
                   <EmptyState
-                    icon={<AwardIcon size={48} className="text-white/20" />}
+                    icon={<AwardIcon size={48} className="text-[#c9c6c5]/25" />}
                     title="No receipts found"
                     description="Make a purchase first to mint access tokens"
                   />
                 ) : (
                   <div className="grid gap-4">
-                    <p className="text-white/50 text-sm mb-2">
+                    <p className="text-[#c9c6c5]/70 text-sm mb-2">
                       Select a receipt to mint a gated access token. The token proves your purchase without revealing payment details.
                     </p>
                     {receipts.map((r, i) => (
@@ -312,8 +309,8 @@ const Verify: FC = () => {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
-                              <PackageIcon size={14} className="text-white/40" />
-                              <span className="text-xs font-mono text-white/40">
+                              <PackageIcon size={14} className="text-[#c9c6c5]/60" />
+                              <span className="text-xs font-mono text-[#c9c6c5]/60">
                                 {truncateAddress(r.purchase_commitment)}
                               </span>
                               <Badge variant={r.token_type === 0 ? 'default' : r.token_type === 2 ? 'warning' : 'info'}>
@@ -321,10 +318,10 @@ const Verify: FC = () => {
                               </Badge>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
-                              <span className="text-white/60">
-                                Total: <span className="text-white font-medium">{r.token_type === 1 ? formatUsdcx(r.total) : r.token_type === 2 ? formatUsad(r.total) : formatCredits(r.total)}</span>
+                              <span className="text-[#c9c6c5]/80">
+                                Total: <span className="text-[#e5e2e1] font-medium">{r.token_type === 1 ? formatUsdcx(r.total) : r.token_type === 2 ? formatUsad(r.total) : formatCredits(r.total)}</span>
                               </span>
-                              <span className="text-white/40">
+                              <span className="text-[#c9c6c5]/60">
                                 Merchant: {truncateAddress(r.merchant)}
                               </span>
                             </div>
@@ -365,30 +362,30 @@ const Verify: FC = () => {
               >
                 {receipts.length === 0 ? (
                   <EmptyState
-                    icon={<LoyaltyIcon size={48} className="text-white/20" />}
+                    icon={<LoyaltyIcon size={48} className="text-[#c9c6c5]/25" />}
                     title="No receipts found"
                     description="Make a purchase first to submit anonymous reviews"
                   />
                 ) : (
                   <div className="grid gap-4">
-                    <p className="text-white/50 text-sm mb-2">
+                    <p className="text-[#c9c6c5]/70 text-sm mb-2">
                       Submit verified reviews without revealing your identity.
                       The contract uses nullifiers to prevent double-reviews per product.
                     </p>
 
                     {/* On-chain review count summary */}
                     {Object.keys(reviewCounts).length > 0 && (
-                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-2">
-                        <h4 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-xl p-4 mb-2">
+                        <h4 className="text-xs text-[#c9c6c5]/60 uppercase tracking-wider mb-3 flex items-center gap-2">
                           <LoyaltyIcon size={12} className="text-yellow-400" />
                           On-Chain Review Counts
                         </h4>
                         <div className="flex flex-wrap gap-3">
                           {Object.entries(reviewCounts).map(([hash, count]) => (
-                            <div key={hash} className="flex items-center gap-2 bg-white/[0.04] rounded-lg px-3 py-2 border border-white/[0.06]">
-                              <span className="text-xs font-mono text-white/40">{truncateAddress(hash)}</span>
+                            <div key={hash} className="flex items-center gap-2 bg-[#1c1b1b]/40 rounded-lg px-3 py-2 border border-[#d4bbff]/10">
+                              <span className="text-xs font-mono text-[#c9c6c5]/60">{truncateAddress(hash)}</span>
                               <span className="text-yellow-400 font-bold text-sm">{count}</span>
-                              <span className="text-white/30 text-xs">reviews</span>
+                              <span className="text-[#c9c6c5]/40 text-xs">reviews</span>
                             </div>
                           ))}
                         </div>
@@ -400,16 +397,16 @@ const Verify: FC = () => {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
-                              <PackageIcon size={14} className="text-white/40" />
-                              <span className="text-xs font-mono text-white/40">
+                              <PackageIcon size={14} className="text-[#c9c6c5]/60" />
+                              <span className="text-xs font-mono text-[#c9c6c5]/60">
                                 {truncateAddress(r.purchase_commitment)}
                               </span>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
-                              <span className="text-white/60">
-                                Total: <span className="text-white font-medium">{r.token_type === 1 ? formatUsdcx(r.total) : r.token_type === 2 ? formatUsad(r.total) : formatCredits(r.total)}</span>
+                              <span className="text-[#c9c6c5]/80">
+                                Total: <span className="text-[#e5e2e1] font-medium">{r.token_type === 1 ? formatUsdcx(r.total) : r.token_type === 2 ? formatUsad(r.total) : formatCredits(r.total)}</span>
                               </span>
-                              <span className="text-white/40">
+                              <span className="text-[#c9c6c5]/60">
                                 {truncateAddress(r.merchant)}
                               </span>
                             </div>
@@ -446,7 +443,7 @@ const Verify: FC = () => {
               >
                 {accessTokens.length === 0 && reviewTokens.length === 0 ? (
                   <EmptyState
-                    icon={<ShieldIcon size={48} className="text-white/20" />}
+                    icon={<ShieldIcon size={48} className="text-[#c9c6c5]/25" />}
                     title="No tokens yet"
                     description="Mint access tokens or submit reviews to see them here"
                   />
@@ -454,7 +451,7 @@ const Verify: FC = () => {
                   <div className="space-y-6">
                     {accessTokens.length > 0 && (
                       <div>
-                        <h3 className="text-white/60 text-sm font-medium mb-3 flex items-center gap-2">
+                        <h3 className="text-[#c9c6c5]/80 text-sm font-medium mb-3 flex items-center gap-2">
                           <AwardIcon size={14} />
                           Access Tokens ({accessTokens.length})
                         </h3>
@@ -463,22 +460,22 @@ const Verify: FC = () => {
                             <Card key={i} className={`p-5 ${tierBgColors[t.token_tier] || ''} ${tierBorderColors[t.token_tier] || ''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${tierBorderColors[t.token_tier] || 'border-white/[0.06]'}`}
+                                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${tierBorderColors[t.token_tier] || 'border-[#d4bbff]/10'}`}
                                     style={{ background: 'rgba(255,255,255,0.02)' }}
                                   >
-                                    <AwardIcon size={22} className={tierColors[t.token_tier] || 'text-white/40'} />
+                                    <AwardIcon size={22} className={tierColors[t.token_tier] || 'text-[#c9c6c5]/60'} />
                                   </div>
                                   <div>
-                                    <p className={`text-base font-bold ${tierColors[t.token_tier] || 'text-white'}`}>
+                                    <p className={`text-base font-bold ${tierColors[t.token_tier] || 'text-[#e5e2e1]'}`}>
                                       {tierLabels[t.token_tier] || `Tier ${t.token_tier}`} Access Pass
                                     </p>
-                                    <p className="text-xs text-white/40 font-mono mt-0.5">
+                                    <p className="text-xs text-[#c9c6c5]/60 font-mono mt-0.5">
                                       Gate: {truncateAddress(t.gate_commitment)}
                                     </p>
-                                    <p className="text-xs text-white/30 mt-0.5">
+                                    <p className="text-xs text-[#c9c6c5]/40 mt-0.5">
                                       Merchant: {truncateAddress(t.merchant)}
                                     </p>
-                                    <p className="text-[10px] text-white/20 mt-1">
+                                    <p className="text-[10px] text-[#c9c6c5]/25 mt-1">
                                       Share the proof code with the merchant to verify your access tier
                                     </p>
                                   </div>
@@ -494,7 +491,7 @@ const Verify: FC = () => {
                                     onClick={() => handleCopyProof(t)}
                                   >
                                     {copiedToken === t.gate_commitment ? (
-                                      <><CheckIcon size={14} className="text-green-400" /><span className="ml-1 text-green-400">Copied</span></>
+                                      <><CheckIcon size={14} className="text-[#7dffa2]" /><span className="ml-1 text-[#7dffa2]">Copied</span></>
                                     ) : (
                                       <><CopyIcon size={14} /><span className="ml-1">Copy Proof</span></>
                                     )}
@@ -509,7 +506,7 @@ const Verify: FC = () => {
 
                     {reviewTokens.length > 0 && (
                       <div>
-                        <h3 className="text-white/60 text-sm font-medium mb-3 flex items-center gap-2">
+                        <h3 className="text-[#c9c6c5]/80 text-sm font-medium mb-3 flex items-center gap-2">
                           <LoyaltyIcon size={14} />
                           Review Tokens ({reviewTokens.length})
                         </h3>
@@ -522,15 +519,15 @@ const Verify: FC = () => {
                                     <LoyaltyIcon size={22} className="text-yellow-400" />
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-white flex items-center gap-1">
+                                    <p className="text-sm font-medium text-[#e5e2e1] flex items-center gap-1">
                                       {Array.from({ length: t.rating }).map((_, si) => (
                                         <LoyaltyIcon key={si} size={14} className="text-yellow-400 fill-yellow-400" />
                                       ))}
                                       {Array.from({ length: 5 - t.rating }).map((_, si) => (
-                                        <LoyaltyIcon key={si} size={14} className="text-white/10" />
+                                        <LoyaltyIcon key={si} size={14} className="text-[#c9c6c5]/15" />
                                       ))}
                                     </p>
-                                    <p className="text-xs text-white/40 font-mono mt-1">
+                                    <p className="text-xs text-[#c9c6c5]/60 font-mono mt-1">
                                       Product: {truncateAddress(t.product_hash)}
                                     </p>
                                     {reviewCounts[t.product_hash] !== undefined && (
@@ -566,12 +563,12 @@ const Verify: FC = () => {
                 <div className="max-w-2xl mx-auto">
                   <Card className="p-6">
                     <div className="flex items-center gap-3 mb-5">
-                      <div className="p-2.5 bg-green-500/10 rounded-xl border border-green-500/20">
-                        <ShieldIcon size={20} className="text-green-400" />
+                      <div className="p-2.5 bg-[#7dffa2]/10 rounded-xl border border-[#7dffa2]/20">
+                        <ShieldIcon size={20} className="text-[#7dffa2]" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-white">Verify Support Proof</h3>
-                        <p className="text-xs text-white/40">
+                        <h3 className="text-lg font-bold text-[#e5e2e1]">Verify Support Proof</h3>
+                        <p className="text-xs text-[#c9c6c5]/60">
                           Paste a customer's proof code or manually enter proof fields to verify their purchase on-chain
                         </p>
                       </div>
@@ -581,7 +578,7 @@ const Verify: FC = () => {
                       {/* Paste Proof Code section */}
                       <div className="p-3.5 bg-blue-500/[0.06] border border-blue-500/15 rounded-xl">
                         <p className="text-xs font-semibold text-blue-400/80 uppercase tracking-wider mb-2">Quick Verify</p>
-                        <p className="text-xs text-white/40 mb-3">
+                        <p className="text-xs text-[#c9c6c5]/60 mb-3">
                           Paste the proof code that the customer copied from their Purchases page. All fields will auto-fill.
                         </p>
                         <div className="flex gap-2">
@@ -606,10 +603,10 @@ const Verify: FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-white/20">
-                        <div className="flex-1 h-px bg-white/[0.06]" />
+                      <div className="flex items-center gap-3 text-xs text-[#c9c6c5]/25">
+                        <div className="flex-1 h-px bg-[#1c1b1b]/60" />
                         <span>or enter fields manually</span>
-                        <div className="flex-1 h-px bg-white/[0.06]" />
+                        <div className="flex-1 h-px bg-[#1c1b1b]/60" />
                       </div>
 
                       <Input
@@ -656,24 +653,24 @@ const Verify: FC = () => {
                             exit={{ opacity: 0, y: -10, scale: 0.95 }}
                             className={`p-4 rounded-xl border flex items-center gap-3 ${
                               verifyResult === 'valid'
-                                ? 'bg-emerald-500/10 border-emerald-500/30'
-                                : 'bg-red-500/10 border-red-500/30'
+                                ? 'bg-[#7dffa2]/10 border-[#7dffa2]/30'
+                                : 'bg-[#ffb4ab]/10 border-[#ffb4ab]/30'
                             }`}
                           >
                             {verifyResult === 'valid' ? (
                               <>
-                                <CheckIcon size={20} className="text-emerald-400" />
+                                <CheckIcon size={20} className="text-[#7dffa2]" />
                                 <div>
-                                  <p className="text-emerald-400 font-semibold">Verified</p>
-                                  <p className="text-emerald-400/60 text-xs">Purchase commitment exists on-chain. This is a legitimate proof.</p>
+                                  <p className="text-[#7dffa2] font-semibold">Verified</p>
+                                  <p className="text-[#7dffa2]/60 text-xs">Purchase commitment exists on-chain. This is a legitimate proof.</p>
                                 </div>
                               </>
                             ) : (
                               <>
-                                <AlertIcon size={20} className="text-red-400" />
+                                <AlertIcon size={20} className="text-[#ffb4ab]" />
                                 <div>
-                                  <p className="text-red-400 font-semibold">Not Verified</p>
-                                  <p className="text-red-400/60 text-xs">Purchase commitment not found on-chain. This proof could not be verified.</p>
+                                  <p className="text-[#ffb4ab] font-semibold">Not Verified</p>
+                                  <p className="text-[#ffb4ab]/60 text-xs">Purchase commitment not found on-chain. This proof could not be verified.</p>
                                 </div>
                               </>
                             )}
@@ -684,24 +681,24 @@ const Verify: FC = () => {
                   </Card>
 
                   {/* How it works */}
-                  <div className="mt-6 bg-white/[0.02] border border-white/[0.05] rounded-xl p-5">
-                    <h4 className="text-sm font-semibold text-white/60 mb-3">How Support Proof Verification Works</h4>
-                    <ol className="space-y-2 text-xs text-white/40">
+                  <div className="mt-6 bg-[#1c1b1b]/30 border border-[#d4bbff]/8 rounded-xl p-5">
+                    <h4 className="text-sm font-semibold text-[#c9c6c5]/80 mb-3">How Support Proof Verification Works</h4>
+                    <ol className="space-y-2 text-xs text-[#c9c6c5]/60">
                       <li className="flex gap-2">
-                        <span className="text-green-400 font-bold">1.</span>
-                        Customer generates a support proof from their Purchases page using the <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">Support</code> button
+                        <span className="text-[#7dffa2] font-bold">1.</span>
+                        Customer generates a support proof from their Purchases page using the <code className="text-[#c9c6c5]/70 bg-[#1c1b1b]/60 px-1.5 py-0.5 rounded">Support</code> button
                       </li>
                       <li className="flex gap-2">
-                        <span className="text-green-400 font-bold">2.</span>
+                        <span className="text-[#7dffa2] font-bold">2.</span>
                         A proof code is generated containing commitment, product hash, and salt — payment details stay private
                       </li>
                       <li className="flex gap-2">
-                        <span className="text-green-400 font-bold">3.</span>
+                        <span className="text-[#7dffa2] font-bold">3.</span>
                         Customer copies and shares the proof code with you. Paste it above to auto-fill all fields
                       </li>
                       <li className="flex gap-2">
-                        <span className="text-green-400 font-bold">4.</span>
-                        Click "Verify On-Chain" to confirm the purchase commitment exists on-chain via the <code className="text-white/50 bg-white/[0.06] px-1.5 py-0.5 rounded">purchase_exists</code> mapping
+                        <span className="text-[#7dffa2] font-bold">4.</span>
+                        Click "Verify On-Chain" to confirm the purchase commitment exists on-chain via the <code className="text-[#c9c6c5]/70 bg-[#1c1b1b]/60 px-1.5 py-0.5 rounded">purchase_exists</code> mapping
                       </li>
                     </ol>
                   </div>
@@ -718,16 +715,16 @@ const Verify: FC = () => {
           title="Mint Access Token"
         >
           <div className="space-y-4">
-            <p className="text-sm text-white/50">
+            <p className="text-sm text-[#c9c6c5]/70">
               Mint a receipt-gated access token. This proves you made a purchase at the merchant without revealing payment details.
             </p>
             {selectedReceipt && (
-              <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
-                <p className="text-xs text-white/40">Receipt</p>
-                <p className="text-sm font-mono text-white/70">
+              <div className="bg-[#1c1b1b]/40 rounded-xl p-3 border border-[#d4bbff]/10">
+                <p className="text-xs text-[#c9c6c5]/60">Receipt</p>
+                <p className="text-sm font-mono text-[#e5e2e1]/80">
                   {truncateAddress(selectedReceipt.purchase_commitment)}
                 </p>
-                <p className="text-xs text-white/40 mt-1">
+                <p className="text-xs text-[#c9c6c5]/60 mt-1">
                   {selectedReceipt.token_type === 1 ? formatUsdcx(selectedReceipt.total) : selectedReceipt.token_type === 2 ? formatUsad(selectedReceipt.total) : formatCredits(selectedReceipt.total)} to {truncateAddress(selectedReceipt.merchant)}
                 </p>
               </div>
@@ -739,7 +736,7 @@ const Verify: FC = () => {
               placeholder="e.g. exclusive_content_2024"
             />
             <div>
-              <label className="block text-sm font-medium text-white/60 mb-2">Tier</label>
+              <label className="block text-sm font-medium text-[#c9c6c5]/80 mb-2">Tier</label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map(t => (
                   <button
@@ -747,8 +744,8 @@ const Verify: FC = () => {
                     onClick={() => setTier(t)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                       tier === t
-                        ? 'bg-white/10 text-white border border-white/20'
-                        : 'bg-white/[0.03] text-white/40 border border-white/[0.06] hover:border-white/10'
+                        ? 'bg-white/10 text-[#e5e2e1] border border-white/20'
+                        : 'bg-[#1c1b1b]/40 text-[#c9c6c5]/60 border border-[#d4bbff]/10 hover:border-white/10'
                     }`}
                   >
                     {tierLabels[t]}
@@ -780,13 +777,13 @@ const Verify: FC = () => {
           title="Submit Anonymous Review"
         >
           <div className="space-y-4">
-            <p className="text-sm text-white/50">
+            <p className="text-sm text-[#c9c6c5]/70">
               Your review is verified by the contract but your identity stays private. A nullifier prevents double-reviewing.
             </p>
             {reviewReceipt && (
-              <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
-                <p className="text-xs text-white/40">Receipt</p>
-                <p className="text-sm font-mono text-white/70">
+              <div className="bg-[#1c1b1b]/40 rounded-xl p-3 border border-[#d4bbff]/10">
+                <p className="text-xs text-[#c9c6c5]/60">Receipt</p>
+                <p className="text-sm font-mono text-[#e5e2e1]/80">
                   {truncateAddress(reviewReceipt.purchase_commitment)}
                 </p>
               </div>
@@ -799,7 +796,7 @@ const Verify: FC = () => {
             />
             {products.length > 0 && (
               <div>
-                <label className="block text-xs text-white/40 mb-1.5">Or select a product:</label>
+                <label className="block text-xs text-[#c9c6c5]/60 mb-1.5">Or select a product:</label>
                 <div className="flex flex-wrap gap-2">
                   {products.map(p => (
                     <button
@@ -808,7 +805,7 @@ const Verify: FC = () => {
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                         productHash === p.sku
                           ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30'
-                          : 'bg-white/[0.03] text-white/40 border-white/[0.06] hover:border-white/15'
+                          : 'bg-[#1c1b1b]/40 text-[#c9c6c5]/60 border-[#d4bbff]/10 hover:border-white/15'
                       }`}
                     >
                       {p.name} ({p.sku})
@@ -818,7 +815,7 @@ const Verify: FC = () => {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-white/60 mb-2">Rating</label>
+              <label className="block text-sm font-medium text-[#c9c6c5]/80 mb-2">Rating</label>
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map(r => (
                   <button
@@ -828,12 +825,12 @@ const Verify: FC = () => {
                   >
                     <LoyaltyIcon
                       size={28}
-                      className={r <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-white/10'}
+                      className={r <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-[#c9c6c5]/15'}
                     />
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-white/30 mt-1">{rating} / 5 stars</p>
+              <p className="text-xs text-[#c9c6c5]/40 mt-1">{rating} / 5 stars</p>
             </div>
             <Button
               onClick={handleSubmitReview}

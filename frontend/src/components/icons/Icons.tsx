@@ -123,7 +123,7 @@ export const LoadingSpinner: FC<IconProps> = ({ className = '', size = 24 }) => 
 // Success checkmark with animation
 export const SuccessCheck: FC<IconProps> = ({ className = '', size = 24 }) => (
   <motion.div
-    className={`text-green-400 ${className}`}
+    className={`text-[#7dffa2] ${className}`}
     initial={{ scale: 0, opacity: 0 }}
     animate={{ scale: 1, opacity: 1 }}
     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
@@ -208,7 +208,7 @@ export const TokenAmount: FC<{
     lg: 'text-lg font-bold',
     xl: 'text-2xl font-extrabold',
   };
-  const colorClass = isUsad ? 'text-violet-300' : isUsdcx ? 'text-emerald-300' : 'text-sky-300';
+  const colorClass = isUsad ? 'text-[#d4bbff]' : isUsdcx ? 'text-[#7dffa2]' : 'text-[#d4bbff]/70';
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
       <TokenIcon type={type} size={sizeMap[size]} />

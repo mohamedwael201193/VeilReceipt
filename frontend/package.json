@@ -16,12 +16,17 @@
     "@provablehq/aleo-wallet-adaptor-react-ui": "^0.3.0-alpha.2",
     "@provablehq/aleo-wallet-adaptor-shield": "^0.3.0-alpha.2",
     "@provablehq/sdk": "^0.9.15",
+    "@react-three/drei": "^9.92.7",
+    "@react-three/fiber": "^8.15.19",
+    "@types/three": "^0.183.1",
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.303.0",
+    "postprocessing": "^6.38.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.21.1",
+    "three": "^0.183.2",
     "zustand": "^4.4.7"
   },
   "devDependencies": {

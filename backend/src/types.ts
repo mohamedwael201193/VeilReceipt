@@ -96,6 +96,62 @@ export interface JWTPayload {
   exp: number;
 }
 
+// ========== Integration API Models ==========
+
+export interface MerchantApiKey {
+  id: string;
+  merchant_id: string;
+  api_key_hash: string;       // SHA-256 of the actual key (we never store raw)
+  api_key_prefix: string;     // First 8 chars for identification (e.g. "veil_pk_")
+  label: string;              // Human-readable label
+  permissions: string[];      // ['payments', 'webhooks', 'products', 'receipts']
+  is_active: boolean;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  merchant_id: string;
+  url: string;
+  secret_hash: string;        // SHA-256 of webhook signing secret
+  events: string[];            // ['payment.confirmed', 'escrow.created', 'escrow.completed', 'refund.processed']
+  is_active: boolean;
+  failure_count: number;
+  last_triggered_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  event: string;
+  payload: Record<string, any>;
+  status: 'pending' | 'delivered' | 'failed';
+  response_code: number | null;
+  attempts: number;
+  next_retry_at: string | null;
+  created_at: string;
+}
+
+export interface PaymentSession {
+  id: string;
+  merchant_id: string;
+  merchant_address: string;
+  amount: number;
+  currency: 'credits' | 'usdcx' | 'usad';
+  description: string;
+  metadata: Record<string, any>;   // Merchant-provided metadata (order ID, etc.)
+  status: 'pending' | 'completed' | 'expired' | 'cancelled';
+  purchase_commitment: string | null;
+  tx_id: string | null;
+  payment_mode: 'private' | 'public' | 'escrow' | null;
+  redirect_url: string | null;
+  cancel_url: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
 // ========== JSON Database Structure ==========
 export interface JsonDatabase {
   merchants: Merchant[];
@@ -105,6 +161,10 @@ export interface JsonDatabase {
   loyalty: LoyaltyRecord[];
   auth_nonces: AuthNonce[];
   pending_txs: PendingTransaction[];
+  api_keys: MerchantApiKey[];
+  webhooks: WebhookEndpoint[];
+  webhook_deliveries: WebhookDelivery[];
+  payment_sessions: PaymentSession[];
 }
 
 // ========== Zod Schemas ==========
@@ -159,4 +219,28 @@ export const CreateProductSchema = z.object({
   sku: z.string(),
   image_url: z.string().optional().default(''),
   category: z.string().optional().default('general'),
+});
+
+// ========== Integration API Schemas ==========
+
+export const CreateApiKeySchema = z.object({
+  label: z.string().min(1).max(100),
+  permissions: z.array(z.enum(['payments', 'webhooks', 'products', 'receipts'])).min(1),
+});
+
+export const CreateWebhookSchema = z.object({
+  url: z.string().url().max(500),
+  events: z.array(z.enum([
+    'payment.confirmed', 'payment.failed',
+    'escrow.created', 'escrow.completed', 'refund.processed',
+  ])).min(1),
+});
+
+export const CreatePaymentSessionSchema = z.object({
+  amount: z.number().positive(),
+  currency: z.enum(['credits', 'usdcx', 'usad']).default('credits'),
+  description: z.string().max(500).default(''),
+  metadata: z.record(z.any()).optional().default({}),
+  redirect_url: z.string().url().max(500).optional(),
+  cancel_url: z.string().url().max(500).optional(),
 });

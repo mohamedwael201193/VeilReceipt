@@ -283,6 +283,68 @@ class ApiClient {
   async healthCheck() {
     return this.request<{ status: string; timestamp: string }>('/health');
   }
+
+  // ═══════════════════════════════════════════
+  // Integration API — API Keys, Webhooks, Payment Sessions
+  // ═══════════════════════════════════════════
+
+  // API Keys
+  async createApiKey(data: { label: string; permissions: string[] }) {
+    return this.request<{ id: string; key: string; prefix: string; label: string; permissions: string[]; warning: string }>('/integrate/keys', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listApiKeys() {
+    return this.request<{ keys: { id: string; prefix: string; label: string; permissions: string[]; is_active: boolean; last_used_at: string | null; created_at: string }[] }>('/integrate/keys');
+  }
+
+  async revokeApiKey(id: string) {
+    return this.request<{ success: boolean }>(`/integrate/keys/${id}`, { method: 'DELETE' });
+  }
+
+  // Webhooks
+  async createWebhook(data: { url: string; events: string[] }) {
+    return this.request<{ id: string; url: string; events: string[]; signing_secret: string; warning: string }>('/integrate/webhooks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listWebhooks() {
+    return this.request<{ webhooks: { id: string; url: string; events: string[]; is_active: boolean; failure_count: number; created_at: string }[] }>('/integrate/webhooks');
+  }
+
+  async deleteWebhook(id: string) {
+    return this.request<{ success: boolean }>(`/integrate/webhooks/${id}`, { method: 'DELETE' });
+  }
+
+  // Payment Sessions
+  async getPaymentSession(id: string) {
+    return this.request<{
+      id: string; amount: number; currency: string; description: string;
+      status: string; merchant_address: string; payment_mode: string | null;
+      tx_id: string | null; redirect_url: string | null; cancel_url: string | null;
+      expires_at: string;
+    }>(`/integrate/payments/${id}`);
+  }
+
+  async completePaymentSession(id: string, data: {
+    purchase_commitment: string; tx_id: string; payment_mode: string; buyer_address?: string;
+  }) {
+    return this.request<{ success: boolean; session_id: string; redirect_url: string | null }>(`/integrate/payments/${id}/complete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifyPurchase(commitment: string) {
+    return this.request<{
+      commitment: string; on_chain_verified: boolean;
+      receipt: { total: number; token_type: number; status: string; tx_id: string } | null;
+    }>(`/integrate/verify/${commitment}`);
+  }
 }
 
 export const api = new ApiClient();

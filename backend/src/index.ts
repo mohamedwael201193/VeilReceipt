@@ -14,6 +14,7 @@ import productRoutes from './routes/products';
 import merchantRoutes from './routes/merchant';
 import receiptsRoutes from './routes/receipts';
 import escrowRoutes from './routes/escrow';
+import integrateRoutes from './routes/integrate';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,7 +36,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'healthy',
-    version: '4.0.0',
+    version: '5.0.0',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV || 'development',
   });
@@ -45,16 +46,34 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'VeilReceipt API',
-    version: '4.0.0',
+    version: '5.0.0',
     program: 'veilreceipt_v7.aleo',
-    description: 'Privacy-first commerce protocol — atomic payments, escrow refund, Merkle cart proofs',
+    description: 'Privacy-first commerce protocol — atomic payments, escrow, Merkle proofs, e-commerce integration',
     endpoints: {
       auth: '/auth',
       products: '/products',
       merchant: '/merchant',
       receipts: '/receipts',
       escrow: '/escrow',
+      integrate: '/integrate',
       tx: '/tx/:txId/status',
+    },
+    integration: {
+      description: 'E-commerce platform integration API — API keys, webhooks, payment sessions',
+      docs: '/integrate/docs',
+      endpoints: {
+        'POST /integrate/keys': 'Create API key (requires JWT)',
+        'GET /integrate/keys': 'List API keys (requires JWT)',
+        'DELETE /integrate/keys/:id': 'Revoke API key (requires JWT)',
+        'POST /integrate/webhooks': 'Register webhook endpoint (requires JWT)',
+        'GET /integrate/webhooks': 'List webhooks (requires JWT)',
+        'DELETE /integrate/webhooks/:id': 'Remove webhook (requires JWT)',
+        'POST /integrate/payments': 'Create payment session (requires API key)',
+        'GET /integrate/payments/:id': 'Get payment status (public)',
+        'POST /integrate/payments/:id/complete': 'Complete payment (from checkout widget)',
+        'GET /integrate/payments': 'List payments (requires API key)',
+        'GET /integrate/verify/:commitment': 'Verify purchase on-chain (public)',
+      },
     },
   });
 });
@@ -65,6 +84,7 @@ app.use('/products', productRoutes);
 app.use('/merchant', merchantRoutes);
 app.use('/receipts', receiptsRoutes);
 app.use('/escrow', escrowRoutes);
+app.use('/integrate', integrateRoutes);
 
 // Transaction status endpoint (cached on-chain lookup)
 app.get('/tx/:txId/status', async (req: Request, res: Response) => {

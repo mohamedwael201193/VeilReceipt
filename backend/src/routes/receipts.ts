@@ -7,6 +7,7 @@ import {
 } from '../services/database';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { CreateReceiptSchema } from '../types';
+import { notifyPaymentConfirmed } from '../services/webhooks';
 
 const router = Router();
 
@@ -37,6 +38,18 @@ router.post('/', optionalAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid receipt data', details: parsed.error.issues });
     }
     const receipt = await createReceipt(parsed.data);
+
+    // Fire webhooks to merchant integrations (non-blocking)
+    if (normalized.merchant_address_hash) {
+      notifyPaymentConfirmed(normalized.merchant_address_hash, {
+        purchase_commitment: parsed.data.purchase_commitment,
+        tx_id: parsed.data.tx_id,
+        amount: parsed.data.total,
+        token_type: parsed.data.token_type,
+        payment_mode: parsed.data.purchase_type || 'private',
+      }).catch(err => console.error('Webhook fire error:', err));
+    }
+
     res.status(201).json(receipt);
   } catch (err: any) {
     console.error('Create receipt error:', err.message);

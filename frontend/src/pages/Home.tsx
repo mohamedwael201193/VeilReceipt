@@ -1,268 +1,227 @@
-// Home — Clean dark landing page with hero + feature SVGs
+﻿// Home — VeilReceipt full-width landing page with premium animations
 
-import { FC, ReactNode, useEffect, useState } from 'react';
+import { FC, useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
 import { Button } from '@/components/ui/Components';
-import {
-  ShieldIcon,
-  CartIcon,
-} from '@/components/icons/Icons';
+import PixelBlast from '@/components/effects/PixelBlast';
 import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
+import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
 
-/* ── Inline SVG illustrations ─────────────────────────────── */
+/* --- HyperText: text scramble effect inspired by componentry.fun --- */
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*';
+const HyperText: FC<{ text: string; className?: string; duration?: number }> = ({ text, className = '', duration = 800 }) => {
+  const [display, setDisplay] = useState(text);
+  const [started, setStarted] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const isInView = useInView(ref, { once: true });
 
-const PrivatePaymentsSVG: FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    {/* Credit card */}
-    <rect x="60" y="80" width="200" height="130" rx="16" stroke="white" strokeWidth="2" opacity="0.9"/>
-    <rect x="60" y="110" width="200" height="28" fill="white" opacity="0.08"/>
-    <rect x="80" y="155" width="60" height="8" rx="4" fill="white" opacity="0.15"/>
-    <rect x="80" y="172" width="40" height="8" rx="4" fill="white" opacity="0.1"/>
-    <circle cx="230" cy="175" r="14" stroke="#22c55e" strokeWidth="2" opacity="0.8"/>
-    <circle cx="244" cy="175" r="14" stroke="#22c55e" strokeWidth="2" opacity="0.5"/>
-    {/* Lock overlay */}
-    <rect x="240" y="100" width="100" height="80" rx="12" stroke="white" strokeWidth="2" opacity="0.7"/>
-    <path d="M275 120 v-12 a15 15 0 0 1 30 0 v12" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.8"/>
-    <circle cx="290" cy="143" r="6" fill="#22c55e"/>
-    <line x1="290" y1="149" x2="290" y2="158" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/>
-    {/* Signal waves */}
-    <path d="M330 110 q12-20 0-40" stroke="#22c55e" strokeWidth="1.5" opacity="0.3" strokeLinecap="round"/>
-    <path d="M340 115 q16-25 0-50" stroke="#22c55e" strokeWidth="1.5" opacity="0.2" strokeLinecap="round"/>
-    {/* Coins */}
-    <ellipse cx="100" cy="260" rx="28" ry="10" stroke="white" strokeWidth="1.5" opacity="0.2"/>
-    <ellipse cx="100" cy="252" rx="28" ry="10" stroke="white" strokeWidth="1.5" opacity="0.3"/>
-    <ellipse cx="100" cy="244" rx="28" ry="10" fill="#22c55e" stroke="#22c55e" strokeWidth="1.5" opacity="0.35"/>
-    <text x="92" y="249" fill="#22c55e" fontSize="10" fontWeight="700" opacity="0.7">AC</text>
-  </svg>
-);
-
-const DualReceiptsSVG: FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    {/* Receipt 1 (buyer - left) */}
-    <g transform="translate(50, 40) rotate(-4)">
-      <path d="M0 0 h120 v175 l-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6 v-175z" stroke="white" strokeWidth="1.5" opacity="0.7" fill="white" fillOpacity="0.03"/>
-      <rect x="16" y="20" width="88" height="6" rx="3" fill="white" opacity="0.2"/>
-      <rect x="16" y="36" width="60" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="16" y="52" width="88" height="1" fill="white" opacity="0.06"/>
-      <rect x="16" y="64" width="50" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="78" y="64" width="26" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="16" y="78" width="50" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="78" y="78" width="26" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="16" y="98" width="88" height="1" fill="white" opacity="0.06"/>
-      <rect x="58" y="110" width="46" height="6" rx="3" fill="#22c55e" opacity="0.5"/>
-      <circle cx="28" cy="136" r="8" stroke="#22c55e" strokeWidth="1.5" opacity="0.4"/>
-      <path d="M24 136 l3 3 6-6" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5"/>
-    </g>
-    {/* Receipt 2 (merchant - right) */}
-    <g transform="translate(220, 50) rotate(3)">
-      <path d="M0 0 h120 v175 l-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6 v-175z" stroke="white" strokeWidth="1.5" opacity="0.7" fill="white" fillOpacity="0.03"/>
-      <rect x="16" y="20" width="88" height="6" rx="3" fill="white" opacity="0.2"/>
-      <rect x="16" y="36" width="60" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="16" y="52" width="88" height="1" fill="white" opacity="0.06"/>
-      <rect x="16" y="64" width="50" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="78" y="64" width="26" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="16" y="78" width="50" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="78" y="78" width="26" height="4" rx="2" fill="white" opacity="0.1"/>
-      <rect x="16" y="98" width="88" height="1" fill="white" opacity="0.06"/>
-      <rect x="58" y="110" width="46" height="6" rx="3" fill="#22c55e" opacity="0.5"/>
-      <circle cx="28" cy="136" r="8" stroke="#22c55e" strokeWidth="1.5" opacity="0.4"/>
-      <path d="M24 136 l3 3 6-6" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5"/>
-    </g>
-    {/* Arrow connecting them */}
-    <g opacity="0.35">
-      <path d="M178 145 h44" stroke="#22c55e" strokeWidth="2" strokeDasharray="4 3"/>
-      <path d="M218 140 l6 5-6 5" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </g>
-    {/* Shield badge center */}
-    <g transform="translate(183, 90)">
-      <path d="M17 0 L34 9 V22 C34 32 26 40 17 44 C8 40 0 32 0 22 V9 Z" stroke="#22c55e" strokeWidth="1.5" fill="#22c55e" fillOpacity="0.08"/>
-      <path d="M11 21 l4 4 8-9" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </g>
-    {/* Labels */}
-    <text x="95" y="280" fill="white" fontSize="11" opacity="0.25" textAnchor="middle" fontFamily="Inter">BUYER</text>
-    <text x="290" y="280" fill="white" fontSize="11" opacity="0.25" textAnchor="middle" fontFamily="Inter">MERCHANT</text>
-  </svg>
-);
-
-const EscrowSVG: FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    {/* Vault / Safe box */}
-    <rect x="110" y="60" width="180" height="160" rx="16" stroke="white" strokeWidth="2" opacity="0.7"/>
-    <rect x="118" y="68" width="164" height="144" rx="12" stroke="white" strokeWidth="1" opacity="0.1"/>
-    {/* Dial */}
-    <circle cx="200" cy="140" r="40" stroke="white" strokeWidth="2" opacity="0.5"/>
-    <circle cx="200" cy="140" r="32" stroke="white" strokeWidth="1" opacity="0.15"/>
-    <circle cx="200" cy="140" r="4" fill="#22c55e" opacity="0.8"/>
-    {/* Dial ticks */}
-    {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle) => (
-      <line
-        key={angle}
-        x1={200 + 34 * Math.cos((angle * Math.PI) / 180)}
-        y1={140 + 34 * Math.sin((angle * Math.PI) / 180)}
-        x2={200 + 38 * Math.cos((angle * Math.PI) / 180)}
-        y2={140 + 38 * Math.sin((angle * Math.PI) / 180)}
-        stroke="white"
-        strokeWidth="1.5"
-        opacity="0.3"
-        strokeLinecap="round"
-      />
-    ))}
-    {/* Dial hand */}
-    <line x1="200" y1="140" x2="200" y2="108" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
-    {/* Handle */}
-    <rect x="260" y="125" width="20" height="30" rx="4" stroke="white" strokeWidth="1.5" opacity="0.4"/>
-    {/* Timer icon bottom */}
-    <g transform="translate(170, 245)">
-      <circle cx="16" cy="16" r="14" stroke="#22c55e" strokeWidth="1.5" opacity="0.5"/>
-      <line x1="16" y1="16" x2="16" y2="8" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
-      <line x1="16" y1="16" x2="22" y2="16" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
-      <line x1="16" y1="0" x2="16" y2="-4" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
-    </g>
-    <text x="210" y="265" fill="white" fontSize="10" opacity="0.2" fontFamily="Inter">500 blocks</text>
-    {/* Refund arrow */}
-    <g transform="translate(60, 130)" opacity="0.3">
-      <path d="M40 20 Q20 20 20 0 Q20 -20 40 -20" stroke="#22c55e" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-      <path d="M36 -25 l6 5-2 7" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </g>
-  </svg>
-);
-
-const SupportProofSVG: FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    {/* Shield outline */}
-    <path d="M200 30 L310 75 V170 C310 230 260 275 200 300 C140 275 90 230 90 170 V75 Z" stroke="white" strokeWidth="2" opacity="0.6" fill="white" fillOpacity="0.02"/>
-    <path d="M200 50 L296 88 V170 C296 222 252 260 200 282 C148 260 104 222 104 170 V88 Z" stroke="white" strokeWidth="1" opacity="0.08"/>
-    {/* Fingerprint-style lines inside shield */}
-    <path d="M180 130 Q180 110 200 110 Q220 110 220 130" stroke="white" strokeWidth="1.5" opacity="0.15" fill="none" strokeLinecap="round"/>
-    <path d="M170 145 Q170 105 200 105 Q230 105 230 145" stroke="white" strokeWidth="1.5" opacity="0.12" fill="none" strokeLinecap="round"/>
-    <path d="M160 155 Q160 100 200 100 Q240 100 240 155" stroke="white" strokeWidth="1.5" opacity="0.09" fill="none" strokeLinecap="round"/>
-    {/* ZK badge center */}
-    <circle cx="200" cy="165" r="28" stroke="#22c55e" strokeWidth="2" opacity="0.6" fill="#22c55e" fillOpacity="0.06"/>
-    <text x="200" y="171" fill="#22c55e" fontSize="16" fontWeight="700" textAnchor="middle" opacity="0.8" fontFamily="Inter">ZK</text>
-    {/* Proof token sparkle */}
-    <g transform="translate(245, 120)" opacity="0.4">
-      <line x1="10" y1="0" x2="10" y2="20" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="0" y1="10" x2="20" y2="10" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-    </g>
-    <g transform="translate(135, 195)" opacity="0.25">
-      <line x1="8" y1="0" x2="8" y2="16" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="0" y1="8" x2="16" y2="8" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-    </g>
-    {/* Small checkmark at bottom */}
-    <g transform="translate(180, 210)">
-      <circle cx="20" cy="12" r="10" stroke="#22c55e" strokeWidth="1.5" opacity="0.35"/>
-      <path d="M15 12 l4 4 8-8" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5"/>
-    </g>
-  </svg>
-);
-
-const AccessTokenSVG: FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    {/* Ticket / Pass shape */}
-    <rect x="80" y="80" width="240" height="140" rx="16" stroke="white" strokeWidth="2" opacity="0.7" fill="white" fillOpacity="0.02"/>
-    {/* Perforation line */}
-    {[0,1,2,3,4,5,6,7,8].map(i => (
-      <line key={i} x1="230" y1={88 + i * 14} x2="230" y2={94 + i * 14} stroke="white" strokeWidth="1.5" opacity="0.2" strokeLinecap="round"/>
-    ))}
-    {/* Left side — receipt info */}
-    <rect x="100" y="105" width="80" height="6" rx="3" fill="white" opacity="0.2"/>
-    <rect x="100" y="120" width="55" height="4" rx="2" fill="white" opacity="0.1"/>
-    <rect x="100" y="134" width="65" height="4" rx="2" fill="white" opacity="0.1"/>
-    {/* Right side — access badge */}
-    <circle cx="280" cy="140" r="30" stroke="#22c55e" strokeWidth="2" opacity="0.6" fill="#22c55e" fillOpacity="0.06"/>
-    <path d="M268 140 l8 8 16-16" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8"/>
-    {/* Tier stars */}
-    {[0,1,2,3,4].map(i => (
-      <circle key={i} cx={255 + i * 12} cy="185" r="3" fill="#22c55e" opacity={0.3 + i * 0.1}/>
-    ))}
-    {/* Key icon */}
-    <g transform="translate(110, 155)" opacity="0.3">
-      <circle cx="8" cy="8" r="6" stroke="#22c55e" strokeWidth="1.5"/>
-      <line x1="14" y1="8" x2="28" y2="8" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="24" y1="8" x2="24" y2="13" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-    </g>
-  </svg>
-);
-
-const ReviewsSVG: FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    {/* Stars row */}
-    {[0,1,2,3,4].map(i => {
-      const cx = 120 + i * 42;
-      return (
-        <g key={i} transform={`translate(${cx}, 100)`}>
-          <polygon
-            points="16,0 20.5,11 32,12.8 23.5,20.5 25.8,32 16,26.5 6.2,32 8.5,20.5 0,12.8 11.5,11"
-            stroke="#22c55e" strokeWidth="1.5" fill="#22c55e"
-            opacity={i < 4 ? 0.6 : 0.15}
-          />
-        </g>
+  useEffect(() => {
+    if (!isInView || started) return;
+    setStarted(true);
+    const len = text.length;
+    const interval = duration / len;
+    let revealedCount = 0;
+    const timer = setInterval(() => {
+      revealedCount++;
+      if (revealedCount >= len) {
+        setDisplay(text);
+        clearInterval(timer);
+        return;
+      }
+      setDisplay(
+        text.slice(0, revealedCount) +
+        Array.from({ length: len - revealedCount }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('')
       );
-    })}
-    {/* Review card */}
-    <rect x="100" y="155" width="200" height="90" rx="12" stroke="white" strokeWidth="1.5" opacity="0.5" fill="white" fillOpacity="0.02"/>
-    <rect x="120" y="175" width="100" height="5" rx="2.5" fill="white" opacity="0.15"/>
-    <rect x="120" y="188" width="70" height="4" rx="2" fill="white" opacity="0.08"/>
-    {/* Anonymous badge */}
-    <circle cx="280" cy="200" r="16" stroke="#22c55e" strokeWidth="1.5" opacity="0.4" fill="#22c55e" fillOpacity="0.06"/>
-    <text x="280" y="205" fill="#22c55e" fontSize="12" fontWeight="700" textAnchor="middle" opacity="0.6">?</text>
-    {/* Nullifier lock */}
-    <g transform="translate(120, 205)" opacity="0.25">
-      <rect x="0" y="6" width="16" height="12" rx="3" stroke="#22c55e" strokeWidth="1.5"/>
-      <path d="M3 6 V3 A5 5 0 0 1 13 3 V6" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
-    </g>
-    <text x="145" y="218" fill="white" fontSize="9" opacity="0.15" fontFamily="Inter">nullifier</text>
-  </svg>
+    }, interval);
+    return () => clearInterval(timer);
+  }, [isInView, text, duration, started]);
+
+  return <span ref={ref} className={className}>{display}</span>;
+};
+
+/* --- SpotlightCard: cursor-tracking glow effect inspired by componentry.fun --- */
+const SpotlightCard: FC<{ children: React.ReactNode; className?: string; spotlightColor?: string }> = ({
+  children, className = '', spotlightColor = 'rgba(212, 187, 255, 0.08)',
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    setPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`relative overflow-hidden ${className}`}
+      style={{ background: isHovered
+        ? `radial-gradient(600px circle at ${pos.x}px ${pos.y}px, ${spotlightColor}, transparent 40%)`
+        : undefined
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
+/* --- BorderBeam: animated gradient beam on border inspired by componentry.fun --- */
+const BorderBeam: FC<{ size?: number; duration?: number; colorFrom?: string; colorTo?: string }> = ({
+  size: _size = 200, duration = 12, colorFrom = '#d4bbff', colorTo = '#7dffa2',
+}) => (
+  <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ borderRadius: 'inherit' }}>
+    <div
+      className="absolute inset-0"
+      style={{
+        background: `conic-gradient(from calc(var(--beam-angle) * 1deg), transparent 50%, ${colorFrom}, ${colorTo}, transparent 80%)`,
+        mask: `linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)`,
+        WebkitMask: `linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)`,
+        maskComposite: 'exclude',
+        WebkitMaskComposite: 'xor',
+        padding: '1px',
+        animation: `beam-spin ${duration}s linear infinite`,
+      }}
+    />
+    <style>{`
+      @property --beam-angle { syntax: "<number>"; initial-value: 0; inherits: false; }
+      @keyframes beam-spin { to { --beam-angle: 360; } }
+    `}</style>
+  </div>
 );
 
-const featureIllustrations: ReactNode[] = [
-  <PrivatePaymentsSVG className="w-full h-auto" />,
-  <DualReceiptsSVG className="w-full h-auto" />,
-  <EscrowSVG className="w-full h-auto" />,
-  <SupportProofSVG className="w-full h-auto" />,
-  <AccessTokenSVG className="w-full h-auto" />,
-  <ReviewsSVG className="w-full h-auto" />,
-];
+/* --- TextAnimate: staggered character/word reveal inspired by componentry.fun --- */
+const TextAnimate: FC<{ children: string; className?: string; by?: 'word' | 'character'; delay?: number }> = ({
+  children, className = '', by = 'word', delay = 0,
+}) => {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-50px' });
+  const segments = by === 'word' ? children.split(' ') : children.split('');
+
+  return (
+    <span ref={ref} className={`inline-flex flex-wrap ${className}`}>
+      {segments.map((seg, i) => (
+        <motion.span
+          key={i}
+          initial={{ opacity: 0, y: 12, filter: 'blur(4px)' }}
+          animate={isInView ? { opacity: 1, y: 0, filter: 'blur(0px)' } : {}}
+          transition={{ duration: 0.4, delay: delay + i * 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="inline-block"
+        >
+          {seg}{by === 'word' ? '\u00A0' : ''}
+        </motion.span>
+      ))}
+    </span>
+  );
+};
+
+/* --- Data --- */
 
 const features = [
   {
-    title: 'Private Payments',
-    desc: 'Atomic private transfers using Aleo Credits, USDCx, or USAD stablecoins. All purchase details stay encrypted — only BHP256 commitments are stored on-chain.',
+    icon: 'lock',
+    label: 'PRIVATE PAYMENTS',
+    desc: 'Pay with three flexible options — Aleo Credits, USDCx, or USAD stablecoins. Your payment details are fully encrypted. No one can see what you bought or how much you paid.',
+    detail: 'End-to-end encrypted • Zero data exposure',
   },
   {
-    title: 'Dual Receipts',
-    desc: 'Buyer and merchant both receive encrypted receipts in one atomic transaction. Cart items form a Merkle tree — prove any single item without revealing the rest.',
+    icon: 'receipt_long',
+    label: 'ENCRYPTED RECEIPTS',
+    desc: 'Get a verifiable digital receipt for every purchase, encrypted and stored only on your device. Share proof of purchase without revealing any personal information.',
+    detail: 'Only you can view your receipts',
   },
   {
-    title: 'Escrow & Refunds',
-    desc: 'Lock funds on-chain with a 500-block return window. Block heights are BHP256-hashed to prevent timing analysis. Self-refund or release — no intermediary.',
+    icon: 'gavel',
+    label: 'BUYER PROTECTION',
+    desc: 'Funds are held safely until you confirm your order. If something goes wrong, claim a full refund within the protection window — no middleman needed.',
+    detail: 'Automatic refund window • No disputes required',
   },
   {
-    title: 'Support Proofs',
-    desc: 'Generate shareable proof codes from any receipt. Merchants paste the code to instantly verify a purchase on-chain — without seeing amounts, items, or identity.',
+    icon: 'verified_user',
+    label: 'PROOF OF PURCHASE',
+    desc: 'Need to contact support or make a warranty claim? Generate a shareable proof code that verifies your purchase without revealing payment details.',
+    detail: 'Share with merchants securely',
   },
   {
-    title: 'Access Tokens',
-    desc: 'Mint receipt-gated access tokens that prove you purchased from a merchant — without revealing what you bought or how much you paid. Five tiers from Bronze to Diamond.',
+    icon: 'token',
+    label: 'LOYALTY REWARDS',
+    desc: 'Earn tiered loyalty tokens based on your purchase history — Bronze, Silver, Gold, Platinum, and Diamond. Unlock exclusive perks and discounts privately.',
+    detail: '5 reward tiers • Fully anonymous',
   },
   {
-    title: 'Anonymous Reviews',
-    desc: 'Submit verified product reviews using zero-knowledge proofs. Nullifiers prevent double-reviews. Star ratings stay private — only aggregate counts appear on-chain.',
+    icon: 'reviews',
+    label: 'HONEST REVIEWS',
+    desc: 'Leave verified star ratings without exposing your identity. Only real buyers can review, and each purchase allows only one review — keeping feedback authentic.',
+    detail: 'Verified buyers only • No fake reviews',
   },
+  {
+    icon: 'shopping_bag',
+    label: 'SMART CART',
+    desc: 'Add up to 4 items per transaction and prove any individual item from your cart later. Perfect for returns, warranties, or selective proof sharing.',
+    detail: 'Selective item verification',
+  },
+  {
+    icon: 'storefront',
+    label: 'MERCHANT TOOLS',
+    desc: 'Merchants get a full dashboard with sales analytics, customer verification tools, and multi-token revenue tracking — all while respecting buyer privacy.',
+    detail: 'Privacy-respecting commerce',
+  },
+];
+
+const stats = [
+  { label: 'PRIVACY', value: '100%', sub: 'Fully encrypted transactions' },
+  { label: 'PAYMENT OPTIONS', value: '3', sub: 'Credits · USDCx · USAD' },
+  { label: 'REWARD TIERS', value: '5', sub: 'Bronze to Diamond' },
+  { label: 'DATA EXPOSED', value: '0', sub: 'Zero personal info leaked' },
 ];
 
 const steps = [
-  { num: '01', title: 'Connect Wallet', desc: 'Link your Shield wallet with auto-decrypt permissions for seamless zero-knowledge transactions.' },
-  { num: '02', title: 'Choose Payment', desc: 'Select privacy mode (Private, Public, Escrow) and token (Aleo Credits, USDCx, or USAD stablecoin).' },
-  { num: '03', title: 'Checkout Atomically', desc: 'One transaction: payment + encrypted buyer receipt + encrypted merchant receipt. Cart Merkle tree built automatically.' },
-  { num: '04', title: 'Prove & Review', desc: 'Generate support proofs, mint access tokens, submit anonymous reviews, or request escrow refunds — all on-chain.' },
+  { num: '01', label: 'CONNECT YOUR WALLET', desc: 'Link your Aleo wallet in one click. Your identity stays private — we never see your personal information.', icon: 'account_balance_wallet' },
+  { num: '02', label: 'CHOOSE HOW TO PAY', desc: 'Pick your preferred payment method — Credits, USDCx, or USAD stablecoins. Want extra protection? Enable buyer escrow for risk-free purchases.', icon: 'shield_lock' },
+  { num: '03', label: 'COMPLETE YOUR ORDER', desc: 'Checkout happens in a single secure transaction. You and the merchant each receive an encrypted receipt — no personal data shared.', icon: 'bolt' },
+  { num: '04', label: 'UNLOCK YOUR BENEFITS', desc: 'Generate proof codes for support, earn loyalty rewards, leave anonymous reviews, and verify individual items from your cart — all privately.', icon: 'verified' },
 ];
 
+const techStack = [
+  { label: 'ENCRYPTION', value: 'Military-Grade', sub: 'Zero-knowledge proofs' },
+  { label: 'BLOCKCHAIN', value: 'Aleo Network', sub: 'Privacy-first L1' },
+  { label: 'PAYMENTS', value: '3 Tokens', sub: 'Credits · USDCx · USAD' },
+  { label: 'PROTECTION', value: 'Built-in Escrow', sub: 'Automatic refunds' },
+  { label: 'REWARDS', value: '5 Loyalty Tiers', sub: 'Bronze → Diamond' },
+  { label: 'UPTIME', value: '24/7', sub: 'Always available' },
+];
+
+/* --- Animated section wrapper with blur-up --- */
+const FadeInSection: FC<{ children: React.ReactNode; className?: string; delay?: number }> = ({ children, className = '', delay = 0 }) => {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 40, filter: 'blur(6px)' }}
+      animate={isInView ? { opacity: 1, y: 0, filter: 'blur(0px)' } : {}}
+      transition={{ duration: 0.8, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+/* --- Main Component --- */
 const Home: FC = () => {
-  const { connected } = useVeilWallet();
+  const { connected, address } = useVeilWallet();
   const [blockHeight, setBlockHeight] = useState(0);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const heroOpacity = useTransform(scrollYProgress, [0, 1], [1, 0]);
+  const heroY = useTransform(scrollYProgress, [0, 1], [0, -80]);
 
   useEffect(() => {
     getCurrentBlockHeight().then(setBlockHeight);
@@ -271,273 +230,535 @@ const Home: FC = () => {
   }, []);
 
   return (
-    <div className="relative min-h-screen">
-      {/* === HERO SECTION === */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 pt-28 pb-20">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-            {/* Left — Text */}
+    <div className="relative min-h-screen bg-[#050505] text-[#e5e2e1] overflow-x-hidden">
+      {/* PixelBlast Background — behind everything, non-interactive */}
+      <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
+        <PixelBlast
+          variant="square"
+          pixelSize={4}
+          color="#B19EEF"
+          patternScale={2}
+          patternDensity={0.6}
+          pixelSizeJitter={0}
+          enableRipples
+          rippleSpeed={0.4}
+          rippleThickness={0.12}
+          rippleIntensityScale={1.0}
+          liquid={false}
+          liquidStrength={0.12}
+          liquidRadius={1.2}
+          liquidWobbleSpeed={5}
+          speed={0.3}
+          edgeFade={0.4}
+          transparent
+        />
+      </div>
+
+      {/* --- LANDING NAV --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 sm:px-10 py-4 bg-[#050505]/90 backdrop-blur-xl border-b border-[#d4bbff]/10">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center">
+            <span className="material-symbols-outlined text-[#7dffa2] text-sm">shield_lock</span>
+          </div>
+          <span className="font-headline text-lg font-bold tracking-tighter text-[#d4bbff]">VEIL_RECEIPT</span>
+        </div>
+        <nav className="hidden md:flex items-center gap-8">
+          <a href="#features" className="text-[10px] font-mono tracking-widest text-[#c9c6c5] hover:text-[#d4bbff] transition-colors uppercase">FEATURES</a>
+          <a href="#how-it-works" className="text-[10px] font-mono tracking-widest text-[#c9c6c5] hover:text-[#d4bbff] transition-colors uppercase">HOW IT WORKS</a>
+          <a href="#privacy" className="text-[10px] font-mono tracking-widest text-[#c9c6c5] hover:text-[#d4bbff] transition-colors uppercase">PRIVACY</a>
+          <a href="#merchants" className="text-[10px] font-mono tracking-widest text-[#c9c6c5] hover:text-[#d4bbff] transition-colors uppercase">MERCHANTS</a>
+        </nav>
+        <div className="flex items-center gap-3">
+          {connected && address && (
+            <span className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-[#7dffa2]">
+              <span className="w-1.5 h-1.5 bg-[#7dffa2] animate-pulse" />
+              {address.slice(0, 8)}...{address.slice(-6)}
+            </span>
+          )}
+          <WalletMultiButton />
+        </div>
+      </header>
+
+      {/* --- HERO --- */}
+      <section ref={heroRef} className="relative z-10 min-h-screen flex items-center pt-20">
+        <motion.div style={{ opacity: heroOpacity, y: heroY }} className="w-full max-w-7xl mx-auto px-6 sm:px-10 py-20">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            {/* Left: Text content */}
             <div>
-              {/* Status pill */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="inline-flex items-center gap-2 mb-8 px-4 py-2 rounded-full bg-white/[0.06] border border-white/[0.08]"
-              >
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="inline-flex items-center gap-2 mb-8 px-4 py-2 bg-[#1c1b1b]/80 border border-[#d4bbff]/15">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+                  <span className="animate-ping absolute inline-flex h-full w-full bg-[#7dffa2] opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 bg-[#7dffa2]" />
                 </span>
-                <span className="text-sm text-white/60">Live on Aleo Testnet</span>
+                <span className="text-[10px] font-mono tracking-widest uppercase text-[#7dffa2]">LIVE ON ALEO</span>
+                <span className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/40 ml-2">Private Commerce Protocol</span>
               </motion.div>
 
-              {/* Headline */}
-              <motion.h1
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.8 }}
-                className="font-display text-5xl sm:text-6xl lg:text-[4.25rem] font-normal leading-[1.05] tracking-tight"
-              >
-                <span className="text-white">Privacy at the</span>
-                <br />
-                <span className="italic text-white">Speed of Commerce</span>
-              </motion.h1>
+              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.8 }}>
+                <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/50 mb-4">// PRIVATE_COMMERCE_FOR_EVERYONE</p>
+                <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-black uppercase leading-[0.95] tracking-tight">
+                  <HyperText text="Buy Anything." className="text-[#e5e2e1] block" duration={600} />
+                  <HyperText text="Prove Everything." className="text-[#e5e2e1] block" duration={800} />
+                  <HyperText text="Reveal Nothing." className="text-[#7dffa2] block" duration={1000} />
+                </h1>
+              </motion.div>
 
-              {/* Subtitle */}
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.7 }}
-                className="mt-8 text-base sm:text-lg text-white/50 max-w-md leading-relaxed"
-              >
-                Atomic private payments with three tokens, on-chain escrow, shareable support proofs,
-                receipt-gated access tokens, and anonymous verified reviews — all powered by zero-knowledge proofs.
+              <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.7 }} className="mt-8 text-sm sm:text-base text-[#c9c6c5]/80 max-w-lg leading-relaxed font-body">
+                Shop online without exposing your identity. VeilReceipt gives you encrypted payments, verifiable receipts, built-in buyer protection, loyalty rewards, and anonymous reviews — all without sharing a single piece of personal data.
               </motion.p>
 
-              {/* CTA buttons */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7, duration: 0.6 }}
-                className="mt-10 flex flex-wrap gap-4"
-              >
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.6 }} className="mt-10 flex flex-wrap gap-3">
                 <Link to="/checkout">
-                  <Button variant="glow" size="lg" icon={<CartIcon size={18} />}>
-                    Start Shopping
+                  <Button variant="glow" size="lg">
+                    <span className="material-symbols-outlined text-base">shopping_cart</span>
+                    Enter Shop
                   </Button>
                 </Link>
-                {!connected && (
-                  <Link to="/merchant">
-                    <Button variant="secondary" size="lg">
-                      Become a Merchant
-                    </Button>
-                  </Link>
-                )}
+                <Link to="/merchant">
+                  <Button variant="secondary" size="lg">
+                    <span className="material-symbols-outlined text-base">storefront</span>
+                    Merchant Portal
+                  </Button>
+                </Link>
+                <Link to="/verify">
+                  <Button variant="ghost" size="lg">
+                    <span className="material-symbols-outlined text-base">verified_user</span>
+                    Verify Proof
+                  </Button>
+                </Link>
               </motion.div>
 
-              {/* Trust indicators */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.1, duration: 1 }}
-                className="mt-14 flex flex-wrap gap-6 text-sm text-white/25"
-              >
-                {['Zero-Knowledge Proofs', 'Aleo L1 Blockchain', 'Open Source Protocol'].map((t) => (
-                  <span key={t} className="flex items-center gap-2">
-                    <span className="w-1 h-1 rounded-full bg-green-500/50" />
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1, duration: 1 }} className="mt-10 flex flex-wrap gap-6">
+                {['100% Private', 'Encrypted Receipts', 'Buyer Protection', 'Loyalty Rewards'].map((t) => (
+                  <span key={t} className="flex items-center gap-2 text-[10px] font-mono tracking-widest text-[#c9c6c5]/30">
+                    <span className="w-1.5 h-1.5 bg-[#7dffa2]/40" />
                     {t}
                   </span>
                 ))}
               </motion.div>
             </div>
 
-            {/* Right — Hero video */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3, duration: 1.2, ease: 'easeOut' }}
-              className="relative flex items-center justify-center lg:-mr-12 xl:-mr-20"
-            >
-              {/* Glow rings behind */}
-              <div className="absolute inset-0 -z-10">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] h-[90%] rounded-full border border-green-500/[0.06]" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110%] h-[110%] rounded-full border border-green-500/[0.03]" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[70%] bg-green-500/[0.04] blur-[80px] rounded-full" />
+            {/* Right: Key benefits showcase */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4, duration: 1 }} className="hidden lg:flex flex-col gap-4">
+              <div className="relative p-6 bg-[#0e0d0d]/95 border border-[#d4bbff]/15 overflow-hidden backdrop-blur-sm">
+                <BorderBeam size={150} duration={10} />
+                <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// WHY VEILRECEIPT</p>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="material-symbols-outlined text-[#d4bbff] text-2xl">shield_lock</span>
+                  <div>
+                    <p className="font-headline text-lg font-bold text-[#e5e2e1]">Your Privacy, Protected</p>
+                    <p className="text-[10px] font-mono text-[#7dffa2]/60">POWERED BY ALEO BLOCKCHAIN</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {stats.map((s) => (
+                    <div key={s.label} className="bg-[#080808]/90 border border-[#d4bbff]/10 p-3">
+                      <p className="text-2xl font-headline font-bold text-[#d4bbff] tabular-nums">{s.value}</p>
+                      <p className="text-[9px] font-mono tracking-widest text-[#c9c6c5]/40">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <video
-                src="/hero.mp4"
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full lg:w-[130%] xl:w-[140%] max-w-none rounded-2xl object-contain drop-shadow-[0_0_40px_rgba(34,197,94,0.08)]"
-              />
+              {/* Trust indicators */}
+              <div className="relative p-5 bg-[#080808]/95 border border-[#7dffa2]/15 overflow-hidden backdrop-blur-sm">
+                <BorderBeam size={100} duration={15} colorFrom="#7dffa2" colorTo="#d4bbff" />
+                <div className="space-y-3">
+                  {[
+                    { icon: 'visibility_off', text: 'No one sees what you buy' },
+                    { icon: 'lock', text: 'Payments encrypted end-to-end' },
+                    { icon: 'verified', text: 'Receipts only you can access' },
+                    { icon: 'security', text: 'Built on proven cryptography' },
+                  ].map((item) => (
+                    <div key={item.text} className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-[#7dffa2] text-base">{item.icon}</span>
+                      <span className="text-xs font-body text-[#c9c6c5]/70">{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Bottom gradient fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black to-transparent" />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.5, duration: 0.8 }} className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+          <span className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/30">SCROLL</span>
+          <motion.div animate={{ y: [0, 8, 0] }} transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }} className="w-px h-8 bg-gradient-to-b from-[#d4bbff]/40 to-transparent" />
+        </motion.div>
       </section>
 
-      {/* === LIVE STATS BAR === */}
-      <section className="relative py-12 border-y border-white/[0.04]">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[
-              { label: 'Contract Version', value: 'v7', sub: 'veilreceipt_v7.aleo' },
-              { label: 'Transitions', value: '13', sub: 'On-chain functions' },
-              { label: 'Block Height', value: blockHeight > 0 ? blockHeight.toLocaleString() : '...', sub: 'Aleo Testnet' },
-              { label: 'Privacy Features', value: '8', sub: 'ZK proof types' },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 10 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-                className="text-center"
-              >
-                <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums">{stat.value}</p>
-                <p className="text-sm text-white/50 mt-1">{stat.label}</p>
-                <p className="text-xs text-white/20 mt-0.5">{stat.sub}</p>
+      {/* --- PROBLEM STATEMENT --- */}
+      <section className="relative z-10 py-24 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <FadeInSection>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+              <div>
+                <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// THE PROBLEM</p>
+                <h2 className="font-headline text-3xl sm:text-4xl font-bold uppercase tracking-tight mb-6">
+                  <TextAnimate className="text-[#e5e2e1]" by="word">Every Purchase</TextAnimate>{' '}
+                  <span className="text-[#ffb4ab]">Leaks Your Data</span>
+                </h2>
+                <p className="text-sm text-[#c9c6c5]/80 leading-relaxed font-body mb-6">
+                  Traditional shopping exposes everything — your name, payment details, what you bought, and when. Even on most blockchains, every transaction is permanently visible to anyone.
+                </p>
+                <p className="text-sm text-[#c9c6c5]/80 leading-relaxed font-body">
+                  VeilReceipt changes that. We built a complete shopping experience where your privacy is the default, not an afterthought.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { problem: 'Exposed transactions', solution: 'Fully encrypted payments', icon: 'visibility_off' },
+                  { problem: 'No private receipts', solution: 'Encrypted digital receipts', icon: 'receipt_long' },
+                  { problem: 'No buyer protection', solution: 'Built-in escrow refunds', icon: 'gavel' },
+                  { problem: 'Identity-linked reviews', solution: 'Anonymous verified reviews', icon: 'reviews' },
+                ].map((item, i) => (
+                  <motion.div key={item.problem} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}>
+                    <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-5 hover:border-[#d4bbff]/30 transition-all h-full backdrop-blur-sm" spotlightColor="rgba(125, 255, 162, 0.06)">
+                      <span className="material-symbols-outlined text-[#d4bbff] text-xl mb-4 block">{item.icon}</span>
+                      <p className="text-[11px] font-mono tracking-widest text-[#ffb4ab]/70 line-through mb-1.5">{item.problem}</p>
+                      <p className="text-[11px] font-mono tracking-widest text-[#7dffa2] font-medium">{item.solution}</p>
+                    </SpotlightCard>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </FadeInSection>
+        </div>
+      </section>
+
+      {/* --- LIVE STATS --- */}
+      <section className="relative z-10 py-12 border-t border-[#d4bbff]/10 bg-[#080808]/90 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <motion.div initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-[#0e0d0d]/95 border border-[#7dffa2]/20 p-4">
+              <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/50 mb-1">NETWORK STATUS</p>
+              <p className="text-2xl font-headline font-bold text-[#7dffa2] tabular-nums">{blockHeight > 0 ? blockHeight.toLocaleString() : '...'}</p>
+              <p className="text-[10px] font-mono text-[#c9c6c5]/30 mt-0.5">Live block height</p>
+            </motion.div>
+            {stats.map((stat, i) => (
+              <motion.div key={stat.label} initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + 1) * 0.06 }} className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-4">
+                <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/60 mb-1">{stat.label}</p>
+                <p className="text-2xl font-headline font-bold text-[#e5e2e1] tabular-nums">{stat.value}</p>
+                <p className="text-[10px] font-mono text-[#d4bbff]/50 mt-0.5">{stat.sub}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* === FEATURES SECTION === */}
-      <section className="relative py-32 overflow-hidden">
-        <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-24"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-green-400/70 mb-4">Core Features</p>
-            <h2 className="font-display text-4xl sm:text-5xl font-normal text-white tracking-tight">
-              Built for Real Privacy
+      {/* --- FEATURES --- */}
+      <section id="features" className="relative z-10 py-24 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <FadeInSection>
+            <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// EVERYTHING YOU NEED</p>
+            <h2 className="font-headline text-3xl sm:text-4xl font-bold uppercase tracking-tight mb-4">
+              <TextAnimate className="text-[#e5e2e1]" by="word">Complete Privacy.</TextAnimate>{' '}
+              <span className="text-[#d4bbff] italic">Zero Compromise.</span>
             </h2>
-          </motion.div>
-
-          <div className="space-y-32">
-            {features.map((feat, i) => {
-              const isEven = i % 2 === 0;
-              return (
-                <motion.div
-                  key={feat.title}
-                  initial={{ opacity: 0, y: 50 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-80px' }}
-                  transition={{ duration: 0.7 }}
-                  className={`grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center ${!isEven ? 'lg:direction-rtl' : ''}`}
-                >
-                  {/* Illustration side */}
-                  <div className={`${!isEven ? 'lg:order-2' : ''}`}>
-                    <div className="relative group flex items-center justify-center p-8">
-                      <div className="group-hover:scale-[1.03] transition-transform duration-700">
-                        {featureIllustrations[i]}
-                      </div>
-                      <div className="absolute -inset-4 -z-10 rounded-3xl bg-green-500/[0.03] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            <p className="text-sm text-[#c9c6c5]/50 max-w-2xl mb-14 font-body">
+              From encrypted payments to anonymous reviews, every feature is designed to protect your identity. No personal data is ever stored, shared, or exposed.
+            </p>
+          </FadeInSection>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {features.map((feat, i) => (
+              <motion.div key={feat.label} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06 }}>
+                <SpotlightCard className="h-full bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 hover:border-[#d4bbff]/30 transition-all duration-500 group backdrop-blur-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/25 transition-all duration-500">
+                      <span className="material-symbols-outlined text-[#d4bbff] text-lg group-hover:text-[#7dffa2] transition-colors duration-500">{feat.icon}</span>
                     </div>
                   </div>
-
-                  {/* Text side */}
-                  <div className={`${!isEven ? 'lg:order-1' : ''}`}>
-                    <span className="inline-block text-xs font-semibold uppercase tracking-[0.15em] text-green-400/60 mb-4">
-                      0{i + 1}
-                    </span>
-                    <h3 className="font-display text-3xl sm:text-4xl font-normal text-white mb-5 tracking-tight">
-                      {feat.title}
-                    </h3>
-                    <p className="text-base sm:text-lg text-white/40 leading-relaxed max-w-md">
-                      {feat.desc}
-                    </p>
-                    <div className="mt-8 h-px w-16 bg-white/[0.08]" />
+                  <span className="text-[11px] font-mono tracking-widest text-[#d4bbff] block mb-3 font-medium">{feat.label}</span>
+                  <p className="text-xs text-[#c9c6c5]/70 leading-relaxed mb-4 font-body">{feat.desc}</p>
+                  <div className="pt-3 border-t border-[#d4bbff]/8">
+                    <p className="text-[9px] font-mono text-[#7dffa2]/50 leading-relaxed break-all">{feat.detail}</p>
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* === HOW IT WORKS === */}
-      <section className="relative py-32">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.h2
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="font-display text-3xl sm:text-4xl font-medium text-white tracking-tight mb-12 text-center"
-          >
-            How it Works
-          </motion.h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-            {steps.map((step, i) => (
-              <motion.div
-                key={step.num}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="flex gap-5 items-start p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl hover:border-white/[0.1] transition-all"
-              >
-                <span className="font-display text-3xl font-medium text-white/15 tabular-nums flex-shrink-0">
-                  {step.num}
-                </span>
-                <div>
-                  <h3 className="text-base font-semibold text-white mb-1">{step.title}</h3>
-                  <p className="text-sm text-white/40 leading-relaxed">{step.desc}</p>
-                </div>
+                  <div className="mt-4 h-px w-8 bg-[#d4bbff]/10 group-hover:w-full group-hover:bg-gradient-to-r group-hover:from-[#d4bbff]/30 group-hover:to-[#7dffa2]/30 transition-all duration-700" />
+                </SpotlightCard>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* === CTA SECTION === */}
-      <section className="relative py-32 overflow-hidden">
-        <div className="relative z-10 max-w-3xl mx-auto px-4 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="font-display text-4xl sm:text-5xl font-medium text-white tracking-tight italic">
-              Ready to transact privately?
+      {/* --- HOW IT WORKS --- */}
+      <section id="how-it-works" className="relative z-10 py-24 border-t border-[#d4bbff]/10 bg-[#080808]/90 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <FadeInSection>
+            <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// GETTING STARTED</p>
+            <h2 className="font-headline text-3xl sm:text-4xl font-bold uppercase tracking-tight mb-4">
+              <TextAnimate className="text-[#e5e2e1]" by="word">Shop Privately in</TextAnimate>{' '}
+              <span className="text-[#d4bbff] italic">4 Simple Steps</span>
             </h2>
-            <p className="mt-5 text-white/40 max-w-lg mx-auto">
-              Connect your wallet and experience the future of private commerce on Aleo.
+            <p className="text-sm text-[#c9c6c5]/50 max-w-2xl mb-14 font-body">
+              Getting started takes less than a minute. Connect your wallet, make a purchase, and enjoy full privacy with every transaction.
             </p>
-            <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <Link to="/checkout">
-                <Button variant="glow" size="lg" icon={<ShieldIcon size={18} />}>
-                  Get Started
-                </Button>
-              </Link>
-              <Link to="/merchant">
-                <Button variant="secondary" size="lg" icon={<CartIcon size={18} />}>
-                  Merchant Portal
-                </Button>
-              </Link>
-            </div>
-          </motion.div>
+          </FadeInSection>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {steps.map((step, i) => (
+              <motion.div key={step.num} initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1, duration: 0.6 }}>
+                <SpotlightCard className="relative flex gap-6 items-start p-8 bg-[#0e0d0d]/95 border border-[#d4bbff]/12 hover:border-[#7dffa2]/25 transition-all group h-full backdrop-blur-sm">
+                  <BorderBeam size={120} duration={14 + i * 2} colorFrom={i % 2 === 0 ? '#d4bbff' : '#7dffa2'} colorTo={i % 2 === 0 ? '#7dffa2' : '#d4bbff'} />
+                  <span className="absolute top-4 right-4 font-headline text-6xl font-black text-[#d4bbff]/[0.04] tabular-nums select-none">{step.num}</span>
+                  <div className="w-12 h-12 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/20 transition-colors">
+                    <span className="material-symbols-outlined text-[#d4bbff] group-hover:text-[#7dffa2] transition-colors">{step.icon}</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-mono tracking-widest text-[#e5e2e1] mb-2">{step.label}</h3>
+                    <p className="text-sm text-[#c9c6c5]/70 leading-relaxed font-body">{step.desc}</p>
+                  </div>
+                </SpotlightCard>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* === FOOTER === */}
-      <footer className="border-t border-white/[0.04] py-8">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
-          <p className="text-xs text-white/20">VeilReceipt &middot; Privacy-First Commerce on Aleo</p>
-          <p className="text-xs text-white/10">Testnet</p>
+      {/* --- PRIVACY & SECURITY --- */}
+      <section id="privacy" className="relative z-10 py-24 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <FadeInSection>
+            <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// YOUR PRIVACY MATTERS</p>
+            <h2 className="font-headline text-3xl sm:text-4xl font-bold uppercase tracking-tight mb-6">
+              <HyperText text="How We Protect You" className="text-[#e5e2e1]" duration={1200} />
+            </h2>
+          </FadeInSection>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <FadeInSection delay={0.1}>
+              <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 relative overflow-hidden backdrop-blur-sm">
+                <BorderBeam size={180} duration={18} />
+                <p className="text-[10px] font-mono tracking-widest text-[#d4bbff] mb-4">PRIVACY GUARANTEES</p>
+                <div className="space-y-4">
+                  {[
+                    { icon: 'visibility_off', title: 'Hidden Purchase Details', desc: 'What you buy, how much you pay, and who you are — all encrypted. No one can trace your shopping activity.' },
+                    { icon: 'lock', title: 'Encrypted Receipts', desc: 'Your receipts are stored in encrypted records that only your wallet can decrypt. Not even we can read them.' },
+                    { icon: 'shield', title: 'No Data Collection', desc: 'We don\'t store your name, email, address, or any personal information. Zero data means zero risk.' },
+                    { icon: 'fingerprint', title: 'Anonymous Identity', desc: 'Your wallet address is never linked to your purchases on the blockchain. Complete unlinkability by design.' },
+                    { icon: 'verified_user', title: 'Selective Disclosure', desc: 'Share only what you choose. Prove you bought something without revealing what, when, or how much you paid.' },
+                  ].map((item, i) => (
+                    <motion.div key={item.title} initial={{ opacity: 0, x: -12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="flex gap-4 items-start">
+                      <div className="w-10 h-10 bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-[#d4bbff] text-lg">{item.icon}</span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-mono tracking-widest text-[#e5e2e1] mb-1">{item.title}</p>
+                        <p className="text-sm text-[#c9c6c5]/70 leading-relaxed font-body">{item.desc}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </SpotlightCard>
+            </FadeInSection>
+            <div className="space-y-6">
+              <FadeInSection delay={0.2}>
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 relative overflow-hidden backdrop-blur-sm">
+                  <p className="text-[10px] font-mono tracking-widest text-[#d4bbff] mb-4">USE CASES</p>
+                  <div className="space-y-4">
+                    {[
+                      { title: 'Private Shopping', desc: 'Buy products online without leaving a trace. No purchase history visible to anyone.', icon: 'shopping_bag' },
+                      { title: 'Warranty Claims', desc: 'Prove you bought a product for warranty or returns — without revealing the price you paid.', icon: 'build' },
+                      { title: 'Subscription Access', desc: 'Unlock exclusive content and perks with loyalty tokens earned from your purchases.', icon: 'card_membership' },
+                      { title: 'Honest Feedback', desc: 'Write product reviews that merchants trust, while staying completely anonymous.', icon: 'rate_review' },
+                    ].map((item, i) => (
+                      <motion.div key={item.title} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="flex gap-4 items-start">
+                        <div className="w-10 h-10 bg-[#7dffa2]/8 border border-[#7dffa2]/15 flex items-center justify-center flex-shrink-0">
+                          <span className="material-symbols-outlined text-[#7dffa2] text-lg">{item.icon}</span>
+                        </div>
+                        <div>
+                          <p className="text-xs font-mono tracking-widest text-[#e5e2e1] mb-1">{item.title}</p>
+                          <p className="text-sm text-[#c9c6c5]/70 leading-relaxed font-body">{item.desc}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </SpotlightCard>
+              </FadeInSection>
+              <FadeInSection delay={0.3}>
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 relative overflow-hidden backdrop-blur-sm">
+                  <BorderBeam size={140} duration={20} colorFrom="#7dffa2" colorTo="#d4bbff" />
+                  <p className="text-[10px] font-mono tracking-widest text-[#d4bbff] mb-4">COMPARISON</p>
+                  <div className="space-y-3">
+                    {[
+                      { feature: 'Payment Privacy', trad: 'Fully visible', veil: 'Fully encrypted' },
+                      { feature: 'Receipt Storage', trad: 'Company servers', veil: 'Your wallet only' },
+                      { feature: 'Buyer Protection', trad: 'Dispute process', veil: 'Automatic escrow' },
+                      { feature: 'Review Identity', trad: 'Name visible', veil: 'Anonymous' },
+                      { feature: 'Data Collected', trad: 'Everything', veil: 'Nothing' },
+                    ].map((row) => (
+                      <div key={row.feature} className="grid grid-cols-3 gap-2 items-center py-1.5 border-b border-[#d4bbff]/5 last:border-0">
+                        <span className="text-xs font-mono text-[#e5e2e1]/80">{row.feature}</span>
+                        <span className="text-[10px] font-mono text-[#ffb4ab]/60 text-center">{row.trad}</span>
+                        <span className="text-[10px] font-mono text-[#7dffa2] text-center font-medium">{row.veil}</span>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <span className="text-[9px] font-mono text-[#c9c6c5]/40"></span>
+                      <span className="text-[9px] font-mono text-[#ffb4ab]/40 text-center">Traditional</span>
+                      <span className="text-[9px] font-mono text-[#7dffa2]/60 text-center">VeilReceipt</span>
+                    </div>
+                  </div>
+                </SpotlightCard>
+              </FadeInSection>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- WHY VEILRECEIPT --- */}
+      <section id="tech" className="relative z-10 py-24 border-t border-[#d4bbff]/10 bg-[#080808]/90 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <FadeInSection>
+            <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// WHY CHOOSE US</p>
+            <h2 className="font-headline text-3xl sm:text-4xl font-bold text-[#e5e2e1] uppercase tracking-tight mb-14">
+              <TextAnimate className="text-[#e5e2e1]" by="word">Built on Trust.</TextAnimate>{' '}
+              <span className="text-[#d4bbff] italic">Backed by Math.</span>
+            </h2>
+          </FadeInSection>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {techStack.map((tech, i) => (
+              <motion.div key={tech.label} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06 }}>
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-5 text-center hover:border-[#d4bbff]/25 transition-all h-full backdrop-blur-sm">
+                  <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/60 mb-2">{tech.label}</p>
+                  <p className="text-sm font-headline font-bold text-[#e5e2e1]">{tech.value}</p>
+                  <p className="text-[10px] font-mono text-[#d4bbff]/50 mt-1">{tech.sub}</p>
+                </SpotlightCard>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* --- FOR MERCHANTS --- */}
+      <section id="merchants" className="relative z-10 py-24 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <FadeInSection>
+              <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// FOR MERCHANTS</p>
+              <h2 className="font-headline text-3xl sm:text-4xl font-bold text-[#e5e2e1] uppercase tracking-tight mb-6">
+                Grow Your Business <span className="text-[#d4bbff] italic">Privately</span>
+              </h2>
+              <div className="space-y-4">
+                {[
+                  { step: 'Create your store', desc: 'Set up your merchant profile and start listing products in minutes.' },
+                  { step: 'Accept private payments', desc: 'Receive payments in Credits, USDCx, or USAD — all handled seamlessly.' },
+                  { step: 'Track your revenue', desc: 'Full sales dashboard with analytics split by payment method.' },
+                  { step: 'Verify customers', desc: 'Customers share proof codes to verify purchases — no personal data needed.' },
+                  { step: 'Build reputation', desc: 'Receive anonymous but verified reviews from real buyers only.' },
+                ].map((item, i) => (
+                  <motion.div key={item.step} initial={{ opacity: 0, x: -16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="flex gap-4 items-start">
+                    <div className="w-6 h-6 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-[10px] font-mono text-[#d4bbff]">{i + 1}</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-mono tracking-widest text-[#e5e2e1] mb-0.5">{item.step}</p>
+                      <p className="text-sm text-[#c9c6c5]/50 font-body">{item.desc}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="mt-8">
+                <Link to="/merchant">
+                  <Button variant="secondary" size="lg">
+                    <span className="material-symbols-outlined text-base">storefront</span>
+                    Open Merchant Portal
+                  </Button>
+                </Link>
+              </div>
+            </FadeInSection>
+            <FadeInSection delay={0.2}>
+              <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-8 relative overflow-hidden backdrop-blur-sm">
+                <BorderBeam size={160} duration={16} />
+                <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-4">// INTEGRATION</p>
+                <h3 className="font-headline text-xl font-bold text-[#e5e2e1] uppercase tracking-tight mb-4">E-Commerce Ready</h3>
+                <p className="text-sm text-[#c9c6c5]/70 font-body mb-6">
+                  Integrate VeilReceipt into your existing online store with our REST API. Accept private payments, manage orders, and handle customer support — all through a simple API.
+                </p>
+                <div className="space-y-2 mb-6">
+                  {['Simple API integration', 'Payment session management', 'Real-time notifications', 'Embeddable checkout', 'Full documentation'].map((item) => (
+                    <div key={item} className="flex items-center gap-2">
+                      <span className="w-1 h-1 bg-[#7dffa2]" />
+                      <span className="text-xs font-mono text-[#c9c6c5]/70">{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/integrate">
+                  <Button variant="ghost" size="md">
+                    <span className="material-symbols-outlined text-base">bolt</span>
+                    View API Docs
+                  </Button>
+                </Link>
+              </SpotlightCard>
+            </FadeInSection>
+          </div>
+        </div>
+      </section>
+
+      {/* --- CTA --- */}
+      <section className="relative z-10 py-32 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10">
+          <FadeInSection>
+            <div className="text-center">
+              <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-6">// START NOW</p>
+              <h2 className="font-headline text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tight">
+                <TextAnimate className="text-[#e5e2e1]" by="word">Ready to Shop</TextAnimate><br />
+                <span className="text-[#d4bbff] italic">Without a Trace?</span>
+              </h2>
+              <p className="mt-6 text-[#c9c6c5]/70 max-w-xl mx-auto text-sm font-body leading-relaxed">
+                Connect your wallet and start shopping with complete privacy. Every payment is encrypted, every receipt is yours alone, and your identity stays hidden.
+              </p>
+              <div className="mt-12 flex flex-wrap justify-center gap-4">
+                <Link to="/checkout">
+                  <Button variant="glow" size="lg">
+                    <span className="material-symbols-outlined text-base">shopping_cart</span>
+                    Start Shopping
+                  </Button>
+                </Link>
+                <Link to="/receipts">
+                  <Button variant="secondary" size="lg">
+                    <span className="material-symbols-outlined text-base">receipt_long</span>
+                    My Receipts
+                  </Button>
+                </Link>
+                <Link to="/merchant">
+                  <Button variant="ghost" size="lg">
+                    <span className="material-symbols-outlined text-base">storefront</span>
+                    I'm a Merchant
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </FadeInSection>
+        </div>
+      </section>
+
+      {/* --- FOOTER --- */}
+      <footer className="relative z-10 border-t border-[#d4bbff]/10 py-10 bg-[#050505]/90 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 bg-[#d4bbff]/10 border border-[#d4bbff]/15 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[#7dffa2] text-xs">shield_lock</span>
+            </div>
+            <span className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/30">VEILRECEIPT // PRIVATE COMMERCE</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <span className="text-[10px] font-mono text-[#d4bbff]/30">Powered by Aleo</span>
+            <span className="text-[10px] font-mono text-[#7dffa2]/30">100% PRIVATE</span>
+          </div>
         </div>
       </footer>
+
+      {/* --- HUD Decorations --- */}
+      <div className="hidden xl:block fixed top-1/2 left-4 -translate-y-1/2 -rotate-90 pointer-events-none z-20">
+        <span className="text-[10px] font-mono text-[#d4bbff]/20 tracking-[1em] uppercase">PRIVATE_COMMERCE</span>
+      </div>
+      <div className="hidden xl:block fixed bottom-10 right-10 pointer-events-none z-20">
+        <div className="flex items-end gap-2">
+          <div className="w-1 h-32 bg-gradient-to-t from-[#d4bbff]/20 to-transparent" />
+          <div className="flex flex-col">
+            <span className="text-[10px] font-mono text-[#7dffa2]">PRIVACY: 100%</span>
+            <span className="text-[10px] font-mono text-[#d4bbff]/40 tracking-tighter">Your data, your control</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

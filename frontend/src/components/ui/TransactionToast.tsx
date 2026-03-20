@@ -72,9 +72,9 @@ const TransactionToast: FC = () => {
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           className="fixed bottom-6 right-6 z-[9999] w-[340px]"
         >
-          <div className="bg-[#0d1117]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+          <div className="bg-[#0a0a0a]/95 backdrop-blur-xl border border-[#d4bbff]/15  shadow-2xl shadow-[#050505]/50 overflow-hidden">
             {/* Progress bar */}
-            <div className="h-1 bg-white/5 relative">
+            <div className="h-1 bg-[#d4bbff]/5 relative">
               <motion.div
                 className="h-full rounded-full"
                 style={{ background: phase.color }}
@@ -109,7 +109,7 @@ const TransactionToast: FC = () => {
                         className="absolute inset-0 rounded-full border-2 border-transparent"
                         style={{ borderTopColor: phase.color, borderRightColor: `${phase.color}40` }}
                       />
-                      <ShieldSvg className="text-white/60" />
+                      <ShieldSvg className="text-[#c9c6c5]/80" />
                     </div>
                   )}
                 </div>
@@ -117,18 +117,18 @@ const TransactionToast: FC = () => {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-white">{phase.label}</p>
+                    <p className="text-sm font-semibold text-[#e5e2e1]">{phase.label}</p>
                     {!isTerminal && (
-                      <span className="text-[11px] text-white/30 font-mono tabular-nums">{formatTime(elapsed)}</span>
+                      <span className="text-[11px] text-[#c9c6c5]/40 font-mono tabular-nums">{formatTime(elapsed)}</span>
                     )}
                   </div>
-                  <p className="text-xs text-white/45 mt-0.5">{phase.sub}</p>
+                  <p className="text-xs text-[#c9c6c5]/60 mt-0.5">{phase.sub}</p>
 
                   {/* TX label */}
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="text-[11px] text-white/25 truncate">{active.label}</span>
+                    <span className="text-[11px] text-[#c9c6c5]/30 truncate">{active.label}</span>
                     {active.txId && (
-                      <span className="text-[10px] font-mono text-white/20 truncate">
+                      <span className="text-[10px] font-mono text-[#c9c6c5]/25 truncate">
                         {active.txId.slice(0, 14)}...
                       </span>
                     )}
@@ -137,7 +137,7 @@ const TransactionToast: FC = () => {
 
                 {/* Dismiss on terminal */}
                 {isTerminal && (
-                  <button onClick={clear} className="text-white/20 hover:text-white/50 transition-colors p-1">
+                  <button onClick={clear} className="text-[#c9c6c5]/25 hover:text-[#c9c6c5]/70 transition-colors p-1">
                     <XSvg />
                   </button>
                 )}

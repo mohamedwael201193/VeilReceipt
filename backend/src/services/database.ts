@@ -8,7 +8,8 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import {
   JsonDatabase, Merchant, Product, ReceiptMeta, EscrowRecord,
-  LoyaltyRecord, AuthNonce, PendingTransaction
+  LoyaltyRecord, AuthNonce, PendingTransaction,
+  MerchantApiKey, WebhookEndpoint, WebhookDelivery, PaymentSession
 } from '../types';
 
 // ========== Configuration ==========
@@ -44,7 +45,8 @@ export async function initDatabase(): Promise<void> {
     if (!fs.existsSync(DB_PATH)) {
       const empty: JsonDatabase = {
         merchants: [], products: [], receipts: [], escrows: [],
-        loyalty: [], auth_nonces: [], pending_txs: []
+        loyalty: [], auth_nonces: [], pending_txs: [],
+        api_keys: [], webhooks: [], webhook_deliveries: [], payment_sessions: []
       };
       fs.writeFileSync(DB_PATH, JSON.stringify(empty, null, 2));
     }
@@ -131,6 +133,62 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_receipts_merchant ON receipts(merchant_address_hash);
       CREATE INDEX IF NOT EXISTS idx_escrows_buyer ON escrows(buyer_address_hash);
       CREATE INDEX IF NOT EXISTS idx_pending_txs_status ON pending_txs(status);
+
+      -- Integration API tables
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        merchant_id TEXT NOT NULL,
+        api_key_hash TEXT UNIQUE NOT NULL,
+        api_key_prefix TEXT NOT NULL,
+        label TEXT NOT NULL DEFAULT '',
+        permissions JSONB DEFAULT '["payments"]',
+        is_active BOOLEAN DEFAULT TRUE,
+        last_used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS webhooks (
+        id TEXT PRIMARY KEY,
+        merchant_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        secret_hash TEXT NOT NULL,
+        events JSONB DEFAULT '["payment.confirmed"]',
+        is_active BOOLEAN DEFAULT TRUE,
+        failure_count INT DEFAULT 0,
+        last_triggered_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        webhook_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        payload JSONB DEFAULT '{}',
+        status TEXT DEFAULT 'pending',
+        response_code INT,
+        attempts INT DEFAULT 0,
+        next_retry_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS payment_sessions (
+        id TEXT PRIMARY KEY,
+        merchant_id TEXT NOT NULL,
+        merchant_address TEXT NOT NULL,
+        amount BIGINT NOT NULL,
+        currency TEXT DEFAULT 'credits',
+        description TEXT DEFAULT '',
+        metadata JSONB DEFAULT '{}',
+        status TEXT DEFAULT 'pending',
+        purchase_commitment TEXT,
+        tx_id TEXT,
+        payment_mode TEXT,
+        redirect_url TEXT,
+        cancel_url TEXT,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_api_keys_merchant ON api_keys(merchant_id);
+      CREATE INDEX IF NOT EXISTS idx_webhooks_merchant ON webhooks(merchant_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_sessions_merchant ON payment_sessions(merchant_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions(status);
     `);
     console.log('✅ PostgreSQL tables initialized');
   } finally {
@@ -143,7 +201,7 @@ function readJson(): JsonDatabase {
   try {
     return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
   } catch {
-    return { merchants: [], products: [], receipts: [], escrows: [], loyalty: [], auth_nonces: [], pending_txs: [] };
+    return { merchants: [], products: [], receipts: [], escrows: [], loyalty: [], auth_nonces: [], pending_txs: [], api_keys: [], webhooks: [], webhook_deliveries: [], payment_sessions: [] };
   }
 }
 
@@ -428,6 +486,258 @@ export async function getOrCreateMerchant(address: string, name: string, categor
     writeJson(db);
   }
   return m;
+}
+
+export async function getMerchantById(id: string): Promise<Merchant | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM merchants WHERE id = $1', [id]);
+    return res.rows[0] || null;
+  }
+  return readJson().merchants.find(m => m.id === id) || null;
+}
+
+export async function getMerchantByAddressHash(addressHash: string): Promise<Merchant | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM merchants WHERE address_hash = $1', [addressHash]);
+    return res.rows[0] || null;
+  }
+  return readJson().merchants.find(m => m.address_hash === addressHash) || null;
+}
+
+// ========== API Keys ==========
+export async function createApiKey(data: Omit<MerchantApiKey, 'id' | 'created_at' | 'is_active' | 'last_used_at'>): Promise<MerchantApiKey> {
+  const id = uuid();
+  const created_at = new Date().toISOString();
+  const full: MerchantApiKey = { id, created_at, is_active: true, last_used_at: null, ...data };
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      `INSERT INTO api_keys (id, merchant_id, api_key_hash, api_key_prefix, label, permissions, is_active, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7)`,
+      [id, data.merchant_id, data.api_key_hash, data.api_key_prefix, data.label, JSON.stringify(data.permissions), created_at]
+    );
+    return full;
+  }
+  const db = readJson();
+  db.api_keys.push(full);
+  writeJson(db);
+  return full;
+}
+
+export async function getApiKeysByMerchant(merchantId: string): Promise<MerchantApiKey[]> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM api_keys WHERE merchant_id = $1 ORDER BY created_at DESC', [merchantId]);
+    return res.rows;
+  }
+  return readJson().api_keys.filter(k => k.merchant_id === merchantId);
+}
+
+export async function getApiKeyByHash(keyHash: string): Promise<MerchantApiKey | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM api_keys WHERE api_key_hash = $1 AND is_active = TRUE', [keyHash]);
+    return res.rows[0] || null;
+  }
+  return readJson().api_keys.find(k => k.api_key_hash === keyHash && k.is_active) || null;
+}
+
+export async function revokeApiKey(id: string, merchantId: string): Promise<boolean> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('UPDATE api_keys SET is_active = FALSE WHERE id = $1 AND merchant_id = $2', [id, merchantId]);
+    return (res.rowCount ?? 0) > 0;
+  }
+  const db = readJson();
+  const key = db.api_keys.find(k => k.id === id && k.merchant_id === merchantId);
+  if (!key) return false;
+  key.is_active = false;
+  writeJson(db);
+  return true;
+}
+
+export async function touchApiKeyUsage(keyHash: string): Promise<void> {
+  const now = new Date().toISOString();
+  if (IS_POSTGRES && pool) {
+    await pool.query('UPDATE api_keys SET last_used_at = $1 WHERE api_key_hash = $2', [now, keyHash]);
+    return;
+  }
+  const db = readJson();
+  const key = db.api_keys.find(k => k.api_key_hash === keyHash);
+  if (key) key.last_used_at = now;
+  writeJson(db);
+}
+
+// ========== Webhooks ==========
+export async function createWebhook(data: Omit<WebhookEndpoint, 'id' | 'created_at' | 'is_active' | 'failure_count' | 'last_triggered_at'>): Promise<WebhookEndpoint> {
+  const id = uuid();
+  const created_at = new Date().toISOString();
+  const full: WebhookEndpoint = { id, created_at, is_active: true, failure_count: 0, last_triggered_at: null, ...data };
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      `INSERT INTO webhooks (id, merchant_id, url, secret_hash, events, is_active, created_at)
+       VALUES ($1,$2,$3,$4,$5,TRUE,$6)`,
+      [id, data.merchant_id, data.url, data.secret_hash, JSON.stringify(data.events), created_at]
+    );
+    return full;
+  }
+  const db = readJson();
+  db.webhooks.push(full);
+  writeJson(db);
+  return full;
+}
+
+export async function getWebhooksByMerchant(merchantId: string): Promise<WebhookEndpoint[]> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM webhooks WHERE merchant_id = $1 ORDER BY created_at DESC', [merchantId]);
+    return res.rows;
+  }
+  return readJson().webhooks.filter(w => w.merchant_id === merchantId);
+}
+
+export async function getActiveWebhooksForEvent(merchantId: string, event: string): Promise<WebhookEndpoint[]> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query(
+      `SELECT * FROM webhooks WHERE merchant_id = $1 AND is_active = TRUE AND events ? $2`,
+      [merchantId, event]
+    );
+    return res.rows;
+  }
+  return readJson().webhooks.filter(w => w.merchant_id === merchantId && w.is_active && w.events.includes(event));
+}
+
+export async function deleteWebhook(id: string, merchantId: string): Promise<boolean> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('DELETE FROM webhooks WHERE id = $1 AND merchant_id = $2', [id, merchantId]);
+    return (res.rowCount ?? 0) > 0;
+  }
+  const db = readJson();
+  const idx = db.webhooks.findIndex(w => w.id === id && w.merchant_id === merchantId);
+  if (idx === -1) return false;
+  db.webhooks.splice(idx, 1);
+  writeJson(db);
+  return true;
+}
+
+export async function incrementWebhookFailure(id: string): Promise<void> {
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      'UPDATE webhooks SET failure_count = failure_count + 1, is_active = (failure_count + 1 < 10) WHERE id = $1',
+      [id]
+    );
+    return;
+  }
+  const db = readJson();
+  const wh = db.webhooks.find(w => w.id === id);
+  if (wh) {
+    wh.failure_count++;
+    if (wh.failure_count >= 10) wh.is_active = false;
+  }
+  writeJson(db);
+}
+
+export async function resetWebhookFailure(id: string): Promise<void> {
+  const now = new Date().toISOString();
+  if (IS_POSTGRES && pool) {
+    await pool.query('UPDATE webhooks SET failure_count = 0, last_triggered_at = $1 WHERE id = $2', [now, id]);
+    return;
+  }
+  const db = readJson();
+  const wh = db.webhooks.find(w => w.id === id);
+  if (wh) { wh.failure_count = 0; wh.last_triggered_at = now; }
+  writeJson(db);
+}
+
+// ========== Webhook Deliveries ==========
+export async function createWebhookDelivery(data: Omit<WebhookDelivery, 'id' | 'created_at' | 'status' | 'response_code' | 'attempts' | 'next_retry_at'>): Promise<WebhookDelivery> {
+  const id = uuid();
+  const created_at = new Date().toISOString();
+  const full: WebhookDelivery = { id, created_at, status: 'pending', response_code: null, attempts: 0, next_retry_at: null, ...data };
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      `INSERT INTO webhook_deliveries (id, webhook_id, event, payload, status, attempts, created_at)
+       VALUES ($1,$2,$3,$4,'pending',0,$5)`,
+      [id, data.webhook_id, data.event, JSON.stringify(data.payload), created_at]
+    );
+    return full;
+  }
+  const db = readJson();
+  db.webhook_deliveries.push(full);
+  writeJson(db);
+  return full;
+}
+
+export async function updateWebhookDelivery(id: string, status: 'delivered' | 'failed', responseCode: number | null): Promise<void> {
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      'UPDATE webhook_deliveries SET status = $1, response_code = $2, attempts = attempts + 1 WHERE id = $3',
+      [status, responseCode, id]
+    );
+    return;
+  }
+  const db = readJson();
+  const d = db.webhook_deliveries.find(x => x.id === id);
+  if (d) { d.status = status; d.response_code = responseCode; d.attempts++; }
+  writeJson(db);
+}
+
+// ========== Payment Sessions ==========
+export async function createPaymentSession(data: Omit<PaymentSession, 'id' | 'created_at' | 'status' | 'purchase_commitment' | 'tx_id' | 'payment_mode'>): Promise<PaymentSession> {
+  const id = 'ps_' + uuid().replace(/-/g, '');
+  const created_at = new Date().toISOString();
+  const full: PaymentSession = {
+    id, created_at, status: 'pending',
+    purchase_commitment: null, tx_id: null, payment_mode: null,
+    ...data,
+  };
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      `INSERT INTO payment_sessions (id, merchant_id, merchant_address, amount, currency, description, metadata, status, redirect_url, cancel_url, expires_at, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11)`,
+      [id, data.merchant_id, data.merchant_address, data.amount, data.currency, data.description,
+       JSON.stringify(data.metadata), data.redirect_url, data.cancel_url, data.expires_at, created_at]
+    );
+    return full;
+  }
+  const db = readJson();
+  db.payment_sessions.push(full);
+  writeJson(db);
+  return full;
+}
+
+export async function getPaymentSession(id: string): Promise<PaymentSession | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM payment_sessions WHERE id = $1', [id]);
+    return res.rows[0] || null;
+  }
+  return readJson().payment_sessions.find(s => s.id === id) || null;
+}
+
+export async function completePaymentSession(id: string, data: { purchase_commitment: string; tx_id: string; payment_mode: string }): Promise<PaymentSession | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query(
+      `UPDATE payment_sessions SET status = 'completed', purchase_commitment = $1, tx_id = $2, payment_mode = $3
+       WHERE id = $4 AND status = 'pending' RETURNING *`,
+      [data.purchase_commitment, data.tx_id, data.payment_mode, id]
+    );
+    return res.rows[0] || null;
+  }
+  const db = readJson();
+  const session = db.payment_sessions.find(s => s.id === id && s.status === 'pending');
+  if (!session) return null;
+  session.status = 'completed';
+  session.purchase_commitment = data.purchase_commitment;
+  session.tx_id = data.tx_id;
+  session.payment_mode = data.payment_mode as 'private' | 'public' | 'escrow';
+  writeJson(db);
+  return session;
+}
+
+export async function getPaymentSessionsByMerchant(merchantId: string): Promise<PaymentSession[]> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query(
+      'SELECT * FROM payment_sessions WHERE merchant_id = $1 ORDER BY created_at DESC LIMIT 100',
+      [merchantId]
+    );
+    return res.rows;
+  }
+  return readJson().payment_sessions.filter(s => s.merchant_id === merchantId);
 }
 
 export { IS_POSTGRES, pool };

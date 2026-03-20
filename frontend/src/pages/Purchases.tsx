@@ -13,7 +13,6 @@ import {
   CopyIcon,
   CheckIcon,
 } from '@/components/icons/Icons';
-import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, formatDate, copyToClipboard } from '@/lib/utils';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { listStoredPurchases } from '@/lib/merkle';
@@ -115,11 +114,10 @@ const Purchases: FC = () => {
 
   if (!connected) {
     return (
-      <div className="relative min-h-screen pt-24 flex items-center justify-center">
-        <GridBackground className="opacity-20" />
+      <div className="relative min-h-screen pt-4 flex items-center justify-center">
         <div className="relative z-10">
           <EmptyState
-            icon={<PackageIcon size={52} className="text-white/20" />}
+            icon={<PackageIcon size={52} className="text-[#c9c6c5]/25" />}
             title="Connect Wallet"
             description="Connect your Aleo wallet to view your purchase history."
           />
@@ -129,8 +127,7 @@ const Purchases: FC = () => {
   }
 
   return (
-    <div className="relative min-h-screen pt-24 pb-16">
-      <GridBackground className="opacity-20" />
+    <div className="relative min-h-screen pt-4 pb-16">
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
@@ -163,36 +160,36 @@ const Purchases: FC = () => {
             transition={{ duration: 0.5 }}
             className="mb-8"
           >
-            <Card className="border-green-500/15">
+            <Card className="border-[#7dffa2]/15">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                 <div>
                   <div className="flex items-center gap-2.5 mb-3">
-                    <div className="p-2 bg-green-500/10 rounded-xl">
-                      <PackageIcon size={20} className="text-green-400" />
+                    <div className="p-2 bg-[#7dffa2]/10 rounded-xl">
+                      <PackageIcon size={20} className="text-[#7dffa2]" />
                     </div>
-                    <span className="text-white font-bold text-lg">Purchase Summary</span>
+                    <span className="text-[#e5e2e1] font-bold text-lg">Purchase Summary</span>
                   </div>
 
                   <div className="flex items-baseline gap-6 mt-3">
                     <div>
-                      <span className="text-5xl font-bold text-green-400">
+                      <span className="text-5xl font-bold text-[#7dffa2]">
                         {receipts.length}
                       </span>
-                      <span className="text-white/30 ml-2 text-sm">purchases</span>
+                      <span className="text-[#c9c6c5]/40 ml-2 text-sm">purchases</span>
                     </div>
                     <div>
                       <span className="text-2xl font-bold text-blue-400">
                         {merkleKeys.length}
                       </span>
-                      <span className="text-white/30 ml-2 text-sm">with Merkle proofs</span>
+                      <span className="text-[#c9c6c5]/40 ml-2 text-sm">with Merkle proofs</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-5 p-3.5 bg-green-500/[0.04] border border-green-500/10 rounded-xl">
-                <p className="text-xs text-white/40 leading-relaxed">
-                  <strong className="text-white/60">How Merkle proofs work:</strong> Each purchase's cart items are organized into a Merkle tree. You can prove you bought a specific item without revealing the rest of your cart — perfect for warranty claims, returns, or review verification.
+              <div className="mt-5 p-3.5 bg-[#7dffa2]/[0.04] border border-[#7dffa2]/10 rounded-xl">
+                <p className="text-xs text-[#c9c6c5]/60 leading-relaxed">
+                  <strong className="text-[#c9c6c5]/80">How Merkle proofs work:</strong> Each purchase's cart items are organized into a Merkle tree. You can prove you bought a specific item without revealing the rest of your cart — perfect for warranty claims, returns, or review verification.
                 </p>
               </div>
             </Card>
@@ -213,8 +210,8 @@ const Purchases: FC = () => {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xl font-semibold text-white">Purchase History</h2>
-              <span className="text-sm text-white/30">{receipts.length} purchase{receipts.length !== 1 ? 's' : ''}</span>
+              <h2 className="text-xl font-semibold text-[#e5e2e1]">Purchase History</h2>
+              <span className="text-sm text-[#c9c6c5]/40">{receipts.length} purchase{receipts.length !== 1 ? 's' : ''}</span>
             </div>
 
             {receipts.map((r, idx) => (
@@ -228,10 +225,10 @@ const Purchases: FC = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2.5 mb-3">
-                        <div className="p-1.5 bg-green-500/10 rounded-lg">
-                          <PackageIcon size={14} className="text-green-400" />
+                        <div className="p-1.5 bg-[#7dffa2]/10 rounded-lg">
+                          <PackageIcon size={14} className="text-[#7dffa2]" />
                         </div>
-                        <span className="text-white font-medium text-sm">Purchase</span>
+                        <span className="text-[#e5e2e1] font-medium text-sm">Purchase</span>
                         <Badge variant={r.token_type === 1 ? 'info' : r.token_type === 2 ? 'purple' : 'success'} dot>
                           <TokenIcon type={r.token_type as 0|1|2} size={11} className="inline mr-0.5" />
                           {r.token_type === 1 ? 'USDCx' : r.token_type === 2 ? 'USAD' : 'Credits'}
@@ -243,18 +240,18 @@ const Purchases: FC = () => {
 
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mt-4">
                         <div>
-                          <span className="text-xs text-white/30 uppercase tracking-wider">Amount</span>
+                          <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Amount</span>
                           <div className="mt-1">
                             <TokenAmount amount={formatAmount(r.total, r.token_type)} type={r.token_type as 0 | 1} size="lg" />
                           </div>
                         </div>
                         <div>
-                          <span className="text-xs text-white/30 uppercase tracking-wider">Merchant</span>
-                          <p className="text-white/60 font-mono text-xs mt-1">{truncateAddress(r.merchant)}</p>
+                          <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Merchant</span>
+                          <p className="text-[#c9c6c5]/80 font-mono text-xs mt-1">{truncateAddress(r.merchant)}</p>
                         </div>
                         <div>
-                          <span className="text-xs text-white/30 uppercase tracking-wider">Date</span>
-                          <p className="text-white/60 text-sm mt-1">{r.timestamp ? formatDate(r.timestamp) : 'N/A'}</p>
+                          <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Date</span>
+                          <p className="text-[#c9c6c5]/80 text-sm mt-1">{r.timestamp ? formatDate(r.timestamp) : 'N/A'}</p>
                         </div>
                       </div>
 
@@ -303,7 +300,7 @@ const Purchases: FC = () => {
       >
         <div className="space-y-5">
           <div className="p-3.5 bg-blue-500/[0.06] border border-blue-500/15 rounded-xl space-y-2">
-            <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">How it works</p>
+            <p className="text-xs font-semibold text-[#c9c6c5]/80 uppercase tracking-wider">How it works</p>
             <ul className="text-xs text-white/45 space-y-1 leading-relaxed list-none">
               <li>• Select which item in your cart to prove (by index)</li>
               <li>• The Merkle proof verifies this item was in your cart</li>
@@ -347,8 +344,8 @@ const Purchases: FC = () => {
       >
         {supportProofData && (
           <div className="space-y-5">
-            <div className="p-3.5 bg-green-500/[0.06] border border-green-500/15 rounded-xl">
-              <p className="text-xs font-semibold text-green-400/80 uppercase tracking-wider mb-2">Proof Ready</p>
+            <div className="p-3.5 bg-[#7dffa2]/[0.06] border border-[#7dffa2]/15 rounded-xl">
+              <p className="text-xs font-semibold text-[#7dffa2]/80 uppercase tracking-wider mb-2">Proof Ready</p>
               <p className="text-xs text-white/45 leading-relaxed">
                 Your support proof has been submitted on-chain. Copy the proof code below and
                 share it with the merchant or support team to verify your purchase — without revealing
@@ -358,20 +355,20 @@ const Purchases: FC = () => {
 
             <div className="space-y-3">
               <div>
-                <span className="text-xs text-white/30 uppercase tracking-wider">Purchase Commitment</span>
-                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.purchase_commitment}</p>
+                <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Purchase Commitment</span>
+                <p className="text-xs text-[#c9c6c5]/80 font-mono mt-0.5 break-all">{supportProofData.purchase_commitment}</p>
               </div>
               <div>
-                <span className="text-xs text-white/30 uppercase tracking-wider">Product Hash</span>
-                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.product_hash}</p>
+                <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Product Hash</span>
+                <p className="text-xs text-[#c9c6c5]/80 font-mono mt-0.5 break-all">{supportProofData.product_hash}</p>
               </div>
               <div>
-                <span className="text-xs text-white/30 uppercase tracking-wider">Salt</span>
-                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.salt}</p>
+                <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Salt</span>
+                <p className="text-xs text-[#c9c6c5]/80 font-mono mt-0.5 break-all">{supportProofData.salt}</p>
               </div>
               <div>
-                <span className="text-xs text-white/30 uppercase tracking-wider">Merchant</span>
-                <p className="text-xs text-white/60 font-mono mt-0.5 break-all">{supportProofData.merchant}</p>
+                <span className="text-xs text-[#c9c6c5]/40 uppercase tracking-wider">Merchant</span>
+                <p className="text-xs text-[#c9c6c5]/80 font-mono mt-0.5 break-all">{supportProofData.merchant}</p>
               </div>
             </div>
 

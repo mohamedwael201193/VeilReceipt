@@ -1,4 +1,4 @@
-// Checkout Page — Clean dark product grid + cart + multi-mode purchase
+// Checkout  Terminal Commerce encrypted shop + cart
 
 import { FC, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,22 +9,13 @@ import { api } from '@/lib/api';
 import { Button, Badge, EmptyState, Select, Modal } from '@/components/ui/Components';
 import { LoadingSpinner, TokenIcon } from '@/components/icons/Icons';
 import {
-  CartIcon,
   PlusIcon,
   MinusIcon,
   TrashIcon,
-  ShieldIcon,
-  PublicIcon,
-  ClockIcon,
   PackageIcon,
   TagIcon,
-  ZapIcon,
-  SettingsIcon,
-  AwardIcon,
-  CardIcon,
   LoyaltyIcon,
 } from '@/components/icons/Icons';
-import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress, toAleoField } from '@/lib/utils';
 import { formatUsdcx, formatCredits, formatUsad } from '@/lib/stablecoin';
 import { getReviewCount } from '@/lib/aleoNetwork';
@@ -32,9 +23,9 @@ import type { Product } from '@/lib/types';
 import type { PaymentPrivacy, TokenType } from '@/lib/chain';
 
 const PRIVACY_OPTIONS = [
-  { value: 'private', label: 'Private', icon: <ShieldIcon size={16} />, desc: 'Fully encrypted — amounts hidden on-chain' },
-  { value: 'public', label: 'Public', icon: <PublicIcon size={16} />, desc: 'Visible on-chain — lower network fee' },
-  { value: 'escrow', label: 'Escrow', icon: <ClockIcon size={16} />, desc: 'Locked with refund window protection' },
+  { value: 'private', label: 'PRIVATE', icon: 'lock', desc: 'Fully encrypted  amounts hidden on-chain' },
+  { value: 'public', label: 'PUBLIC', icon: 'public', desc: 'Visible on-chain  lower network fee' },
+  { value: 'escrow', label: 'ESCROW', icon: 'schedule', desc: 'Locked with 500-block refund window' },
 ];
 
 const TOKEN_OPTIONS = [
@@ -54,7 +45,7 @@ const Checkout: FC = () => {
   const [showCart, setShowCart] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
-  const [myReviews, setMyReviews] = useState<Record<string, number>>({}); // sku -> my rating
+  const [myReviews, setMyReviews] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -65,10 +56,10 @@ const Checkout: FC = () => {
       } catch (e: any) {
         console.error('Failed to fetch products:', e);
         setProducts([
-          { id: '1', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Privacy Shield Pro', description: 'Enterprise ZK privacy suite for secure transactions', price: 5000000, price_type: 'credits', sku: 'PSP-001', category: 'Software', in_stock: true, created_at: new Date().toISOString() },
-          { id: '2', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'ZK Audit Package', description: 'Smart contract security audit with formal verification', price: 15000000, price_type: 'credits', sku: 'ZKA-002', category: 'Service', in_stock: true, created_at: new Date().toISOString() },
-          { id: '3', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Aleo Dev Toolkit', description: 'Developer tools, SDKs and utilitiy libraries', price: 2000000, price_type: 'credits', sku: 'ADT-003', category: 'Tools', in_stock: true, created_at: new Date().toISOString() },
-          { id: '4', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Node License', description: 'Validator node annual license with SLA', price: 50000000, price_type: 'usdcx', sku: 'NL-004', category: 'License', in_stock: true, created_at: new Date().toISOString() },
+          { id: '1', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Privacy Shield Pro', description: 'Enterprise ZK privacy suite', price: 5000000, price_type: 'credits', sku: 'PSP-001', category: 'Software', in_stock: true, created_at: new Date().toISOString() },
+          { id: '2', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'ZK Audit Package', description: 'Smart contract security audit', price: 15000000, price_type: 'credits', sku: 'ZKA-002', category: 'Service', in_stock: true, created_at: new Date().toISOString() },
+          { id: '3', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Aleo Dev Toolkit', description: 'Developer tools and SDK', price: 2000000, price_type: 'credits', sku: 'ADT-003', category: 'Tools', in_stock: true, created_at: new Date().toISOString() },
+          { id: '4', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Node License', description: 'Validator node annual license', price: 50000000, price_type: 'usdcx', sku: 'NL-004', category: 'License', in_stock: true, created_at: new Date().toISOString() },
         ]);
       } finally {
         setLoadingProducts(false);
@@ -77,7 +68,6 @@ const Checkout: FC = () => {
     fetchProducts();
   }, []);
 
-  // Fetch on-chain review counts for products + user's own reviews
   useEffect(() => {
     if (products.length === 0) return;
     const fetchCounts = async () => {
@@ -113,39 +103,16 @@ const Checkout: FC = () => {
     fetchMyReviews();
   }, [connected, products, getReviewTokens]);
 
-  // Detect self-purchase (buyer === merchant)
   const isSelfPurchase = connected && address && merchantAddress && address === merchantAddress;
 
   const handleCheckout = async () => {
-    if (!connected || !address) {
-      toast.error('Please connect your wallet first');
-      return;
-    }
-    if (items.length === 0) {
-      toast.error('Cart is empty');
-      return;
-    }
-    if (!merchantAddress) {
-      toast.error('No merchant address found');
-      return;
-    }
-    if (address === merchantAddress) {
-      toast.error('You cannot purchase your own products. The on-chain contract prevents self-purchases for security.');
-      return;
-    }
-    if (tokenType === 'usdcx' && privacy !== 'private') {
-      toast.error('USDCx only supports private transfers');
-      return;
-    }
-    if (tokenType === 'usad' && privacy !== 'private') {
-      toast.error('USAD only supports private transfers');
-      return;
-    }
-    if (privacy === 'escrow' && tokenType !== 'credits') {
-      toast.error('Escrow only supports Aleo credits');
-      return;
-    }
-    // Show confirmation modal before proceeding
+    if (!connected || !address) { toast.error('Connect wallet first'); return; }
+    if (items.length === 0) { toast.error('Cart is empty'); return; }
+    if (!merchantAddress) { toast.error('No merchant address'); return; }
+    if (address === merchantAddress) { toast.error('Cannot purchase own products'); return; }
+    if (tokenType === 'usdcx' && privacy !== 'private') { toast.error('USDCx: private only'); return; }
+    if (tokenType === 'usad' && privacy !== 'private') { toast.error('USAD: private only'); return; }
+    if (privacy === 'escrow' && tokenType !== 'credits') { toast.error('Escrow: credits only'); return; }
     setConfirmModalOpen(true);
   };
 
@@ -156,19 +123,13 @@ const Checkout: FC = () => {
       const total = getTotal();
       const cartItems = items.map(i => ({ sku: i.product.sku, quantity: i.quantity }));
       const txId = await purchase(merchantAddress!, total, cartItems, privacy, tokenType);
-      toast.success(`Transaction submitted: ${txId.slice(0, 12)}...`);
+      toast.success(`TX: ${txId.slice(0, 12)}...`);
       clearCart();
       setShowCart(false);
     } catch (e: any) {
       console.error('Checkout error:', e);
       const msg = e.message || 'Checkout failed';
-      if (msg.includes('rejected') || msg.includes('Rejected')) {
-        toast.error('Transaction rejected on-chain. Check your balance and try a different payment mode.');
-      } else if (msg.includes('Insufficient')) {
-        toast.error(msg);
-      } else {
-        toast.error(msg);
-      }
+      toast.error(msg.includes('rejected') ? 'TX rejected. Check balance.' : msg);
     } finally {
       setCheckingOut(false);
     }
@@ -179,586 +140,279 @@ const Checkout: FC = () => {
     if (tokenType === 'usad') return formatUsad(microcredits);
     return formatCredits(microcredits);
   };
+  const displayProductPrice = (p: Product) => {
+    if (p.price_type === 'usdcx') return formatUsdcx(p.price);
+    if (p.price_type === 'usad') return formatUsad(p.price);
+    return formatCredits(p.price);
+  };
 
   const total = getTotal();
   const itemCount = getItemCount();
 
   return (
-    <div className="relative min-h-screen pt-24 pb-16">
-      {/* Background */}
-      <GridBackground className="opacity-30" />
-
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <h1 className="text-4xl font-bold text-white tracking-tight">Shop</h1>
-            <p className="text-white/40 mt-2 text-sm">Browse products and pay with zero-knowledge privacy</p>
-          </motion.div>
-
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            onClick={() => setShowCart(!showCart)}
-            className="relative p-3.5 bg-white/[0.04] rounded-xl border border-white/[0.08] hover:border-green-500/30 hover:bg-white/[0.08] transition-all duration-300 group"
-          >
-            <CartIcon size={22} className="text-white/70 group-hover:text-white transition-colors" />
-            {itemCount > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-2 -right-2 bg-green-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow-lg shadow-green-500/30"
-              >
-                {itemCount}
-              </motion.span>
-            )}
-          </motion.button>
+    <div className="relative min-h-screen px-6 sm:px-8 lg:px-12 max-w-6xl mx-auto pb-16">
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-6 pt-4">
+        <div>
+          <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-1">// DIRECTORY: ENCRYPTED_SHOP</p>
+          <h1 className="text-2xl font-headline font-bold text-[#e5e2e1] uppercase tracking-tight">Product Catalog</h1>
+          <p className="text-[#c9c6c5]/50 text-sm mt-1">Browse and pay with zero-knowledge privacy</p>
         </div>
 
-        {/* Payment mode info bar */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="flex flex-wrap items-center gap-3 mb-8 p-3.5 bg-white/[0.02] border border-white/[0.05] rounded-xl text-xs text-white/35"
+        <button
+          onClick={() => setShowCart(!showCart)}
+          className="relative p-3 bg-[#1c1b1b] border border-[#d4bbff]/15 hover:border-[#d4bbff]/30 transition-all"
         >
-          <span className="text-white/20 uppercase tracking-wider font-semibold">Payment Modes:</span>
-          <span className="flex items-center gap-1.5"><ShieldIcon size={12} className="text-green-400" /><span className="text-green-400/80">Private</span> — ZK proof, untraceable</span>
-          <span className="text-white/10">|</span>
-          <span className="flex items-center gap-1.5"><PublicIcon size={12} className="text-white/40" /><span>Public</span> — on-chain visible</span>
-          <span className="text-white/10">|</span>
-          <span className="flex items-center gap-1.5"><ClockIcon size={12} className="text-amber-400" /><span className="text-amber-400/80">Escrow</span> — locked funds, refund window (Credits only)</span>
-          <span className="text-white/20 ml-auto hidden sm:block">↑ Select in cart sidebar</span>
-        </motion.div>
-
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Product Grid */}
-          <div className="flex-1">
-            {loadingProducts ? (
-              <div className="flex justify-center py-24">
-                <LoadingSpinner size={40} />
-              </div>
-            ) : products.length === 0 ? (
-              <EmptyState
-                icon={<PackageIcon size={48} />}
-                title="No Products Available"
-                description="Check back later or connect to a merchant's store."
-              />
-            ) : (
-              <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5"
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  hidden: {},
-                  visible: { transition: { staggerChildren: 0.08 } },
-                }}
-              >
-                {products.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAdd={() => addItem(product)}
-                    formatPrice={formatPrice}
-                    reviewCount={reviewCounts[product.sku]}
-                    myRating={myReviews[product.sku]}
-                  />
-                ))}
-              </motion.div>
-            )}
-          </div>
-
-          {/* Cart Sidebar */}
-          <AnimatePresence>
-            {(showCart || itemCount > 0) && (
-              <motion.div
-                initial={{ opacity: 0, x: 50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 50 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="w-full lg:w-[400px] flex-shrink-0"
-              >
-                <div className="sticky top-24 bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6 shadow-2xl">
-                  <h2 className="text-xl font-bold text-white mb-5 flex items-center gap-3">
-                    <div className="p-2 bg-green-500/10 rounded-lg">
-                      <CartIcon size={18} className="text-green-400" />
-                    </div>
-                    Cart
-                    <span className="text-white/30 text-base font-normal">({itemCount})</span>
-                  </h2>
-
-                  {items.length === 0 ? (
-                    <p className="text-white/30 text-sm py-6 text-center">Your cart is empty</p>
-                  ) : (
-                    <>
-                      {/* Cart Items */}
-                      <div className="space-y-3 mb-6 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
-                        {items.map((item) => (
-                          <motion.div
-                            key={item.product.id}
-                            layout
-                            className="flex items-center justify-between bg-white/[0.04] border border-white/[0.06] rounded-xl p-3.5"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white truncate">{item.product.name}</p>
-                              <p className="text-xs text-white/30 mt-0.5">{item.product.price_type === 'usdcx' ? formatUsdcx(item.product.price) : item.product.price_type === 'usad' ? formatUsad(item.product.price) : formatCredits(item.product.price)} each</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 ml-3">
-                              <button
-                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                                className="p-1.5 text-white/30 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
-                              >
-                                <MinusIcon size={12} />
-                              </button>
-                              <span className="text-white text-sm w-7 text-center font-medium">{item.quantity}</span>
-                              <button
-                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                                className="p-1.5 text-white/30 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
-                              >
-                                <PlusIcon size={12} />
-                              </button>
-                              <button
-                                onClick={() => removeItem(item.product.id)}
-                                className="p-1.5 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all ml-0.5"
-                              >
-                                <TrashIcon size={12} />
-                              </button>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-
-                      {/* Payment Options */}
-                      <div className="space-y-5 mb-6">
-                        <Select
-                          label="Payment Token"
-                          value={tokenType}
-                          onChange={(e) => {
-                            setTokenType(e.target.value as TokenType);
-                            if (e.target.value === 'usdcx' || e.target.value === 'usad') setPrivacy('private');
-                          }}
-                          options={TOKEN_OPTIONS}
-                        />
-
-                        {/* Privacy Mode Selector */}
-                        <div className="space-y-2.5">
-                          <label className="block text-sm font-medium text-white/50">
-                            Privacy Mode
-                            {privacy === 'escrow' && (
-                              <span className="ml-2 text-amber-400/80 text-xs font-normal">— Refundable within 500 blocks</span>
-                            )}
-                          </label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {PRIVACY_OPTIONS.map((opt) => {
-                              const disabled = ((tokenType === 'usdcx' || tokenType === 'usad') && opt.value !== 'private') ||
-                                               (opt.value === 'escrow' && tokenType !== 'credits');
-                              return (
-                                <button
-                                  key={opt.value}
-                                  onClick={() => !disabled && setPrivacy(opt.value as PaymentPrivacy)}
-                                  disabled={disabled}
-                                  className={`relative flex flex-col items-center gap-1.5 p-3.5 rounded-xl border text-xs transition-all duration-300 ${
-                                    privacy === opt.value
-                                      ? 'border-green-500/40 bg-green-500/[0.08] text-white shadow-sm shadow-green-500/10'
-                                      : disabled
-                                      ? 'border-white/[0.04] text-white/20 cursor-not-allowed'
-                                      : 'border-white/[0.07] text-white/40 hover:border-white/[0.15] hover:text-white/70'
-                                  }`}
-                                >
-                                  {privacy === opt.value && (
-                                    <motion.div
-                                      layoutId="privacyMode"
-                                      className="absolute inset-0 border border-green-500/30 rounded-xl bg-gradient-to-b from-green-500/[0.06] to-transparent"
-                                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                                    />
-                                  )}
-                                  <span className="relative">{opt.icon}</span>
-                                  <span className="relative font-medium">{opt.label}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="text-xs text-white/25 mt-1.5">
-                            {PRIVACY_OPTIONS.find(o => o.value === privacy)?.desc}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Merchant Info */}
-                      {merchantAddress && (
-                        <div className="flex items-center gap-2 text-xs text-white/30 mb-4">
-                          <span>Merchant:</span>
-                          <span className="text-white/50 font-mono">{truncateAddress(merchantAddress)}</span>
-                        </div>
-                      )}
-
-                      {/* Total & Checkout */}
-                      <div className="border-t border-white/[0.06] pt-5">
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-white/50 font-medium">Total</span>
-                          <span className="text-2xl font-bold text-white">{formatPrice(total)}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 mb-5 flex-wrap">
-                          <Badge variant={privacy === 'private' ? 'info' : privacy === 'escrow' ? 'warning' : 'default'} dot>
-                            {privacy === 'private' ? 'Private' : privacy === 'escrow' ? 'Escrow' : 'Public'}
-                          </Badge>
-                          <Badge variant="purple" dot>
-                            {tokenType === 'usdcx' ? 'USDCx' : tokenType === 'usad' ? 'USAD' : 'Credits'}
-                          </Badge>
-                          {privacy === 'escrow' && (
-                            <Badge variant="warning">500-block refund window</Badge>
-                          )}
-                        </div>
-
-                        {isSelfPurchase && (
-                          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                            <p className="text-red-400 text-xs font-medium">⚠ You cannot buy your own products. The smart contract prevents self-purchases. Use a different wallet to test buying.</p>
-                          </div>
-                        )}
-
-                        <Button
-                          onClick={handleCheckout}
-                          loading={checkingOut || walletLoading}
-                          disabled={!connected || items.length === 0 || !!isSelfPurchase}
-                          className="w-full"
-                          size="lg"
-                          variant="glow"
-                          icon={<ShieldIcon size={18} />}
-                        >
-                          {!connected ? 'Connect Wallet' : isSelfPurchase ? 'Cannot Self-Purchase' : checkingOut ? 'Processing...' : 'Pay Now'}
-                        </Button>
-
-                        {items.length > 0 && (
-                          <button
-                            onClick={clearCart}
-                            className="w-full mt-3 text-sm text-white/25 hover:text-red-400/70 transition-colors py-2"
-                          >
-                            Clear Cart
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+          <span className="material-symbols-outlined text-[#d4bbff]">shopping_cart</span>
+          {itemCount > 0 && (
+            <span className="absolute -top-2 -right-2 bg-[#7dffa2] text-[#050505] text-[10px] w-5 h-5 flex items-center justify-center font-bold font-mono">
+              {itemCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Order Confirmation Modal */}
-      <Modal
-        isOpen={confirmModalOpen}
-        onClose={() => setConfirmModalOpen(false)}
-        title="Confirm Order"
-      >
+      {/* Privacy modes bar */}
+      <div className="flex flex-wrap items-center gap-3 mb-8 p-3 bg-[#1c1b1b]/40 border border-[#d4bbff]/10 text-[10px] font-mono tracking-wider">
+        <span className="text-[#c9c6c5]/30 uppercase">MODES:</span>
+        <span className="flex items-center gap-1 text-[#7dffa2]"><span className="material-symbols-outlined text-xs">lock</span> PRIVATE</span>
+        <span className="text-[#c9c6c5]/15">|</span>
+        <span className="flex items-center gap-1 text-[#c9c6c5]/50"><span className="material-symbols-outlined text-xs">public</span> PUBLIC</span>
+        <span className="text-[#c9c6c5]/15">|</span>
+        <span className="flex items-center gap-1 text-amber-400/70"><span className="material-symbols-outlined text-xs">schedule</span> ESCROW</span>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Product Grid */}
+        <div className="flex-1">
+          {loadingProducts ? (
+            <div className="flex justify-center py-24"><LoadingSpinner size={32} /></div>
+          ) : products.length === 0 ? (
+            <EmptyState icon={<PackageIcon size={48} />} title="NO_PRODUCTS" description="Check back later." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {products.map((product) => {
+                const isStable = product.price_type === 'usdcx' || product.price_type === 'usad';
+                const rc = reviewCounts[product.sku];
+                return (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ y: -4 }}
+                    onClick={() => addItem(product)}
+                    className="group cursor-pointer bg-[#1c1b1b]/40 border border-[#d4bbff]/10 hover:border-[#d4bbff]/25 transition-all p-5"
+                  >
+                    {/* Category + token */}
+                    <div className="flex items-center justify-between mb-3">
+                      {product.category && (
+                        <span className={`text-[10px] font-mono tracking-widest uppercase ${isStable ? 'text-emerald-400' : 'text-[#7dffa2]'}`}>
+                          {product.category}
+                        </span>
+                      )}
+                      <span className="text-[9px] font-mono tracking-widest text-[#c9c6c5]/30 uppercase">
+                        {product.price_type === 'usad' ? 'USAD' : product.price_type === 'usdcx' ? 'USDCx' : 'CREDITS'}
+                      </span>
+                    </div>
+
+                    {/* Icon */}
+                    <div className={`w-10 h-10 ${isStable ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-[#d4bbff]/10 border-[#d4bbff]/20'} border flex items-center justify-center mb-3`}>
+                      <span className={`material-symbols-outlined text-lg ${isStable ? 'text-emerald-400' : 'text-[#d4bbff]'}`}>
+                        {product.category === 'Software' ? 'security' : product.category === 'Service' ? 'verified' : product.category === 'Tools' ? 'build' : 'inventory_2'}
+                      </span>
+                    </div>
+
+                    {/* Name + desc */}
+                    <h3 className="text-[#e5e2e1] font-bold text-sm mb-1">{product.name}</h3>
+                    <p className="text-[#c9c6c5]/40 text-xs line-clamp-2 mb-4">{product.description || 'ZK product'}</p>
+
+                    <div className="h-px bg-[#d4bbff]/5 mb-3" />
+
+                    {/* Price + add */}
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-[9px] font-mono tracking-widest text-[#c9c6c5]/30 mb-0.5">PRICE</p>
+                        <div className="flex items-center gap-1.5">
+                          <TokenIcon type={product.price_type === 'usad' ? 'usad' : product.price_type === 'usdcx' ? 'usdcx' : 'credits'} size={18} />
+                          <span className={`text-lg font-bold ${isStable ? 'text-emerald-400' : 'text-[#7dffa2]'}`}>{displayProductPrice(product)}</span>
+                        </div>
+                      </div>
+                      <div className={`p-2 border ${isStable ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-[#7dffa2]/10 border-[#7dffa2]/20 text-[#7dffa2]'} group-hover:scale-110 transition-transform`}>
+                        <PlusIcon size={16} />
+                      </div>
+                    </div>
+
+                    {/* Reviews */}
+                    {rc && rc > 0 && (
+                      <div className="mt-3 flex items-center gap-1.5 text-[10px]">
+                        <div className="flex gap-0.5">
+                          {[1,2,3,4,5].map(s => (
+                            <LoyaltyIcon key={s} size={10} className={s <= (myReviews[product.sku] || Math.min(4, rc)) ? 'text-yellow-400 fill-yellow-400' : 'text-[#c9c6c5]/15'} />
+                          ))}
+                        </div>
+                        <span className="text-yellow-400/60 font-mono">{rc}</span>
+                        <span className="text-[#c9c6c5]/25 font-mono">verified</span>
+                      </div>
+                    )}
+
+                    {/* SKU */}
+                    <div className="mt-2 flex items-center gap-1 text-[10px] text-[#c9c6c5]/15 font-mono">
+                      <TagIcon size={9} />{product.sku}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Cart Sidebar */}
+        <AnimatePresence>
+          {(showCart || itemCount > 0) && (
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              className="w-full lg:w-[380px] flex-shrink-0"
+            >
+              <div className="sticky top-24 bg-[#0a0a0a] border border-[#d4bbff]/15 p-6">
+                <h2 className="text-xs font-mono tracking-widest text-[#d4bbff] mb-5 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">shopping_cart</span>
+                  // CART ({itemCount})
+                </h2>
+
+                {items.length === 0 ? (
+                  <p className="text-[#c9c6c5]/30 text-sm py-6 text-center font-mono">EMPTY</p>
+                ) : (
+                  <>
+                    {/* Cart items */}
+                    <div className="space-y-2 mb-5 max-h-56 overflow-y-auto terminal-scroll pr-1">
+                      {items.map((item) => (
+                        <div key={item.product.id} className="flex items-center justify-between bg-[#1c1b1b]/60 border border-[#d4bbff]/10 p-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-[#e5e2e1] truncate">{item.product.name}</p>
+                            <p className="text-[10px] font-mono text-[#c9c6c5]/30">{displayProductPrice(item.product)} ea</p>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2">
+                            <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="p-1 text-[#c9c6c5]/30 hover:text-[#e5e2e1] hover:bg-[#1c1b1b] transition-all"><MinusIcon size={12} /></button>
+                            <span className="text-[#e5e2e1] text-sm w-6 text-center font-mono">{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="p-1 text-[#c9c6c5]/30 hover:text-[#e5e2e1] hover:bg-[#1c1b1b] transition-all"><PlusIcon size={12} /></button>
+                            <button onClick={() => removeItem(item.product.id)} className="p-1 text-[#ffb4ab]/40 hover:text-[#ffb4ab] hover:bg-[#ffb4ab]/10 transition-all ml-1"><TrashIcon size={12} /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Payment options */}
+                    <div className="space-y-4 mb-5">
+                      <Select
+                        label="TOKEN"
+                        value={tokenType}
+                        onChange={(e) => {
+                          setTokenType(e.target.value as TokenType);
+                          if (e.target.value === 'usdcx' || e.target.value === 'usad') setPrivacy('private');
+                        }}
+                        options={TOKEN_OPTIONS}
+                      />
+
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-mono tracking-widest uppercase text-[#c9c6c5]">
+                          PRIVACY_MODE
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {PRIVACY_OPTIONS.map((opt) => {
+                            const disabled = ((tokenType === 'usdcx' || tokenType === 'usad') && opt.value !== 'private') ||
+                                             (opt.value === 'escrow' && tokenType !== 'credits');
+                            return (
+                              <button
+                                key={opt.value}
+                                onClick={() => !disabled && setPrivacy(opt.value as PaymentPrivacy)}
+                                disabled={disabled}
+                                className={`flex flex-col items-center gap-1 p-3 border text-[10px] font-mono tracking-wider transition-all ${
+                                  privacy === opt.value
+                                    ? 'border-[#d4bbff]/40 bg-[#d4bbff]/10 text-[#d4bbff]'
+                                    : disabled
+                                    ? 'border-[#1c1b1b] text-[#c9c6c5]/20 cursor-not-allowed'
+                                    : 'border-[#d4bbff]/10 text-[#c9c6c5]/50 hover:border-[#d4bbff]/25'
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-base">{opt.icon}</span>
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] font-mono text-[#c9c6c5]/30">
+                          {PRIVACY_OPTIONS.find(o => o.value === privacy)?.desc}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Merchant */}
+                    {merchantAddress && (
+                      <div className="flex items-center gap-2 text-[10px] font-mono text-[#c9c6c5]/30 mb-4">
+                        MERCHANT: <span className="text-[#d4bbff]/40">{truncateAddress(merchantAddress)}</span>
+                      </div>
+                    )}
+
+                    {/* Total */}
+                    <div className="border-t border-[#d4bbff]/10 pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] font-mono tracking-widest text-[#c9c6c5]">TOTAL</span>
+                        <span className="text-xl font-headline font-bold text-[#e5e2e1]">{formatPrice(total)}</span>
+                      </div>
+                      <div className="flex gap-2 mb-4 flex-wrap">
+                        <Badge variant={privacy === 'private' ? 'info' : privacy === 'escrow' ? 'warning' : 'default'} dot>{privacy.toUpperCase()}</Badge>
+                        <Badge variant="purple" dot>{tokenType === 'usdcx' ? 'USDCx' : tokenType === 'usad' ? 'USAD' : 'CREDITS'}</Badge>
+                      </div>
+                      {isSelfPurchase && (
+                        <div className="mb-3 p-3 bg-[#ffb4ab]/10 border border-[#ffb4ab]/20 text-[10px] font-mono text-[#ffb4ab]">
+                          ERROR: Self-purchase blocked by contract
+                        </div>
+                      )}
+                      <Button onClick={handleCheckout} loading={checkingOut || walletLoading} disabled={!connected || items.length === 0 || !!isSelfPurchase} className="w-full" size="lg" variant="glow">
+                        {!connected ? 'CONNECT_WALLET' : isSelfPurchase ? 'BLOCKED' : checkingOut ? 'PROCESSING...' : 'PAY_NOW'}
+                      </Button>
+                      {items.length > 0 && (
+                        <button onClick={clearCart} className="w-full mt-2 text-[10px] font-mono tracking-widest text-[#c9c6c5]/25 hover:text-[#ffb4ab]/60 transition-colors py-2">
+                          CLEAR_CART
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Confirm Modal */}
+      <Modal isOpen={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="CONFIRM_ORDER">
         <div className="space-y-4">
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-3">
+          <div className="bg-[#1c1b1b]/60 border border-[#d4bbff]/10 p-4 space-y-2">
             {items.map((item, i) => (
               <div key={i} className="flex justify-between text-sm">
-                <span className="text-white/60">{item.product.name} x{item.quantity}</span>
-                <span className="text-white font-medium">{formatPrice(item.product.price * item.quantity)}</span>
+                <span className="text-[#c9c6c5]/60">{item.product.name} x{item.quantity}</span>
+                <span className="text-[#e5e2e1] font-mono">{formatPrice(item.product.price * item.quantity)}</span>
               </div>
             ))}
-            <div className="border-t border-white/[0.06] pt-3 flex justify-between">
-              <span className="text-white font-medium">Total</span>
-              <span className="text-white font-bold text-lg">{formatPrice(total)}</span>
+            <div className="border-t border-[#d4bbff]/10 pt-2 flex justify-between">
+              <span className="text-[#e5e2e1] font-mono text-xs">TOTAL</span>
+              <span className="text-[#e5e2e1] font-bold text-lg">{formatPrice(total)}</span>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Badge variant={privacy === 'private' ? 'info' : privacy === 'escrow' ? 'warning' : 'default'} dot>
-              {privacy === 'private' ? 'Private Payment' : privacy === 'escrow' ? 'Escrow (Refundable)' : 'Public Payment'}
-            </Badge>
-            <Badge variant="purple" dot>
-              {tokenType === 'usdcx' ? 'USDCx' : tokenType === 'usad' ? 'USAD' : 'Aleo Credits'}
-            </Badge>
+            <Badge variant={privacy === 'private' ? 'info' : privacy === 'escrow' ? 'warning' : 'default'} dot>{privacy.toUpperCase()}</Badge>
+            <Badge variant="purple" dot>{tokenType === 'usdcx' ? 'USDCx' : tokenType === 'usad' ? 'USAD' : 'Credits'}</Badge>
           </div>
-          {privacy === 'escrow' && (
-            <p className="text-xs text-amber-400/70">
-              Funds will be locked on-chain with a 500-block (~8 hour) refund window.
-            </p>
-          )}
           <div className="flex gap-3 justify-end pt-2">
-            <Button variant="ghost" onClick={() => setConfirmModalOpen(false)}>Cancel</Button>
-            <Button
-              variant="glow"
-              onClick={executeCheckout}
-              icon={<ShieldIcon size={14} />}
-            >
-              Confirm & Pay
-            </Button>
+            <Button variant="ghost" onClick={() => setConfirmModalOpen(false)}>CANCEL</Button>
+            <Button variant="glow" onClick={executeCheckout}>CONFIRM_PAY</Button>
           </div>
         </div>
       </Modal>
     </div>
-  );
-};
-
-// Category icon mapping
-const categoryIcon = (category: string | undefined, isStablecoin: boolean) => {
-  const cls = isStablecoin ? 'text-emerald-400/80' : 'text-green-400/80';
-  switch (category?.toLowerCase()) {
-    case 'software': return <ShieldIcon size={24} className={cls} />;
-    case 'service': return <AwardIcon size={24} className={cls} />;
-    case 'tools': return <SettingsIcon size={24} className={cls} />;
-    case 'hardware': return <ZapIcon size={24} className={cls} />;
-    case 'subscription': return <CardIcon size={24} className={cls} />;
-    default: return <PackageIcon size={24} className={cls} />;
-  }
-};
-
-// Product Card Component
-const ProductCard: FC<{
-  product: Product;
-  onAdd: () => void;
-  formatPrice: (n: number) => string;
-  reviewCount?: number;
-  myRating?: number;
-}> = ({ product, onAdd, reviewCount, myRating }) => {
-  const [showReviews, setShowReviews] = useState(false);
-  // Use product's OWN price_type for display, not the global cart selection
-  const displayPrice = product.price_type === 'usdcx' ? formatUsdcx(product.price) : product.price_type === 'usad' ? formatUsad(product.price) : formatCredits(product.price);
-  const isStablecoin = product.price_type === 'usdcx' || product.price_type === 'usad';
-
-  // Generate a gradient based on category/price_type
-  const iconBgGradient = isStablecoin
-    ? 'from-emerald-500/20 to-teal-500/10'
-    : 'from-green-500/20 to-emerald-500/10';
-  const priceGradient = isStablecoin
-    ? 'from-emerald-400 via-teal-400 to-cyan-400'
-    : 'from-green-400 via-emerald-400 to-teal-400';
-  const borderHover = isStablecoin
-    ? 'hover:border-emerald-500/25'
-    : 'hover:border-green-500/25';
-  const shadowHover = isStablecoin
-    ? 'hover:shadow-emerald-500/[0.08]'
-    : 'hover:shadow-green-500/[0.08]';
-  const buttonBg = isStablecoin
-    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 group-hover:shadow-emerald-500/20'
-    : 'bg-green-500/10 border-green-500/20 text-green-400 group-hover:bg-green-500/20 group-hover:border-green-500/40 group-hover:shadow-green-500/20';
-
-  return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 25, scale: 0.95 },
-        visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: 'easeOut' } },
-      }}
-    >
-      <motion.div
-        onClick={onAdd}
-        whileHover={{ y: -6, scale: 1.02 }}
-        whileTap={{ scale: 0.97 }}
-        className={`relative group cursor-pointer overflow-hidden rounded-2xl bg-white/[0.03] border border-white/[0.08] ${borderHover} ${shadowHover} shadow-xl transition-all duration-500`}
-      >
-        {/* Ambient glow effect on hover */}
-        <div className={`absolute -inset-1 bg-gradient-to-r ${isStablecoin ? 'from-emerald-500/[0.07] via-teal-500/[0.05] to-cyan-500/[0.07]' : 'from-green-500/[0.07] via-emerald-500/[0.05] to-teal-500/[0.07]'} rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl -z-10`} />
-
-        {/* Top accent line */}
-        <div className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r ${priceGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-
-        <div className="p-5">
-          {/* Header: Category + Token badge */}
-          <div className="flex items-center justify-between mb-4">
-            {product.category ? (
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider ${isStablecoin ? 'bg-emerald-500/[0.08] text-emerald-400 border border-emerald-500/[0.12]' : 'bg-green-500/[0.08] text-green-400 border border-green-500/[0.12]'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${isStablecoin ? 'bg-emerald-400' : 'bg-green-400'}`} />
-                {product.category}
-              </span>
-            ) : <span />}
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest ${isStablecoin ? 'bg-emerald-500/[0.06] text-emerald-500/60 border border-emerald-500/10' : 'bg-green-500/[0.06] text-green-500/60 border border-green-500/10'}`}>
-              {product.price_type === 'usad' ? '$ USAD' : product.price_type === 'usdcx' ? '$ USDCx' : '◈ ALEO'}
-            </span>
-          </div>
-
-          {/* Product icon/visual area */}
-          <div className="relative mb-4">
-            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${iconBgGradient} border border-white/[0.06] flex items-center justify-center`}>
-              {categoryIcon(product.category, isStablecoin)}
-            </div>
-            {/* Decorative dot */}
-            <div className={`absolute top-1 right-0 w-8 h-8 rounded-full bg-gradient-to-br ${iconBgGradient} blur-2xl opacity-60 group-hover:opacity-100 transition-opacity`} />
-          </div>
-
-          {/* Product Info */}
-          <h3 className="text-white font-bold text-base leading-tight group-hover:text-white transition-colors duration-300 mb-1.5">
-            {product.name}
-          </h3>
-          <p className="text-white/30 text-[13px] line-clamp-2 leading-relaxed mb-5">
-            {product.description || 'Premium zero-knowledge product'}
-          </p>
-
-          {/* Divider */}
-          <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent mb-4" />
-
-          {/* Price + Add button row */}
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-[10px] text-white/20 uppercase tracking-widest font-medium mb-1">Price</p>
-              <div className="flex items-center gap-2">
-                <TokenIcon type={product.price_type === 'usad' ? 'usad' : product.price_type === 'usdcx' ? 'usdcx' : 'credits'} size={22} />
-                <p className={`text-2xl font-extrabold bg-gradient-to-r ${priceGradient} bg-clip-text text-transparent leading-none`}>
-                  {displayPrice}
-                </p>
-              </div>
-            </div>
-
-            <motion.div
-              whileHover={{ scale: 1.15, rotate: 90 }}
-              whileTap={{ scale: 0.9 }}
-              className={`p-3 rounded-xl border ${buttonBg} shadow-lg transition-all duration-300 cursor-pointer`}
-            >
-              <PlusIcon size={18} />
-            </motion.div>
-          </div>
-
-          {/* Reviews bar */}
-          {reviewCount !== undefined && reviewCount > 0 && (
-            <div
-              className="mt-4 p-2.5 -mx-1 rounded-xl bg-yellow-400/[0.04] border border-yellow-400/[0.08] cursor-pointer hover:bg-yellow-400/[0.08] transition-all"
-              onClick={(e) => { e.stopPropagation(); setShowReviews(true); }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map(s => (
-                      <LoyaltyIcon
-                        key={s}
-                        size={12}
-                        className={s <= (myRating || Math.min(reviewCount >= 3 ? 4 : 5, 5))
-                          ? 'text-yellow-400 fill-yellow-400'
-                          : 'text-white/10'}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-yellow-400/90 text-[11px] font-bold ml-1">{reviewCount}</span>
-                  <span className="text-white/25 text-[10px]">verified {reviewCount === 1 ? 'review' : 'reviews'}</span>
-                </div>
-                {myRating && (
-                  <span className="text-[10px] text-yellow-400/50 font-medium">You: {myRating}★</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* SKU footer */}
-          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-white/15">
-            <TagIcon size={10} />
-            <span className="font-mono">{product.sku}</span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Review Details Modal */}
-      <AnimatePresence>
-        {showReviews && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowReviews(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-md bg-[#0d0d0d] border border-white/[0.08] rounded-2xl p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-11 h-11 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
-                  <LoyaltyIcon size={22} className="text-yellow-400 fill-yellow-400" />
-                </div>
-                <div>
-                  <h3 className="text-white font-bold text-lg">{product.name}</h3>
-                  <p className="text-white/40 text-xs">On-Chain Verified Reviews</p>
-                </div>
-              </div>
-
-              {/* Rating Overview */}
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <div className="text-3xl font-extrabold text-yellow-400">{myRating || '—'}</div>
-                    <div className="text-[10px] text-white/30 uppercase tracking-wider mt-0.5">Your Rating</div>
-                  </div>
-                  <div className="h-12 w-px bg-white/[0.06]" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1 mb-1">
-                      {[1, 2, 3, 4, 5].map(s => (
-                        <LoyaltyIcon
-                          key={s}
-                          size={18}
-                          className={s <= (myRating || 0)
-                            ? 'text-yellow-400 fill-yellow-400'
-                            : 'text-white/10'}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-white/50 text-xs">
-                      <span className="text-yellow-400 font-bold">{reviewCount}</span> total verified
-                      {reviewCount === 1 ? ' review' : ' reviews'} on-chain
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* ZK Privacy Notice */}
-              <div className="bg-green-500/[0.04] border border-green-500/[0.1] rounded-xl p-3.5 mb-4">
-                <div className="flex items-start gap-2.5">
-                  <ShieldIcon size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-green-400/80 text-xs font-semibold mb-1">Zero-Knowledge Verified</p>
-                    <p className="text-white/35 text-[11px] leading-relaxed">
-                      Every review is verified on-chain via <span className="text-white/50">submit_anonymous_review</span>.
-                      A nullifier prevents double-reviewing. Individual ratings stay private in each reviewer's wallet
-                      — only the total count is public.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 text-center">
-                  <div className="text-lg font-bold text-white">{reviewCount}</div>
-                  <div className="text-[10px] text-white/30">Total</div>
-                </div>
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 text-center">
-                  <div className="text-lg font-bold text-green-400">✓</div>
-                  <div className="text-[10px] text-white/30">On-Chain</div>
-                </div>
-                <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 text-center">
-                  <div className="text-lg font-bold text-purple-400">🔒</div>
-                  <div className="text-[10px] text-white/30">Private</div>
-                </div>
-              </div>
-
-              {!myRating && (
-                <p className="text-white/25 text-xs text-center mb-4">
-                  Buy this product and submit a review from the Verify page to add your verified rating.
-                </p>
-              )}
-
-              <button
-                onClick={() => setShowReviews(false)}
-                className="w-full py-2.5 text-sm text-white/50 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all"
-              >
-                Close
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
   );
 };
 

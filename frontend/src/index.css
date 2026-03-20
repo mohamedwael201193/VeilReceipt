@@ -4,33 +4,70 @@
 
 @layer base {
   * {
-    @apply border-white/[0.08];
+    @apply border-[#444748]/20;
   }
 
   body {
-    @apply bg-black text-white antialiased;
+    @apply bg-[#050505] text-[#e5e2e1] antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   ::selection {
-    @apply bg-green-500/30 text-white;
+    @apply bg-[#d4bbff]/30 text-white;
   }
 }
 
-/* Wallet Adapter UI — Dark theme overrides */
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Grid overlay background */
+.grid-overlay {
+  background-image: linear-gradient(to right, rgba(142, 145, 146, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(142, 145, 146, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.grid-bg-dots {
+  background-image: radial-gradient(#8e9192 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.05;
+}
+
+/* Primary glow effect */
+.primary-glow {
+  box-shadow: 0px 0px 40px rgba(212, 187, 255, 0.04);
+}
+
+.primary-glow-hover:hover {
+  box-shadow: 0px 0px 60px rgba(212, 187, 255, 0.08);
+}
+
+/* Glass panel */
+.glass-panel {
+  background: rgba(14, 14, 14, 0.7);
+  backdrop-filter: blur(20px);
+}
+
+/* Terminal scrollbar */
+.terminal-scroll::-webkit-scrollbar { width: 4px; }
+.terminal-scroll::-webkit-scrollbar-track { background: #0e0e0e; }
+.terminal-scroll::-webkit-scrollbar-thumb { background: #d4bbff33; }
+
+/* Wallet Adapter UI — Terminal theme overrides */
 .wallet-adapter-button {
-  @apply !bg-white/[0.06] hover:!bg-white/[0.10] !backdrop-blur-xl
-         !text-white !font-medium !py-2.5 !px-5 !rounded-xl !transition-all !duration-300
-         !border !border-white/[0.08] hover:!border-white/[0.15] !shadow-none;
+  @apply !bg-[#1c1b1b] hover:!bg-[#2a2a2a]
+         !text-[#e5e2e1] !font-mono !text-xs !py-2.5 !px-5 !rounded-none !transition-all !duration-300
+         !border !border-[#444748]/30 hover:!border-[#d4bbff]/30 !shadow-none !tracking-widest !uppercase;
 }
 
 .wallet-adapter-button:hover {
-  @apply !transform !scale-[1.02];
+  @apply !transform !scale-[0.98];
 }
 
 .wallet-adapter-button-trigger {
-  @apply !bg-green-500/10 !border-green-500/20;
+  @apply !bg-[#d4bbff]/10 !border-[#d4bbff]/30 !text-[#d4bbff];
 }
 
 .wallet-adapter-modal-wrapper {
@@ -38,11 +75,11 @@
 }
 
 .wallet-adapter-modal-container {
-  @apply !bg-neutral-950 !border !border-white/[0.08] !rounded-2xl !shadow-2xl;
+  @apply !bg-[#0e0e0e] !border !border-[#d4bbff]/10 !rounded-none !shadow-2xl;
 }
 
 .wallet-adapter-modal-title {
-  @apply !text-white !font-bold !text-xl;
+  @apply !text-[#d4bbff] !font-mono !font-bold !text-lg !tracking-widest !uppercase;
 }
 
 .wallet-adapter-modal-list {
@@ -50,40 +87,41 @@
 }
 
 .wallet-adapter-modal-list li {
-  @apply !bg-white/[0.04] hover:!bg-white/[0.08] !rounded-xl !transition-all !duration-200;
+  @apply !bg-[#1c1b1b] hover:!bg-[#2a2a2a] !rounded-none !transition-all !duration-200 !border !border-[#444748]/20;
 }
 
 .wallet-adapter-modal-list-more {
-  @apply !text-green-400 hover:!text-green-300;
+  @apply !text-[#7dffa2] hover:!text-[#62ff96];
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #050505;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-white/10 rounded-full;
+  @apply bg-[#d4bbff]/20;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-white/20;
+  @apply bg-[#d4bbff]/40;
 }
 
 /* Focus */
 *:focus-visible {
-  @apply outline-none ring-2 ring-green-500/50 ring-offset-2 ring-offset-black;
+  @apply outline-none ring-1 ring-[#d4bbff]/50 ring-offset-1 ring-offset-[#050505];
 }
 
-/* Smooth page transitions */
-.page-enter {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.page-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 400ms cubic-bezier(0.16, 1, 0.3, 1), transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+/* Scan line effect */
+.scan-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d4bbff33, transparent);
+  animation: scanLine 8s linear infinite;
 }

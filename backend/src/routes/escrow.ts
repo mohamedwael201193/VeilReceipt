@@ -8,6 +8,7 @@ import {
 import { getTransactionStatus } from '../services/aleo';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { CreateEscrowSchema, ResolveEscrowSchema } from '../types';
+import { notifyEscrowEvent } from '../services/webhooks';
 
 const router = Router();
 
@@ -19,6 +20,14 @@ router.post('/deposit', optionalAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid escrow data', details: parsed.error.issues });
     }
     const escrow = await createEscrow(parsed.data);
+
+    // Fire webhook for escrow creation
+    notifyEscrowEvent(parsed.data.merchant_address_hash, 'escrow.created', {
+      purchase_commitment: parsed.data.purchase_commitment,
+      total: parsed.data.total,
+      escrow_tx_id: parsed.data.escrow_tx_id,
+    }).catch(err => console.error('Escrow webhook error:', err));
+
     res.status(201).json(escrow);
   } catch (err: any) {
     console.error('Create escrow error:', err.message);
@@ -34,6 +43,18 @@ router.post('/resolve', optionalAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid resolve data', details: parsed.error.issues });
     }
     await resolveEscrow(parsed.data.purchase_commitment, parsed.data.status, parsed.data.resolve_tx_id);
+
+    // Fire webhook for escrow resolution
+    const escrowRecord = await getEscrowByCommitment(parsed.data.purchase_commitment);
+    if (escrowRecord) {
+      const event = parsed.data.status === 'completed' ? 'escrow.completed' : 'refund.processed';
+      notifyEscrowEvent(escrowRecord.merchant_address_hash, event as any, {
+        purchase_commitment: parsed.data.purchase_commitment,
+        resolve_tx_id: parsed.data.resolve_tx_id,
+        total: escrowRecord.total,
+      }).catch(err => console.error('Resolve webhook error:', err));
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     console.error('Resolve escrow error:', err.message);

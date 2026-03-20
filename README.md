@@ -18,7 +18,7 @@
 
 <br/>
 
-**[🛒 Shop](frontend/src/pages/Checkout.tsx)** &nbsp;·&nbsp; **[🧾 Receipts](frontend/src/pages/Receipts.tsx)** &nbsp;·&nbsp; **[🔐 Verify](frontend/src/pages/Verify.tsx)** &nbsp;·&nbsp; **[📊 Merchant](frontend/src/pages/Merchant.tsx)** &nbsp;·&nbsp; **[📜 Contract](contracts/src/main.leo)**
+**[🛒 Shop](frontend/src/pages/Checkout.tsx)** &nbsp;·&nbsp; **[🧾 Receipts](frontend/src/pages/Receipts.tsx)** &nbsp;·&nbsp; **[🔐 Verify](frontend/src/pages/Verify.tsx)** &nbsp;·&nbsp; **[📊 Merchant](frontend/src/pages/Merchant.tsx)** &nbsp;·&nbsp; **[⚡ Integrate](frontend/src/pages/Integrate.tsx)** &nbsp;·&nbsp; **[📜 Contract](contracts/src/main.leo)**
 
 </div>
 
@@ -43,8 +43,10 @@ The protocol covers the full commerce lifecycle:
 | 💎 **Three Payment Tokens** | Private purchases via Aleo Credits, USDCx, and USAD stablecoins |
 | 🎟️ **Access Tokens** | Receipt-gated access tokens — prove purchase without revealing details (5 tiers) |
 | ⭐ **Anonymous Reviews** | Verified star ratings with nullifier-based double-review prevention |
+| ⚡ **Integration API** | Merchant API keys, webhooks, payment sessions — embed VeilReceipt in any store |
+| 🔌 **Embeddable Widget** | Drop-in JavaScript SDK for Shopify, WooCommerce, or any e-commerce platform |
 
-Everything runs through a single Leo smart contract (`veilreceipt_v7.aleo`) deployed on Aleo Testnet, with a React frontend and Express API backend.
+Everything runs through a single Leo smart contract (`veilreceipt_v7.aleo`) deployed on Aleo Testnet, with a React frontend, Express API backend, and a full merchant integration layer for external platforms.
 
 ---
 
@@ -57,26 +59,30 @@ Everything runs through a single Leo smart contract (`veilreceipt_v7.aleo`) depl
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │          React Frontend  (Vite + Tailwind CSS)            │  │
 │  │                                                           │  │
-│  │  🛒 Shop        🧾 Receipts    🔐 Verify    📊 Merchant   │  │
-│  │  ────────────   ────────────   ──────────   ────────────  │  │
-│  │  Product cards  Buyer rcpts    Access tkns  Revenue split │  │
-│  │  Cart + modal   Escrow mgmt   Anon review  ALEO/USDCx/   │  │
-│  │  Pay mode sel   Support proof  My tokens    USAD stats    │  │
-│  │  Star ratings   Copy Code      Verify Proof Product CRUD  │  │
-│  │  3 token types  JSON export    Star rating  On-chain reg  │  │
+│  │  🛒 Shop     🧾 Receipts   🔐 Verify   📊 Merchant       │  │
+│  │  ⚡ Integrate  💳 Pay (hosted checkout)                   │  │
 │  │                                                           │  │
 │  │          useVeilWallet hook  (Shield Wallet SDK)           │  │
 │  └────────────────┬──────────────────────┬───────────────────┘  │
 │                   │  wallet calls         │  REST API           │
 └───────────────────┼──────────────────────┼─────────────────────┘
                     │                      │
-         ┌──────────▼──────┐    ┌──────────▼──────────────┐
-         │  Shield Wallet  │    │  Express Backend API     │
-         │  ─────────────  │    │  ─────────────────────   │
-         │  ZK proof gen   │    │  /auth    /products      │
-         │  TX signing     │    │  /receipts  /merchant    │
-         │  Record decrypt │    │  /escrow                 │
-         └──────────┬──────┘    └──────────┬───────────────┘
+         ┌──────────▼──────┐    ┌──────────▼──────────────────┐
+         │  Shield Wallet  │    │  Express Backend API v5      │
+         │  ─────────────  │    │  ──────────────────────────  │
+         │  ZK proof gen   │    │  /auth     /products         │
+         │  TX signing     │    │  /receipts /merchant         │
+         │  Record decrypt │    │  /escrow   /integrate  ← NEW │
+         └──────────┬──────┘    └──────────┬───────────────────┘
+                    │                      │
+                    │        ┌─────────────┼─────────────┐
+                    │        │  Integration Layer (NEW)  │
+                    │        │  ─────────────────────── │
+                    │        │  API Keys (HMAC-SHA256)  │
+                    │        │  Webhooks (signed)       │
+                    │        │  Payment Sessions        │
+                    │        │  Embeddable JS SDK       │
+                    │        └─────────────┬─────────────┘
                     │                      │
          ┌──────────▼──────────────────────▼──────────────┐
          │                  Aleo Testnet                   │
@@ -92,7 +98,92 @@ Everything runs through a single Leo smart contract (`veilreceipt_v7.aleo`) depl
                      │  commitment hashes   │
                      │  no private data     │
                      └─────────────────────┘
+
+         ┌──────────────────────────────────────────────┐
+         │           External E-Commerce Platforms       │
+         │  Shopify · WooCommerce · Custom Stores       │
+         │                                              │
+         │  1. POST /integrate/payments (API key)       │
+         │  2. Redirect customer → /pay/:sessionId      │
+         │  3. Receive webhook on payment confirmation   │
+         │  4. Verify purchase: GET /integrate/verify/   │
+         └──────────────────────────────────────────────┘
 ```
+
+---
+
+## ⚡ E-Commerce Integration API
+
+VeilReceipt provides a **complete merchant integration layer** that lets any e-commerce platform accept private payments powered by Aleo zero-knowledge proofs.
+
+### Quick Start
+
+```bash
+# 1. Generate an API key (from the Integrate dashboard or via JWT-authenticated endpoint)
+curl -X POST https://veilreceipt-api.onrender.com/integrate/keys \
+  -H "Authorization: Bearer <your-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Store", "permissions": ["payments:create", "payments:read"]}'
+
+# 2. Create a payment session
+curl -X POST https://veilreceipt-api.onrender.com/integrate/payments \
+  -H "X-API-Key: veil_pk_abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 500000, "currency": "credits", "description": "Order #42", "redirect_url": "https://mystore.com/success"}'
+# → Returns { session_id, checkout_url }
+
+# 3. Redirect customer to checkout_url → they pay with ZK proof
+# 4. Receive webhook notification when payment confirms
+```
+
+### Integration Endpoints
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `POST /integrate/keys` | JWT | Create an API key |
+| `GET /integrate/keys` | JWT | List your API keys |
+| `DELETE /integrate/keys/:id` | JWT | Revoke an API key |
+| `POST /integrate/webhooks` | JWT | Register a webhook endpoint |
+| `GET /integrate/webhooks` | JWT | List webhook endpoints |
+| `DELETE /integrate/webhooks/:id` | JWT | Delete a webhook |
+| `POST /integrate/payments` | API Key | Create a payment session |
+| `GET /integrate/payments/:id` | Public | Get session status |
+| `POST /integrate/payments/:id/complete` | Public | Complete payment with TX proof |
+| `GET /integrate/payments` | API Key | List your payment sessions |
+| `GET /integrate/verify/:commitment` | Public | Verify a purchase commitment |
+
+### Webhook Events
+
+Webhooks are signed with **HMAC-SHA256** using your webhook secret. Events:
+
+| Event | Fired When |
+|---|---|
+| `payment.confirmed` | A receipt is stored after on-chain confirmation |
+| `payment.session_completed` | A payment session is completed |
+| `escrow.created` | An escrow is locked on-chain |
+| `escrow.completed` | An escrow is released to the merchant |
+| `refund.processed` | An escrow is refunded to the buyer |
+
+### Embeddable Checkout Widget
+
+```html
+<!-- Add to your store's HTML -->
+<script src="https://veil-receipt.vercel.app/veil-checkout.js"></script>
+<script>
+  // Open checkout in a popup
+  VeilCheckout.open({
+    sessionId: 'ps_abc123',
+    mode: 'popup',
+    onSuccess: function(data) {
+      console.log('Paid!', data.tx_id);
+    }
+  });
+</script>
+```
+
+### Demo Store
+
+See the embedded demo at [demo-store.html](frontend/public/demo-store.html) — a complete example of a digital goods store integrated with VeilReceipt.
 
 ---
 
@@ -294,19 +385,27 @@ VeilReceipt/
 │
 ├── 🖥️ backend/
 │   └── src/
-│       ├── index.ts              ← Express server
+│       ├── index.ts              ← Express server (v5.0.0)
 │       ├── types.ts              ← Zod schemas + shared types
 │       ├── routes/
 │       │   ├── auth.ts           ← Nonce-based wallet auth
 │       │   ├── products.ts       ← Product catalog CRUD
 │       │   ├── merchant.ts       ← Revenue dashboard + token analytics
-│       │   ├── receipts.ts       ← Off-chain receipt metadata
-│       │   └── escrow.ts         ← Escrow record management
+│       │   ├── receipts.ts       ← Off-chain receipt metadata + webhook firing
+│       │   ├── escrow.ts         ← Escrow record management + webhook firing
+│       │   └── integrate.ts      ← API keys, webhooks, payment sessions, verification
+│       ├── middleware/
+│       │   ├── auth.ts           ← JWT authentication
+│       │   └── apiKey.ts         ← API key auth (SHA-256 hashed, HMAC-SHA256 signing)
 │       └── services/
 │           ├── database.ts       ← PostgreSQL (prod) / JSON (dev)
-│           └── aleo.ts           ← TX status + block height RPC
+│           ├── aleo.ts           ← TX status + block height RPC
+│           └── webhooks.ts       ← Webhook dispatcher with HMAC-SHA256 signing
 │
 └── 🎨 frontend/
+    ├── public/
+    │   ├── veil-checkout.js      ← Embeddable checkout SDK (drop into any website)
+    │   └── demo-store.html       ← Demo e-commerce store with VeilReceipt integration
     └── src/
         ├── pages/
         │   ├── Home.tsx          ← Landing page + feature showcase + live stats
@@ -314,7 +413,9 @@ VeilReceipt/
         │   ├── Purchases.tsx     ← Purchase history + Merkle proofs + support proofs
         │   ├── Merchant.tsx      ← Revenue dashboard + on-chain registration
         │   ├── Receipts.tsx      ← Receipts + escrow + Copy Code + JSON export
-        │   └── Verify.tsx        ← Access tokens + reviews + My Tokens + Verify Proof
+        │   ├── Verify.tsx        ← Access tokens + reviews + My Tokens + Verify Proof
+        │   ├── Integrate.tsx     ← Merchant integration dashboard (API keys, webhooks, docs)
+        │   └── Pay.tsx           ← Hosted checkout page for payment sessions
         ├── hooks/
         │   └── useVeilWallet.ts  ← All wallet ops + ZK proof + TX polling
         ├── stores/
@@ -391,6 +492,12 @@ Four tabs — **Access Tokens** (mint receipt-gated tokens with 5 tiers, "Token 
 ### 📊 Merchant
 On-chain registration with `register_merchant` transition. Revenue analytics split by token type (ALEO, USDCx, USAD). Product CRUD management with price currency selection. Sales history. Privacy note: all buyer addresses are hashed before storage.
 
+### ⚡ Integrate
+Merchant integration dashboard with four tabs — **Overview** (active API keys, webhooks, total payments), **API Keys** (create/revoke keys with granular permissions), **Webhooks** (register/delete HMAC-signed endpoints for payment and escrow events), **Docs** (Quick Start Guide with curl examples, embeddable widget code, Shopify/WooCommerce integration patterns, full API reference table).
+
+### 💳 Pay (Hosted Checkout)
+Payment session checkout page at `/pay/:sessionId`. Loads session details from API, displays amount and currency with token icon, offers privacy mode selector (Private/Public/Escrow), wallet connect prompt, pay button that executes the on-chain transaction and completes the session. Auto-redirects to merchant's redirect URL on success. Handles expired and invalid sessions gracefully.
+
 ---
 
 ## 🚀 Local Development
@@ -458,11 +565,22 @@ VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 - [x] Redesigned all pages with custom dark UI, SVG illustrations, animations
 - [x] Wallet record fetch retry logic for reliable first-click transactions
 
+### � New in v5 — E-Commerce Integration Layer (Wave 4)
+- [x] **Merchant API Keys** — SHA-256 hashed, `veil_pk_` prefix, granular permissions (payments:create, payments:read, webhooks:manage)
+- [x] **Webhook System** — HMAC-SHA256 signed payloads, 5 event types, auto-disable after 10 failures
+- [x] **Payment Sessions** — 30-minute expiry, hosted checkout at `/pay/:sessionId`, callback URLs
+- [x] **Embeddable Checkout Widget** — Vanilla JS SDK (`veil-checkout.js`), popup and redirect modes, no dependencies
+- [x] **Integration Dashboard** — API key management, webhook configuration, Quick Start docs, full API reference
+- [x] **Demo Store** — Complete example e-commerce site (`demo-store.html`) showing Shopify-like integration
+- [x] **Payment Verification API** — `GET /integrate/verify/:commitment` for external receipt verification
+- [x] **Webhook events** — `payment.confirmed`, `payment.session_completed`, `escrow.created`, `escrow.completed`, `refund.processed`
+
 ### 🔬 Future
 - [ ] Partial category disclosure — prove purchase category, not specific product
 - [ ] Third-party escrow arbitration with ZK evidence submission
 - [ ] Cross-merchant private reputation scoring
-- [ ] Verifier SDK (npm package) for external platforms
+- [ ] Official Shopify App with App Bridge integration
+- [ ] WooCommerce plugin (PHP)
 - [ ] Mobile wallet support
 - [ ] Mainnet deployment
 

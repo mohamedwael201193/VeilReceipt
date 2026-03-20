@@ -20,7 +20,6 @@ import {
   RefreshIcon,
   ShieldIcon,
 } from '@/components/icons/Icons';
-import { GridBackground } from '@/components/effects/CosmicBackground';
 import { truncateAddress } from '@/lib/utils';
 import { formatUsdcx, formatCredits, formatUsad } from '@/lib/stablecoin';
 import type { Product } from '@/lib/types';
@@ -215,11 +214,10 @@ const Merchant: FC = () => {
   // Not connected
   if (!connected) {
     return (
-      <div className="relative min-h-screen pt-24 flex items-center justify-center">
-        <GridBackground className="opacity-20" />
+      <div className="relative min-h-screen pt-4 flex items-center justify-center">
         <div className="relative z-10">
           <EmptyState
-            icon={<StoreIcon size={52} className="text-white/20" />}
+            icon={<StoreIcon size={52} className="text-[#c9c6c5]/25" />}
             title="Connect Wallet"
             description="Connect your Aleo wallet to access the merchant dashboard."
           />
@@ -231,8 +229,7 @@ const Merchant: FC = () => {
   // Not authenticated
   if (!authenticated) {
     return (
-      <div className="relative min-h-screen pt-24 flex items-center justify-center">
-        <GridBackground className="opacity-20" />
+      <div className="relative min-h-screen pt-4 flex items-center justify-center">
 
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -243,19 +240,19 @@ const Merchant: FC = () => {
           <Card glow className="text-center">
             {/* Animated store icon */}
             <div className="relative inline-flex mb-6">
-              <div className="relative p-5 bg-green-500/10 border border-white/[0.08] rounded-2xl">
-                <StoreIcon size={36} className="text-green-400" />
+              <div className="relative p-5 bg-[#7dffa2]/10 border border-[#d4bbff]/15 rounded-2xl">
+                <StoreIcon size={36} className="text-[#7dffa2]" />
               </div>
             </div>
 
-            <h2 className="text-2xl font-bold text-white mb-2">Merchant Dashboard</h2>
-            <p className="text-white/40 mb-6 text-sm leading-relaxed">
+            <h2 className="text-2xl font-bold text-[#e5e2e1] mb-2">Merchant Dashboard</h2>
+            <p className="text-[#c9c6c5]/60 mb-6 text-sm leading-relaxed">
               Authenticate to manage products, view analytics, and accept private payments.
             </p>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-full mb-6">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-white/40 font-mono">{truncateAddress(address || '')}</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-full mb-6">
+              <div className="w-2 h-2 rounded-full bg-[#7dffa2] animate-pulse" />
+              <span className="text-xs text-[#c9c6c5]/60 font-mono">{truncateAddress(address || '')}</span>
             </div>
 
             <Button onClick={handleAuth} loading={loading} icon={<ShieldIcon size={18} />} variant="glow" className="w-full" size="lg">
@@ -268,10 +265,9 @@ const Merchant: FC = () => {
   }
 
   return (
-    <div className="relative min-h-screen pt-24 pb-16">
+    <div className="relative min-h-screen pt-4 pb-16">
       {/* Background */}
-      <GridBackground className="opacity-20" />
-      <div className="absolute top-20 left-0 w-[500px] h-[400px] bg-green-500/[0.02] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute top-20 left-0 w-[500px] h-[400px] bg-[#7dffa2]/[0.02] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
@@ -303,19 +299,19 @@ const Merchant: FC = () => {
           transition={{ duration: 0.5 }}
           className="mb-8"
         >
-          <Card className={onChainRegistered ? 'border-emerald-500/15' : 'border-amber-500/15'}>
+          <Card className={onChainRegistered ? 'border-[#7dffa2]/15' : 'border-amber-500/15'}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className={`p-2 rounded-xl ${onChainRegistered ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
-                    <ShieldIcon size={18} className={onChainRegistered ? 'text-emerald-400' : 'text-amber-400'} />
+                  <div className={`p-2 rounded-xl ${onChainRegistered ? 'bg-[#7dffa2]/10' : 'bg-amber-500/10'}`}>
+                    <ShieldIcon size={18} className={onChainRegistered ? 'text-[#7dffa2]' : 'text-amber-400'} />
                   </div>
-                  <span className="text-white font-bold">On-Chain Registration</span>
+                  <span className="text-[#e5e2e1] font-bold">On-Chain Registration</span>
                   <Badge variant={onChainRegistered ? 'success' : 'warning'} dot>
                     {onChainRegistered ? 'Registered' : 'Not Registered'}
                   </Badge>
                 </div>
-                <p className="text-xs text-white/40 leading-relaxed max-w-lg">
+                <p className="text-xs text-[#c9c6c5]/60 leading-relaxed max-w-lg">
                   {onChainRegistered
                     ? 'Your merchant identity is registered on the Aleo blockchain. Customers can verify you are a legitimate seller.'
                     : 'Register your merchant identity on-chain to unlock verified seller status. This creates a MerchantLicense record in your wallet.'}
@@ -378,7 +374,7 @@ const Merchant: FC = () => {
         {tab === 'products' && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Your Products</h2>
+              <h2 className="text-xl font-semibold text-[#e5e2e1]">Your Products</h2>
               <Button
                 icon={<PlusIcon size={16} />}
                 variant="glow"
@@ -424,17 +420,17 @@ const Merchant: FC = () => {
                     <Card hover>
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-semibold truncate">{p.name}</h3>
+                          <h3 className="text-[#e5e2e1] font-semibold truncate">{p.name}</h3>
                           <p className="text-white/35 text-sm mt-1.5 line-clamp-2 leading-relaxed">{p.description}</p>
                         </div>
                         <button
                           onClick={() => handleDeleteProduct(p.id)}
-                          className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all ml-2"
+                          className="p-2 text-[#c9c6c5]/25 hover:text-[#ffb4ab] hover:bg-[#ffb4ab]/10 rounded-lg transition-all ml-2"
                         >
                           <TrashIcon size={15} />
                         </button>
                       </div>
-                      <div className="mt-4 flex items-end justify-between pt-3 border-t border-white/[0.05]">
+                      <div className="mt-4 flex items-end justify-between pt-3 border-t border-[#d4bbff]/8">
                         <TokenAmount
                           amount={p.price_type === 'usdcx' ? formatUsdcx(p.price) : p.price_type === 'usad' ? formatUsad(p.price) : formatCredits(p.price)}
                           type={p.price_type === 'usad' ? 'usad' : p.price_type === 'usdcx' ? 'usdcx' : 'credits'}
@@ -465,10 +461,10 @@ const Merchant: FC = () => {
           >
             <Card glow>
               <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-green-500/10 rounded-xl">
-                  <ChartIcon size={20} className="text-green-400" />
+                  <div className="p-2 bg-[#7dffa2]/10 rounded-xl">
+                  <ChartIcon size={20} className="text-[#7dffa2]" />
                 </div>
-                <h2 className="text-xl font-bold text-white">Sales Analytics</h2>
+                <h2 className="text-xl font-bold text-[#e5e2e1]">Sales Analytics</h2>
               </div>
 
               {stats ? (
@@ -482,17 +478,17 @@ const Merchant: FC = () => {
                     ].map((item) => (
                       <div
                         key={item.label}
-                        className="p-5 bg-white/[0.03] border border-white/[0.06] rounded-xl"
+                        className="p-5 bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-xl"
                       >
-                        <p className="text-white/30 text-xs uppercase tracking-wider">{item.label}</p>
-                        <p className="text-2xl font-bold text-white mt-2">{item.value}</p>
+                        <p className="text-[#c9c6c5]/40 text-xs uppercase tracking-wider">{item.label}</p>
+                        <p className="text-2xl font-bold text-[#e5e2e1] mt-2">{item.value}</p>
                       </div>
                     ))}
                   </div>
 
-                  <div className="p-4 bg-green-500/[0.04] border border-green-500/10 rounded-xl">
+                  <div className="p-4 bg-[#7dffa2]/[0.04] border border-[#7dffa2]/10 rounded-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <ShieldIcon size={14} className="text-green-400" />
+                      <ShieldIcon size={14} className="text-[#7dffa2]" />
                       <span className="text-green-300 text-sm font-medium">Privacy Note</span>
                     </div>
                     <p className="text-xs text-green-300/50 leading-relaxed">
@@ -501,7 +497,7 @@ const Merchant: FC = () => {
                   </div>
                 </div>
               ) : (
-                <p className="text-white/30">No analytics data available yet.</p>
+                <p className="text-[#c9c6c5]/40">No analytics data available yet.</p>
               )}
             </Card>
           </motion.div>
