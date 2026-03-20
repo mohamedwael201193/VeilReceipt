@@ -6,6 +6,7 @@ import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
 import { useCartStore } from '@/stores/cartStore';
 import { truncateAddress } from '@/lib/utils';
+import { VeilLogoMini } from '@/components/icons/VeilLogo';
 
 const navLinks = [
   { path: '/', label: 'HOME' },
@@ -27,9 +28,7 @@ export const Header: FC = () => {
       <div className="h-16 bg-[#050505]/80 backdrop-blur-xl border-b border-[#d4bbff]/10 flex items-center justify-between px-6">
         {/* Left — brand (visible on mobile where sidebar is hidden) */}
         <div className="flex items-center gap-3 lg:hidden">
-          <div className="w-7 h-7 bg-[#1c1b1b] border border-[#d4bbff]/20 flex items-center justify-center">
-            <span className="material-symbols-outlined text-[#7dffa2] text-sm">shield_lock</span>
-          </div>
+          <VeilLogoMini size={24} />
           <span className="text-[#d4bbff] font-black italic tracking-widest text-xs font-headline">VEIL_RECEIPT</span>
         </div>
 

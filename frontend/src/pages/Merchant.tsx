@@ -272,9 +272,9 @@ const Merchant: FC = () => {
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
           <SectionHeader
             title="Merchant Dashboard"
@@ -338,7 +338,7 @@ const Merchant: FC = () => {
           animate="visible"
           variants={{
             hidden: {},
-            visible: { transition: { staggerChildren: 0.08 } },
+            visible: { transition: { staggerChildren: 0.1 } },
           }}
         >
           {[
@@ -351,8 +351,8 @@ const Merchant: FC = () => {
             <motion.div
               key={stat.label}
               variants={{
-                hidden: { opacity: 0, y: 20 },
-                visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+                hidden: { opacity: 0, y: 24, scale: 0.96 },
+                visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] } },
               }}
             >
               <StatCard {...stat} />
@@ -406,15 +406,15 @@ const Merchant: FC = () => {
                 animate="visible"
                 variants={{
                   hidden: {},
-                  visible: { transition: { staggerChildren: 0.06 } },
+                  visible: { transition: { staggerChildren: 0.08 } },
                 }}
               >
                 {products.map((p) => (
                   <motion.div
                     key={p.id}
                     variants={{
-                      hidden: { opacity: 0, y: 15 },
-                      visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+                      hidden: { opacity: 0, y: 20, scale: 0.96 },
+                      visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] } },
                     }}
                   >
                     <Card hover>

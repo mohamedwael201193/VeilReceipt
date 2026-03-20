@@ -305,9 +305,9 @@ const Receipts: FC = () => {
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
           <SectionHeader
             title="My Receipts"
@@ -437,9 +437,9 @@ const Receipts: FC = () => {
                   receipts.map((r, idx) => (
                     <motion.div
                       key={`${r.purchase_commitment}_${idx}`}
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.06, duration: 0.4 }}
+                      initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ delay: idx * 0.08, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
                     >
                       <Card hover>
                         <div className="flex items-start justify-between gap-4">
@@ -573,9 +573,9 @@ const Receipts: FC = () => {
                     {merchantReceipts.map((r, idx) => (
                       <motion.div
                         key={`merchant_${r.purchase_commitment}_${idx}`}
-                        initial={{ opacity: 0, y: 15 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.06, duration: 0.4 }}
+                        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ delay: idx * 0.08, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
                       >
                         <Card hover>
                           <div className="flex items-start justify-between gap-4">

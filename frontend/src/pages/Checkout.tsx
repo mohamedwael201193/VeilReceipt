@@ -152,7 +152,12 @@ const Checkout: FC = () => {
   return (
     <div className="relative min-h-screen px-6 sm:px-8 lg:px-12 max-w-6xl mx-auto pb-16">
       {/* Page header */}
-      <div className="flex items-center justify-between mb-6 pt-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex items-center justify-between mb-6 pt-4"
+      >
         <div>
           <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-1">// DIRECTORY: ENCRYPTED_SHOP</p>
           <h1 className="text-2xl font-headline font-bold text-[#e5e2e1] uppercase tracking-tight">Product Catalog</h1>
@@ -161,7 +166,7 @@ const Checkout: FC = () => {
 
         <button
           onClick={() => setShowCart(!showCart)}
-          className="relative p-3 bg-[#1c1b1b] border border-[#d4bbff]/15 hover:border-[#d4bbff]/30 transition-all"
+          className="relative p-3 bg-[#1c1b1b] border border-[#d4bbff]/15 hover:border-[#d4bbff]/30 hover:bg-[#d4bbff]/5 transition-all"
         >
           <span className="material-symbols-outlined text-[#d4bbff]">shopping_cart</span>
           {itemCount > 0 && (
@@ -170,17 +175,22 @@ const Checkout: FC = () => {
             </span>
           )}
         </button>
-      </div>
+      </motion.div>
 
       {/* Privacy modes bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-8 p-3 bg-[#1c1b1b]/40 border border-[#d4bbff]/10 text-[10px] font-mono tracking-wider">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
+        className="flex flex-wrap items-center gap-3 mb-8 p-3 bg-[#1c1b1b]/40 border border-[#d4bbff]/10 text-[10px] font-mono tracking-wider"
+      >
         <span className="text-[#c9c6c5]/30 uppercase">MODES:</span>
         <span className="flex items-center gap-1 text-[#7dffa2]"><span className="material-symbols-outlined text-xs">lock</span> PRIVATE</span>
         <span className="text-[#c9c6c5]/15">|</span>
         <span className="flex items-center gap-1 text-[#c9c6c5]/50"><span className="material-symbols-outlined text-xs">public</span> PUBLIC</span>
         <span className="text-[#c9c6c5]/15">|</span>
         <span className="flex items-center gap-1 text-amber-400/70"><span className="material-symbols-outlined text-xs">schedule</span> ESCROW</span>
-      </div>
+      </motion.div>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Product Grid */}
@@ -191,17 +201,18 @@ const Checkout: FC = () => {
             <EmptyState icon={<PackageIcon size={48} />} title="NO_PRODUCTS" description="Check back later." />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {products.map((product) => {
+              {products.map((product, i) => {
                 const isStable = product.price_type === 'usdcx' || product.price_type === 'usad';
                 const rc = reviewCounts[product.sku];
                 return (
                   <motion.div
                     key={product.id}
-                    initial={{ opacity: 0, y: 16 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    whileHover={{ y: -4 }}
+                    transition={{ delay: i * 0.08, duration: 0.5 }}
+                    whileHover={{ y: -6, transition: { duration: 0.25 } }}
                     onClick={() => addItem(product)}
-                    className="group cursor-pointer bg-[#1c1b1b]/40 border border-[#d4bbff]/10 hover:border-[#d4bbff]/25 transition-all p-5"
+                    className="group cursor-pointer bg-[#1c1b1b]/40 border border-[#d4bbff]/10 hover:border-[#d4bbff]/25 hover:shadow-[0_8px_30px_rgba(212,187,255,0.06)] transition-all duration-300 p-5"
                   >
                     {/* Category + token */}
                     <div className="flex items-center justify-between mb-3">
@@ -275,7 +286,7 @@ const Checkout: FC = () => {
               exit={{ opacity: 0, x: 40 }}
               className="w-full lg:w-[380px] flex-shrink-0"
             >
-              <div className="sticky top-24 bg-[#0a0a0a] border border-[#d4bbff]/15 p-6">
+              <div className="sticky top-24 bg-[#0a0a0a] border border-[#d4bbff]/15 p-6 shadow-[0_0_40px_rgba(212,187,255,0.04)]">
                 <h2 className="text-xs font-mono tracking-widest text-[#d4bbff] mb-5 flex items-center gap-2">
                   <span className="material-symbols-outlined text-sm">shopping_cart</span>
                   // CART ({itemCount})

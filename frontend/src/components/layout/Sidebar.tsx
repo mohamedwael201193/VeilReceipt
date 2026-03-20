@@ -3,6 +3,7 @@
 import { FC } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
+import { VeilLogoMini } from '@/components/icons/VeilLogo';
 
 interface NavItem {
   path: string;
@@ -29,9 +30,7 @@ export const Sidebar: FC = () => {
       {/* Protocol branding */}
       <div className="px-6 mb-10">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-8 h-8 bg-surface-container-highest border border-primary/20 flex items-center justify-center">
-            <span className="material-symbols-outlined text-xs text-secondary">shield_lock</span>
-          </div>
+          <VeilLogoMini size={28} />
           <div>
             <h2 className="text-[#d4bbff] font-black italic tracking-widest text-sm font-headline">VEIL_PROTOCOL</h2>
             <p className="text-[10px] font-mono text-secondary">STATUS: // LIVE_ENCRYPTION</p>

@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/Components';
 import PixelBlast from '@/components/effects/PixelBlast';
 import { getCurrentBlockHeight } from '@/lib/aleoNetwork';
 import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
+import { VeilLogo, VeilLogoMini } from '@/components/icons/VeilLogo';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
+import NumberFlow from '@number-flow/react';
+
+gsap.registerPlugin(ScrollTrigger);
 
 /* --- HyperText: text scramble effect inspired by componentry.fun --- */
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*';
@@ -121,6 +128,80 @@ const TextAnimate: FC<{ children: string; className?: string; by?: 'word' | 'cha
   );
 };
 
+/* --- AnimatedCounter: number that counts up when scrolled into view --- */
+const AnimatedCounter: FC<{ value: number | string; suffix?: string; className?: string }> = ({ value, suffix = '', className = '' }) => {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
+  const numVal = typeof value === 'string' ? parseInt(value, 10) : value;
+  const isNum = !isNaN(numVal);
+
+  useEffect(() => {
+    if (!isInView || !isNum) return;
+    setDisplay(numVal);
+  }, [isInView, numVal, isNum]);
+
+  if (!isNum) return <span ref={ref} className={className}>{value}{suffix}</span>;
+
+  return (
+    <span ref={ref} className={className}>
+      <NumberFlow value={display} trend={1} />
+      {suffix}
+    </span>
+  );
+};
+
+/* --- ScrollMarquee: infinite scrolling text band --- */
+const ScrollMarquee: FC<{ children: string; speed?: number; className?: string }> = ({ children, speed = 30, className = '' }) => {
+  const content = `${children} — `.repeat(8);
+  return (
+    <div className={`overflow-hidden whitespace-nowrap ${className}`}>
+      <div
+        className="inline-block animate-marquee"
+        style={{ animation: `marquee ${speed}s linear infinite` }}
+      >
+        <span className="inline-block mr-0">{content}</span>
+        <span className="inline-block mr-0">{content}</span>
+      </div>
+      <style>{`@keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
+    </div>
+  );
+};
+
+/* --- MagneticButton: button that slightly follows cursor on hover --- */
+const MagneticButton: FC<{ children: React.ReactNode; className?: string; strength?: number }> = ({ children, className = '', strength = 0.3 }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left - rect.width / 2) * strength;
+    const y = (e.clientY - rect.top - rect.height / 2) * strength;
+    gsap.to(ref.current, { x, y, duration: 0.3, ease: 'power2.out' });
+  }, [strength]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (!ref.current) return;
+    gsap.to(ref.current, { x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.5)' });
+  }, []);
+
+  return (
+    <div ref={ref} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} className={`inline-block ${className}`}>
+      {children}
+    </div>
+  );
+};
+
+/* --- GradientText: animated gradient text effect --- */
+const GradientText: FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <span
+    className={`bg-clip-text text-transparent bg-[length:200%_200%] animate-gradient-shift ${className}`}
+    style={{ backgroundImage: 'linear-gradient(135deg, #d4bbff 0%, #7dffa2 25%, #d4bbff 50%, #7dffa2 75%, #d4bbff 100%)' }}
+  >
+    {children}
+  </span>
+);
+
 /* --- Data --- */
 
 const features = [
@@ -219,6 +300,7 @@ const Home: FC = () => {
   const { connected, address } = useVeilWallet();
   const [blockHeight, setBlockHeight] = useState(0);
   const heroRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const heroOpacity = useTransform(scrollYProgress, [0, 1], [1, 0]);
   const heroY = useTransform(scrollYProgress, [0, 1], [0, -80]);
@@ -229,8 +311,52 @@ const Home: FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  /* GSAP ScrollTrigger animations for sections */
+  useGSAP(() => {
+    // Staggered feature cards entrance
+    gsap.utils.toArray<HTMLElement>('.gsap-feature-card').forEach((card, i) => {
+      gsap.fromTo(card,
+        { y: 60, opacity: 0, scale: 0.92 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.7, ease: 'power3.out', delay: i * 0.08,
+          scrollTrigger: { trigger: card, start: 'top 88%', toggleActions: 'play none none none' }
+        }
+      );
+    });
+
+    // Steps slide-in
+    gsap.utils.toArray<HTMLElement>('.gsap-step-card').forEach((card, i) => {
+      gsap.fromTo(card,
+        { x: i % 2 === 0 ? -50 : 50, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.8, ease: 'power2.out',
+          scrollTrigger: { trigger: card, start: 'top 85%', toggleActions: 'play none none none' }
+        }
+      );
+    });
+
+    // Tech/trust cards cascade
+    gsap.utils.toArray<HTMLElement>('.gsap-trust-card').forEach((card, i) => {
+      gsap.fromTo(card,
+        { y: 30, opacity: 0, rotateX: 8 },
+        { y: 0, opacity: 1, rotateX: 0, duration: 0.6, ease: 'power2.out', delay: i * 0.06,
+          scrollTrigger: { trigger: card, start: 'top 90%', toggleActions: 'play none none none' }
+        }
+      );
+    });
+
+    // CTA section zoom-in
+    const ctaEl = document.querySelector('.gsap-cta-section');
+    if (ctaEl) {
+      gsap.fromTo(ctaEl,
+        { scale: 0.9, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 1, ease: 'power3.out',
+          scrollTrigger: { trigger: ctaEl, start: 'top 80%', toggleActions: 'play none none none' }
+        }
+      );
+    }
+  }, { scope: containerRef });
+
   return (
-    <div className="relative min-h-screen bg-[#050505] text-[#e5e2e1] overflow-x-hidden">
+    <div ref={containerRef} className="relative min-h-screen bg-[#050505] text-[#e5e2e1] overflow-x-hidden">
       {/* PixelBlast Background — behind everything, non-interactive */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
         <PixelBlast
@@ -257,9 +383,7 @@ const Home: FC = () => {
       {/* --- LANDING NAV --- */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 sm:px-10 py-4 bg-[#050505]/90 backdrop-blur-xl border-b border-[#d4bbff]/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center">
-            <span className="material-symbols-outlined text-[#7dffa2] text-sm">shield_lock</span>
-          </div>
+          <VeilLogoMini size={28} />
           <span className="font-headline text-lg font-bold tracking-tighter text-[#d4bbff]">VEIL_RECEIPT</span>
         </div>
         <nav className="hidden md:flex items-center gap-8">
@@ -299,7 +423,9 @@ const Home: FC = () => {
                 <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-black uppercase leading-[0.95] tracking-tight">
                   <HyperText text="Buy Anything." className="text-[#e5e2e1] block" duration={600} />
                   <HyperText text="Prove Everything." className="text-[#e5e2e1] block" duration={800} />
-                  <HyperText text="Reveal Nothing." className="text-[#7dffa2] block" duration={1000} />
+                  <GradientText className="block font-headline text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-black uppercase leading-[0.95] tracking-tight">
+                    Reveal Nothing.
+                  </GradientText>
                 </h1>
               </motion.div>
 
@@ -308,24 +434,30 @@ const Home: FC = () => {
               </motion.p>
 
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.6 }} className="mt-10 flex flex-wrap gap-3">
-                <Link to="/checkout">
-                  <Button variant="glow" size="lg">
-                    <span className="material-symbols-outlined text-base">shopping_cart</span>
-                    Enter Shop
-                  </Button>
-                </Link>
-                <Link to="/merchant">
-                  <Button variant="secondary" size="lg">
-                    <span className="material-symbols-outlined text-base">storefront</span>
-                    Merchant Portal
-                  </Button>
-                </Link>
-                <Link to="/verify">
-                  <Button variant="ghost" size="lg">
-                    <span className="material-symbols-outlined text-base">verified_user</span>
-                    Verify Proof
-                  </Button>
-                </Link>
+                <MagneticButton strength={0.25}>
+                  <Link to="/checkout">
+                    <Button variant="glow" size="lg">
+                      <span className="material-symbols-outlined text-base">shopping_cart</span>
+                      Enter Shop
+                    </Button>
+                  </Link>
+                </MagneticButton>
+                <MagneticButton strength={0.25}>
+                  <Link to="/merchant">
+                    <Button variant="secondary" size="lg">
+                      <span className="material-symbols-outlined text-base">storefront</span>
+                      Merchant Portal
+                    </Button>
+                  </Link>
+                </MagneticButton>
+                <MagneticButton strength={0.25}>
+                  <Link to="/verify">
+                    <Button variant="ghost" size="lg">
+                      <span className="material-symbols-outlined text-base">verified_user</span>
+                      Verify Proof
+                    </Button>
+                  </Link>
+                </MagneticButton>
               </motion.div>
 
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1, duration: 1 }} className="mt-10 flex flex-wrap gap-6">
@@ -344,7 +476,7 @@ const Home: FC = () => {
                 <BorderBeam size={150} duration={10} />
                 <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// WHY VEILRECEIPT</p>
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="material-symbols-outlined text-[#d4bbff] text-2xl">shield_lock</span>
+                  <VeilLogo size={40} animated={false} />
                   <div>
                     <p className="font-headline text-lg font-bold text-[#e5e2e1]">Your Privacy, Protected</p>
                     <p className="text-[10px] font-mono text-[#7dffa2]/60">POWERED BY ALEO BLOCKCHAIN</p>
@@ -353,7 +485,7 @@ const Home: FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   {stats.map((s) => (
                     <div key={s.label} className="bg-[#080808]/90 border border-[#d4bbff]/10 p-3">
-                      <p className="text-2xl font-headline font-bold text-[#d4bbff] tabular-nums">{s.value}</p>
+                      <p className="text-2xl font-headline font-bold text-[#d4bbff] tabular-nums"><AnimatedCounter value={s.value} suffix={s.value === '100%' ? '%' : ''} /></p>
                       <p className="text-[9px] font-mono tracking-widest text-[#c9c6c5]/40">{s.label}</p>
                     </div>
                   ))}
@@ -425,6 +557,13 @@ const Home: FC = () => {
         </div>
       </section>
 
+      {/* --- SCROLL MARQUEE --- */}
+      <section className="relative z-10 py-6 border-t border-[#d4bbff]/10 bg-[#080808]/90 overflow-hidden">
+        <ScrollMarquee speed={60} className="text-xl sm:text-2xl font-headline font-bold uppercase tracking-widest text-[#d4bbff]/10">
+          PRIVATE PAYMENTS — ENCRYPTED RECEIPTS — BUYER PROTECTION — LOYALTY REWARDS — ZERO DATA EXPOSED — ANONYMOUS REVIEWS — PROOF OF PURCHASE — SMART CART
+        </ScrollMarquee>
+      </section>
+
       {/* --- LIVE STATS --- */}
       <section className="relative z-10 py-12 border-t border-[#d4bbff]/10 bg-[#080808]/90 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 sm:px-10">
@@ -437,7 +576,7 @@ const Home: FC = () => {
             {stats.map((stat, i) => (
               <motion.div key={stat.label} initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + 1) * 0.06 }} className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-4">
                 <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/60 mb-1">{stat.label}</p>
-                <p className="text-2xl font-headline font-bold text-[#e5e2e1] tabular-nums">{stat.value}</p>
+                <p className="text-2xl font-headline font-bold text-[#e5e2e1] tabular-nums"><AnimatedCounter value={stat.value} suffix={stat.value === '100%' ? '%' : ''} /></p>
                 <p className="text-[10px] font-mono text-[#d4bbff]/50 mt-0.5">{stat.sub}</p>
               </motion.div>
             ))}
@@ -459,9 +598,9 @@ const Home: FC = () => {
             </p>
           </FadeInSection>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {features.map((feat, i) => (
-              <motion.div key={feat.label} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06 }}>
-                <SpotlightCard className="h-full bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 hover:border-[#d4bbff]/30 transition-all duration-500 group backdrop-blur-sm">
+            {features.map((feat) => (
+              <div key={feat.label} className="gsap-feature-card opacity-0">
+                <SpotlightCard className="h-full bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 hover:border-[#d4bbff]/30 hover:shadow-[0_0_30px_rgba(212,187,255,0.06)] transition-all duration-500 group backdrop-blur-sm hover:-translate-y-1">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/25 transition-all duration-500">
                       <span className="material-symbols-outlined text-[#d4bbff] text-lg group-hover:text-[#7dffa2] transition-colors duration-500">{feat.icon}</span>
@@ -474,7 +613,7 @@ const Home: FC = () => {
                   </div>
                   <div className="mt-4 h-px w-8 bg-[#d4bbff]/10 group-hover:w-full group-hover:bg-gradient-to-r group-hover:from-[#d4bbff]/30 group-hover:to-[#7dffa2]/30 transition-all duration-700" />
                 </SpotlightCard>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -495,8 +634,8 @@ const Home: FC = () => {
           </FadeInSection>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {steps.map((step, i) => (
-              <motion.div key={step.num} initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1, duration: 0.6 }}>
-                <SpotlightCard className="relative flex gap-6 items-start p-8 bg-[#0e0d0d]/95 border border-[#d4bbff]/12 hover:border-[#7dffa2]/25 transition-all group h-full backdrop-blur-sm">
+              <div key={step.num} className="gsap-step-card opacity-0">
+                <SpotlightCard className="relative flex gap-6 items-start p-8 bg-[#0e0d0d]/95 border border-[#d4bbff]/12 hover:border-[#7dffa2]/25 hover:shadow-[0_0_25px_rgba(125,255,162,0.04)] transition-all group h-full backdrop-blur-sm">
                   <BorderBeam size={120} duration={14 + i * 2} colorFrom={i % 2 === 0 ? '#d4bbff' : '#7dffa2'} colorTo={i % 2 === 0 ? '#7dffa2' : '#d4bbff'} />
                   <span className="absolute top-4 right-4 font-headline text-6xl font-black text-[#d4bbff]/[0.04] tabular-nums select-none">{step.num}</span>
                   <div className="w-12 h-12 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/20 transition-colors">
@@ -507,7 +646,7 @@ const Home: FC = () => {
                     <p className="text-sm text-[#c9c6c5]/70 leading-relaxed font-body">{step.desc}</p>
                   </div>
                 </SpotlightCard>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -614,14 +753,14 @@ const Home: FC = () => {
             </h2>
           </FadeInSection>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {techStack.map((tech, i) => (
-              <motion.div key={tech.label} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06 }}>
-                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-5 text-center hover:border-[#d4bbff]/25 transition-all h-full backdrop-blur-sm">
+            {techStack.map((tech) => (
+              <div key={tech.label} className="gsap-trust-card opacity-0">
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-5 text-center hover:border-[#d4bbff]/25 hover:shadow-[0_0_20px_rgba(212,187,255,0.05)] transition-all h-full backdrop-blur-sm hover:-translate-y-1">
                   <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/60 mb-2">{tech.label}</p>
                   <p className="text-sm font-headline font-bold text-[#e5e2e1]">{tech.value}</p>
                   <p className="text-[10px] font-mono text-[#d4bbff]/50 mt-1">{tech.sub}</p>
                 </SpotlightCard>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -693,37 +832,43 @@ const Home: FC = () => {
       </section>
 
       {/* --- CTA --- */}
-      <section className="relative z-10 py-32 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm">
+      <section className="relative z-10 py-32 border-t border-[#d4bbff]/10 bg-[#050505]/80 backdrop-blur-sm gsap-cta-section">
         <div className="max-w-7xl mx-auto px-6 sm:px-10">
           <FadeInSection>
             <div className="text-center">
               <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-6">// START NOW</p>
               <h2 className="font-headline text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tight">
                 <TextAnimate className="text-[#e5e2e1]" by="word">Ready to Shop</TextAnimate><br />
-                <span className="text-[#d4bbff] italic">Without a Trace?</span>
+                <GradientText className="font-headline text-4xl sm:text-5xl lg:text-6xl font-black uppercase tracking-tight italic">Without a Trace?</GradientText>
               </h2>
               <p className="mt-6 text-[#c9c6c5]/70 max-w-xl mx-auto text-sm font-body leading-relaxed">
                 Connect your wallet and start shopping with complete privacy. Every payment is encrypted, every receipt is yours alone, and your identity stays hidden.
               </p>
               <div className="mt-12 flex flex-wrap justify-center gap-4">
-                <Link to="/checkout">
-                  <Button variant="glow" size="lg">
-                    <span className="material-symbols-outlined text-base">shopping_cart</span>
-                    Start Shopping
-                  </Button>
-                </Link>
-                <Link to="/receipts">
-                  <Button variant="secondary" size="lg">
-                    <span className="material-symbols-outlined text-base">receipt_long</span>
-                    My Receipts
-                  </Button>
-                </Link>
-                <Link to="/merchant">
+                <MagneticButton strength={0.2}>
+                  <Link to="/checkout">
+                    <Button variant="glow" size="lg">
+                      <span className="material-symbols-outlined text-base">shopping_cart</span>
+                      Start Shopping
+                    </Button>
+                  </Link>
+                </MagneticButton>
+                <MagneticButton strength={0.2}>
+                  <Link to="/receipts">
+                    <Button variant="secondary" size="lg">
+                      <span className="material-symbols-outlined text-base">receipt_long</span>
+                      My Receipts
+                    </Button>
+                  </Link>
+                </MagneticButton>
+                <MagneticButton strength={0.2}>
+                  <Link to="/merchant">
                   <Button variant="ghost" size="lg">
                     <span className="material-symbols-outlined text-base">storefront</span>
                     I'm a Merchant
                   </Button>
                 </Link>
+                </MagneticButton>
               </div>
             </div>
           </FadeInSection>
@@ -734,9 +879,7 @@ const Home: FC = () => {
       <footer className="relative z-10 border-t border-[#d4bbff]/10 py-10 bg-[#050505]/90 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-[#d4bbff]/10 border border-[#d4bbff]/15 flex items-center justify-center">
-              <span className="material-symbols-outlined text-[#7dffa2] text-xs">shield_lock</span>
-            </div>
+            <VeilLogoMini size={20} />
             <span className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/30">VEILRECEIPT // PRIVATE COMMERCE</span>
           </div>
           <div className="flex items-center gap-6">

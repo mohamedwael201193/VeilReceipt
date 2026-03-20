@@ -59,6 +59,7 @@ export default {
         'scale-in': 'scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
         'pulse-glow': 'pulseGlow 4s ease-in-out infinite',
         'scan-line': 'scanLine 8s linear infinite',
+        'gradient-shift': 'gradientShift 4s ease infinite',
       },
       keyframes: {
         float: {
@@ -80,6 +81,10 @@ export default {
         scanLine: {
           '0%': { transform: 'translateY(-100%)' },
           '100%': { transform: 'translateY(100vh)' },
+        },
+        gradientShift: {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
         },
       },
     },
