@@ -55,12 +55,8 @@ const Checkout: FC = () => {
         setProducts(res?.products ?? []);
       } catch (e: any) {
         console.error('Failed to fetch products:', e);
-        setProducts([
-          { id: '1', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Privacy Shield Pro', description: 'Enterprise ZK privacy suite', price: 5000000, price_type: 'credits', sku: 'PSP-001', category: 'Software', in_stock: true, created_at: new Date().toISOString() },
-          { id: '2', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'ZK Audit Package', description: 'Smart contract security audit', price: 15000000, price_type: 'credits', sku: 'ZKA-002', category: 'Service', in_stock: true, created_at: new Date().toISOString() },
-          { id: '3', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Aleo Dev Toolkit', description: 'Developer tools and SDK', price: 2000000, price_type: 'credits', sku: 'ADT-003', category: 'Tools', in_stock: true, created_at: new Date().toISOString() },
-          { id: '4', merchant_id: 'm1', merchant_address: 'aleo1merchant_demo_address_placeholder0000000000000000000000qcyxn8', name: 'Node License', description: 'Validator node annual license', price: 50000000, price_type: 'usdcx', sku: 'NL-004', category: 'License', in_stock: true, created_at: new Date().toISOString() },
-        ]);
+        toast.error('Could not load products — check that a merchant has registered and added products.');
+        setProducts([]);
       } finally {
         setLoadingProducts(false);
       }

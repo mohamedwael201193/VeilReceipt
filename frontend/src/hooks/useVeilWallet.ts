@@ -118,7 +118,9 @@ export function useVeilWallet() {
   const userStore = useUserStore();
   const pendingTxStore = usePendingTxStore();
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<'buyer' | 'merchant'>('buyer');
+  const [role, setRole] = useState<'buyer' | 'merchant'>(() =>
+    useUserStore.getState().isMerchant ? 'merchant' : 'buyer'
+  );
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync address to user store

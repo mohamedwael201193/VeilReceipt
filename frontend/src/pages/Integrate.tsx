@@ -144,13 +144,22 @@ const Integrate: FC = () => {
     toast.success('Copied to clipboard');
   };
 
-  if (!connected || role !== 'merchant') {
+  const isMerchant = connected && role === 'merchant';
+
+  // Determine which tabs to show — docs always visible, others need merchant auth
+  const allTabs = ['overview', 'keys', 'webhooks', 'docs'] as const;
+  const availableTabs = isMerchant ? allTabs : (['docs'] as const);
+
+  // Force docs tab if not merchant
+  const effectiveTab = isMerchant ? activeTab : 'docs';
+
+  if (!connected) {
     return (
       <div className="pt-4 pb-16 px-4 max-w-4xl mx-auto">
         <EmptyState
           icon={<SettingsIcon size={32} />}
-          title="Merchant Integration"
-          description="Connect your wallet and authenticate as a merchant to manage your integration settings."
+          title="Integration Dashboard"
+          description="Connect your wallet to view integration documentation and API reference."
         />
       </div>
     );
@@ -164,14 +173,26 @@ const Integrate: FC = () => {
         <p className="text-[#c9c6c5]/60 text-sm">Connect VeilReceipt to your e-commerce platform</p>
       </div>
 
+      {/* Merchant Auth Notice */}
+      {!isMerchant && (
+        <div className="mb-6 bg-[#1c1b1b]/40 border border-amber-500/20 rounded-xl p-4 flex items-center gap-3">
+          <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" /></svg>
+          <p className="text-[#c9c6c5]/70 text-sm">
+            <span className="text-amber-300 font-medium">Authenticate as a merchant</span> on the{' '}
+            <a href="/merchant" className="text-sky-400 underline underline-offset-2 hover:text-sky-300">Merchant page</a>{' '}
+            to unlock API keys, webhooks, and full dashboard access.
+          </p>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 mb-8 p-1 bg-[#1c1b1b]/40 rounded-xl border border-[#d4bbff]/10 w-fit">
-        {(['overview', 'keys', 'webhooks', 'docs'] as const).map(tab => (
+        {availableTabs.map(tab => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => setActiveTab(tab as any)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === tab
+              effectiveTab === tab
                 ? 'bg-sky-500/10 text-sky-300 border border-sky-500/20'
                 : 'text-[#c9c6c5]/60 hover:text-[#c9c6c5]/80'
             }`}
@@ -186,7 +207,7 @@ const Integrate: FC = () => {
       ) : (
         <>
           {/* Overview Tab */}
-          {activeTab === 'overview' && (
+          {effectiveTab === 'overview' && (
             <div className="grid gap-6 md:grid-cols-3">
               <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl p-6">
                 <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mb-3">
@@ -227,7 +248,7 @@ const Integrate: FC = () => {
           )}
 
           {/* API Keys Tab */}
-          {activeTab === 'keys' && (
+          {effectiveTab === 'keys' && (
             <div>
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -276,7 +297,7 @@ const Integrate: FC = () => {
           )}
 
           {/* Webhooks Tab */}
-          {activeTab === 'webhooks' && (
+          {effectiveTab === 'webhooks' && (
             <div>
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -326,7 +347,7 @@ const Integrate: FC = () => {
           )}
 
           {/* Docs Tab */}
-          {activeTab === 'docs' && (
+          {effectiveTab === 'docs' && (
             <div className="space-y-8">
               {/* Quick Start */}
               <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl p-6">
