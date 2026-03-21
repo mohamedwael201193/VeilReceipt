@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
 import { useUserStore } from '@/stores/userStore';
 import { api } from '@/lib/api';
-import { Button, Card, Badge, Input, EmptyState, StatCard, Modal, PillNav, SectionHeader, Select } from '@/components/ui/Components';
+import { Button, Card, Badge, Input, EmptyState, StatCard, Modal, PillNav, SectionHeader, Select, CurrencySelect } from '@/components/ui/Components';
 import { LoadingSpinner, TokenAmount } from '@/components/icons/Icons';
 import {
   StoreIcon,
@@ -15,7 +15,6 @@ import {
   ChartIcon,
   ReceiptIcon,
   DollarIcon,
-  TrendingIcon,
   TrashIcon,
   RefreshIcon,
   ShieldIcon,
@@ -268,9 +267,12 @@ const Merchant: FC = () => {
 
       const { txId } = await createPaymentLink(amount, tokenType, linkTypeNum);
 
+      // Generate a unique link_hash for the backend (not the on-chain BHP256 hash)
+      const linkHash = `pl_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+
       // Store in backend
       await api.createPaymentLink({
-        link_hash: txId, // Use txId as initial hash reference (updated once on-chain)
+        link_hash: linkHash,
         amount,
         currency: linkForm.currency,
         link_type: linkForm.link_type,
@@ -444,9 +446,9 @@ const Merchant: FC = () => {
           {[
             { label: 'Products', value: products.length, icon: <PackageIcon size={22} /> },
             { label: 'Total Sales', value: stats?.totalReceipts ?? 0, icon: <ReceiptIcon size={22} /> },
-            { label: 'Credits Revenue', value: <TokenAmount amount={stats?.creditsRevenue != null ? formatCredits(stats.creditsRevenue) : (stats?.totalRevenue ? formatCredits(stats.totalRevenue) : '0.00 ALEO')} type="credits" size="lg" />, icon: <DollarIcon size={22} /> },
-            { label: 'USDCx Revenue', value: <TokenAmount amount={stats?.usdcxRevenue != null ? formatUsdcx(stats.usdcxRevenue) : '$0.00'} type="usdcx" size="lg" />, icon: <TrendingIcon size={22} /> },
-            { label: 'USAD Revenue', value: <TokenAmount amount={stats?.usadRevenue != null ? formatUsad(stats.usadRevenue) : '$0.00'} type="usad" size="lg" />, icon: <TrendingIcon size={22} /> },
+            { label: 'Credits Revenue', value: <TokenAmount amount={stats?.creditsRevenue != null ? formatCredits(stats.creditsRevenue) : (stats?.totalRevenue ? formatCredits(stats.totalRevenue) : '0.00 ALEO')} type="credits" size="lg" />, icon: <img src="/aleoicon.png" alt="Credits" className="w-6 h-6 object-contain" /> },
+            { label: 'USDCx Revenue', value: <TokenAmount amount={stats?.usdcxRevenue != null ? formatUsdcx(stats.usdcxRevenue) : '$0.00'} type="usdcx" size="lg" />, icon: <img src="/usdcx.svg" alt="USDCx" className="w-6 h-6 object-contain" /> },
+            { label: 'USAD Revenue', value: <TokenAmount amount={stats?.usadRevenue != null ? formatUsad(stats.usadRevenue) : '$0.00'} type="usad" size="lg" />, icon: <img src="/USAD.svg" alt="USAD" className="w-6 h-6 object-contain" /> },
           ].map((stat) => (
             <motion.div
               key={stat.label}
@@ -592,19 +594,26 @@ const Merchant: FC = () => {
                   visible: { transition: { staggerChildren: 0.08 } },
                 }}
               >
-                {paymentLinks.map((link) => (
+                {paymentLinks.map((link) => {
+                  const currencyLogo = link.currency === 'usdcx' ? '/usdcx.svg' : link.currency === 'usad' ? '/USAD.svg' : '/aleoicon.png';
+                  return (
                   <motion.div
                     key={link.id}
                     variants={{
                       hidden: { opacity: 0, y: 20, scale: 0.96 },
-                      visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5 } },
+                      visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] } },
                     }}
                   >
                     <Card hover>
                       <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-[#e5e2e1] font-semibold truncate">{link.label}</h3>
-                          <p className="text-white/35 text-sm mt-1 line-clamp-2">{link.description || 'No description'}</p>
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-[#d4bbff]/8 border border-[#d4bbff]/10 flex items-center justify-center flex-shrink-0">
+                            <img src={currencyLogo} alt={link.currency} className="w-5 h-5 object-contain" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-[#e5e2e1] font-semibold truncate">{link.label}</h3>
+                            <p className="text-white/30 text-xs mt-0.5 line-clamp-1">{link.description || 'No description'}</p>
+                          </div>
                         </div>
                         <Badge variant={link.is_active ? 'success' : 'error'} dot>
                           {link.is_active ? 'Active' : 'Closed'}
@@ -619,13 +628,13 @@ const Merchant: FC = () => {
                       </div>
 
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-lg">
+                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-xl">
                           <p className="text-[#c9c6c5]/40 text-[10px] uppercase tracking-wider">Amount</p>
                           <p className="text-[#e5e2e1] font-mono text-sm mt-0.5">
                             {link.link_type === 'open' ? 'Any' : (link.amount / 1_000_000).toFixed(2)}
                           </p>
                         </div>
-                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-lg">
+                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-xl">
                           <p className="text-[#c9c6c5]/40 text-[10px] uppercase tracking-wider">Payments</p>
                           <p className="text-[#e5e2e1] font-mono text-sm mt-0.5">{link.total_contributions}</p>
                         </div>
@@ -664,7 +673,8 @@ const Merchant: FC = () => {
                       </div>
                     </Card>
                   </motion.div>
-                ))}
+                  );
+                })}
               </motion.div>
             )}
           </div>
@@ -741,15 +751,10 @@ const Merchant: FC = () => {
             onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
             placeholder="Enterprise ZK privacy suite"
           />
-          <Select
+          <CurrencySelect
             label="Price Currency"
             value={productForm.price_type}
-            onChange={(e) => setProductForm({ ...productForm, price_type: e.target.value as 'credits' | 'usdcx' | 'usad' })}
-            options={[
-              { value: 'credits', label: 'Aleo Credits' },
-              { value: 'usdcx', label: 'USDCx Stablecoin' },
-              { value: 'usad', label: 'USAD Stablecoin' },
-            ]}
+            onChange={(val) => setProductForm({ ...productForm, price_type: val as 'credits' | 'usdcx' | 'usad' })}
           />
           <Input
             label={productForm.price_type === 'usdcx' ? 'Price (in USDCx, e.g. 5.00)' : productForm.price_type === 'usad' ? 'Price (in USAD, e.g. 5.00)' : 'Price (in Aleo Credits, e.g. 5.00)'}
@@ -809,15 +814,10 @@ const Merchant: FC = () => {
               { value: 'open', label: 'Open — Any amount, any token' },
             ]}
           />
-          <Select
+          <CurrencySelect
             label="Currency"
             value={linkForm.currency}
-            onChange={(e) => setLinkForm({ ...linkForm, currency: e.target.value as 'credits' | 'usdcx' | 'usad' })}
-            options={[
-              { value: 'credits', label: 'Aleo Credits' },
-              { value: 'usdcx', label: 'USDCx Stablecoin' },
-              { value: 'usad', label: 'USAD Stablecoin' },
-            ]}
+            onChange={(val) => setLinkForm({ ...linkForm, currency: val as 'credits' | 'usdcx' | 'usad' })}
           />
           {linkForm.link_type !== 'open' && (
             <Input

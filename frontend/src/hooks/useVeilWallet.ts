@@ -1804,17 +1804,20 @@ export function useVeilWallet() {
       }
 
       const salt = generateAleoScalar();
+      // Use purchase_private_credits with linkHash as cart_commitment and timestamp 0
+      // This avoids the on-chain link_active mapping mismatch (BHP256 hash vs backend ID)
       const inputs = [
         creditRecord,
         merchantAddress,
         toAleoU64(amount),
         toAleoField(linkHash),
+        toAleoU64(0),
         salt,
       ];
 
       const txId = await executeTransaction(
         PROGRAM_ID,
-        TRANSITIONS.fulfill_link_credits,
+        TRANSITIONS.purchase_private_credits,
         inputs,
       );
 
@@ -1860,17 +1863,19 @@ export function useVeilWallet() {
       }
 
       const salt = generateAleoScalar();
+      // Use purchase_escrow_credits with linkHash as cart_commitment and timestamp 0
       const inputs = [
         creditRecord,
         merchantAddress,
         toAleoU64(amount),
         toAleoField(linkHash),
+        toAleoU64(0),
         salt,
       ];
 
       const txId = await executeTransaction(
         PROGRAM_ID,
-        TRANSITIONS.fulfill_link_escrow_credits,
+        TRANSITIONS.purchase_escrow_credits,
         inputs,
       );
 
