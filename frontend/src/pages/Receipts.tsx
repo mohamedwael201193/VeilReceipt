@@ -332,7 +332,7 @@ const Receipts: FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="mb-6"
           >
-            <Card className={displayedTxs.some(t => t.status === 'pending') ? 'border-amber-500/20' : 'border-[#d4bbff]/15'}>
+            <Card className={displayedTxs.some(t => t.status === 'pending') ? 'border-amber-500/20' : 'border-[#d4bbff]/15'} beam={displayedTxs.some(t => t.status === 'pending')} beamColor={{ from: '#f59e0b', to: '#7dffa2' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   {displayedTxs.some(t => t.status === 'pending')
@@ -543,7 +543,7 @@ const Receipts: FC = () => {
                 ) : (
                   <>
                     {/* Sales summary */}
-                    <Card glow className="border-[#7dffa2]/15">
+                    <Card glow className="border-[#7dffa2]/15" beam beamColor={{ from: '#7dffa2', to: '#d4bbff' }}>
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-[#7dffa2]/10 rounded-xl">
                           <ShieldIcon size={20} className="text-[#7dffa2]" />

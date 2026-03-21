@@ -472,7 +472,7 @@ const Home: FC = () => {
 
             {/* Right: Key benefits showcase */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4, duration: 1 }} className="hidden lg:flex flex-col gap-4">
-              <div className="relative p-6 bg-[#0e0d0d]/95 border border-[#d4bbff]/15 overflow-hidden backdrop-blur-sm">
+                <div className="relative p-6 rounded-2xl bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] overflow-hidden backdrop-blur-sm">
                 <BorderBeam size={150} duration={10} />
                 <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-3">// WHY VEILRECEIPT</p>
                 <div className="flex items-center gap-3 mb-4">
@@ -484,7 +484,7 @@ const Home: FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {stats.map((s) => (
-                    <div key={s.label} className="bg-[#080808]/90 border border-[#d4bbff]/10 p-3">
+                    <div key={s.label} className="bg-[#080808]/90 border border-[#d4bbff]/[0.08] rounded-xl p-3 hover:border-[#d4bbff]/15 transition-all">
                       <p className="text-2xl font-headline font-bold text-[#d4bbff] tabular-nums"><AnimatedCounter value={s.value} suffix={s.value === '100%' ? '%' : ''} /></p>
                       <p className="text-[9px] font-mono tracking-widest text-[#c9c6c5]/40">{s.label}</p>
                     </div>
@@ -492,7 +492,7 @@ const Home: FC = () => {
                 </div>
               </div>
               {/* Trust indicators */}
-              <div className="relative p-5 bg-[#080808]/95 border border-[#7dffa2]/15 overflow-hidden backdrop-blur-sm">
+              <div className="relative p-5 rounded-2xl bg-[#080808]/95 border border-[#7dffa2]/[0.08] overflow-hidden backdrop-blur-sm">
                 <BorderBeam size={100} duration={15} colorFrom="#7dffa2" colorTo="#d4bbff" />
                 <div className="space-y-3">
                   {[
@@ -544,7 +544,7 @@ const Home: FC = () => {
                   { problem: 'Identity-linked reviews', solution: 'Anonymous verified reviews', icon: 'reviews' },
                 ].map((item, i) => (
                   <motion.div key={item.problem} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}>
-                    <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-5 hover:border-[#d4bbff]/30 transition-all h-full backdrop-blur-sm" spotlightColor="rgba(125, 255, 162, 0.06)">
+                    <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-5 hover:border-[#d4bbff]/25 transition-all h-full backdrop-blur-sm" spotlightColor="rgba(125, 255, 162, 0.06)">
                       <span className="material-symbols-outlined text-[#d4bbff] text-xl mb-4 block">{item.icon}</span>
                       <p className="text-[11px] font-mono tracking-widest text-[#ffb4ab]/70 line-through mb-1.5">{item.problem}</p>
                       <p className="text-[11px] font-mono tracking-widest text-[#7dffa2] font-medium">{item.solution}</p>
@@ -568,13 +568,13 @@ const Home: FC = () => {
       <section className="relative z-10 py-12 border-t border-[#d4bbff]/10 bg-[#080808]/90 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 sm:px-10">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <motion.div initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="bg-[#0e0d0d]/95 border border-[#7dffa2]/20 p-4">
+            <motion.div initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="rounded-2xl bg-[#0e0d0d]/95 border border-[#7dffa2]/[0.12] p-4 hover:border-[#7dffa2]/25 transition-all duration-300">
               <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/50 mb-1">NETWORK STATUS</p>
               <p className="text-2xl font-headline font-bold text-[#7dffa2] tabular-nums">{blockHeight > 0 ? blockHeight.toLocaleString() : '...'}</p>
               <p className="text-[10px] font-mono text-[#c9c6c5]/30 mt-0.5">Live block height</p>
             </motion.div>
             {stats.map((stat, i) => (
-              <motion.div key={stat.label} initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + 1) * 0.06 }} className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-4">
+              <motion.div key={stat.label} initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i + 1) * 0.06 }} className="rounded-2xl bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] p-4 hover:border-[#d4bbff]/15 transition-all duration-300">
                 <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/60 mb-1">{stat.label}</p>
                 <p className="text-2xl font-headline font-bold text-[#e5e2e1] tabular-nums"><AnimatedCounter value={stat.value} suffix={stat.value === '100%' ? '%' : ''} /></p>
                 <p className="text-[10px] font-mono text-[#d4bbff]/50 mt-0.5">{stat.sub}</p>
@@ -600,15 +600,15 @@ const Home: FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {features.map((feat) => (
               <div key={feat.label} className="gsap-feature-card opacity-0">
-                <SpotlightCard className="h-full bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 hover:border-[#d4bbff]/30 hover:shadow-[0_0_30px_rgba(212,187,255,0.06)] transition-all duration-500 group backdrop-blur-sm hover:-translate-y-1">
+                <SpotlightCard className="h-full bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-6 hover:border-[#d4bbff]/25 hover:shadow-[0_0_40px_rgba(212,187,255,0.05)] transition-all duration-500 group backdrop-blur-sm hover:-translate-y-1">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/25 transition-all duration-500">
+                    <div className="w-10 h-10 rounded-xl bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/25 group-hover:shadow-[0_0_16px_rgba(125,255,162,0.1)] transition-all duration-500">
                       <span className="material-symbols-outlined text-[#d4bbff] text-lg group-hover:text-[#7dffa2] transition-colors duration-500">{feat.icon}</span>
                     </div>
                   </div>
                   <span className="text-[11px] font-mono tracking-widest text-[#d4bbff] block mb-3 font-medium">{feat.label}</span>
                   <p className="text-xs text-[#c9c6c5]/70 leading-relaxed mb-4 font-body">{feat.desc}</p>
-                  <div className="pt-3 border-t border-[#d4bbff]/8">
+                  <div className="pt-3 border-t border-[#d4bbff]/[0.06]">
                     <p className="text-[9px] font-mono text-[#7dffa2]/50 leading-relaxed break-all">{feat.detail}</p>
                   </div>
                   <div className="mt-4 h-px w-8 bg-[#d4bbff]/10 group-hover:w-full group-hover:bg-gradient-to-r group-hover:from-[#d4bbff]/30 group-hover:to-[#7dffa2]/30 transition-all duration-700" />
@@ -635,10 +635,10 @@ const Home: FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {steps.map((step, i) => (
               <div key={step.num} className="gsap-step-card opacity-0">
-                <SpotlightCard className="relative flex gap-6 items-start p-8 bg-[#0e0d0d]/95 border border-[#d4bbff]/12 hover:border-[#7dffa2]/25 hover:shadow-[0_0_25px_rgba(125,255,162,0.04)] transition-all group h-full backdrop-blur-sm">
+                <SpotlightCard className="relative flex gap-6 items-start p-8 rounded-2xl bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] hover:border-[#7dffa2]/25 hover:shadow-[0_0_30px_rgba(125,255,162,0.04)] transition-all group h-full backdrop-blur-sm">
                   <BorderBeam size={120} duration={14 + i * 2} colorFrom={i % 2 === 0 ? '#d4bbff' : '#7dffa2'} colorTo={i % 2 === 0 ? '#7dffa2' : '#d4bbff'} />
                   <span className="absolute top-4 right-4 font-headline text-6xl font-black text-[#d4bbff]/[0.04] tabular-nums select-none">{step.num}</span>
-                  <div className="w-12 h-12 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/20 transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 group-hover:bg-[#7dffa2]/10 group-hover:border-[#7dffa2]/20 group-hover:shadow-[0_0_16px_rgba(125,255,162,0.1)] transition-all duration-500">
                     <span className="material-symbols-outlined text-[#d4bbff] group-hover:text-[#7dffa2] transition-colors">{step.icon}</span>
                   </div>
                   <div>
@@ -663,7 +663,7 @@ const Home: FC = () => {
           </FadeInSection>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <FadeInSection delay={0.1}>
-              <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 relative overflow-hidden backdrop-blur-sm">
+              <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-6 relative overflow-hidden backdrop-blur-sm">
                 <BorderBeam size={180} duration={18} />
                 <p className="text-[10px] font-mono tracking-widest text-[#d4bbff] mb-4">PRIVACY GUARANTEES</p>
                 <div className="space-y-4">
@@ -675,7 +675,7 @@ const Home: FC = () => {
                     { icon: 'verified_user', title: 'Selective Disclosure', desc: 'Share only what you choose. Prove you bought something without revealing what, when, or how much you paid.' },
                   ].map((item, i) => (
                     <motion.div key={item.title} initial={{ opacity: 0, x: -12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="flex gap-4 items-start">
-                      <div className="w-10 h-10 bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-[#d4bbff]/8 border border-[#d4bbff]/15 flex items-center justify-center flex-shrink-0">
                         <span className="material-symbols-outlined text-[#d4bbff] text-lg">{item.icon}</span>
                       </div>
                       <div>
@@ -689,7 +689,7 @@ const Home: FC = () => {
             </FadeInSection>
             <div className="space-y-6">
               <FadeInSection delay={0.2}>
-                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 relative overflow-hidden backdrop-blur-sm">
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-6 relative overflow-hidden backdrop-blur-sm">
                   <p className="text-[10px] font-mono tracking-widest text-[#d4bbff] mb-4">USE CASES</p>
                   <div className="space-y-4">
                     {[
@@ -699,7 +699,7 @@ const Home: FC = () => {
                       { title: 'Honest Feedback', desc: 'Write product reviews that merchants trust, while staying completely anonymous.', icon: 'rate_review' },
                     ].map((item, i) => (
                       <motion.div key={item.title} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="flex gap-4 items-start">
-                        <div className="w-10 h-10 bg-[#7dffa2]/8 border border-[#7dffa2]/15 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-[#7dffa2]/8 border border-[#7dffa2]/15 flex items-center justify-center flex-shrink-0">
                           <span className="material-symbols-outlined text-[#7dffa2] text-lg">{item.icon}</span>
                         </div>
                         <div>
@@ -712,7 +712,7 @@ const Home: FC = () => {
                 </SpotlightCard>
               </FadeInSection>
               <FadeInSection delay={0.3}>
-                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-6 relative overflow-hidden backdrop-blur-sm">
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-6 relative overflow-hidden backdrop-blur-sm">
                   <BorderBeam size={140} duration={20} colorFrom="#7dffa2" colorTo="#d4bbff" />
                   <p className="text-[10px] font-mono tracking-widest text-[#d4bbff] mb-4">COMPARISON</p>
                   <div className="space-y-3">
@@ -755,7 +755,7 @@ const Home: FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {techStack.map((tech) => (
               <div key={tech.label} className="gsap-trust-card opacity-0">
-                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-5 text-center hover:border-[#d4bbff]/25 hover:shadow-[0_0_20px_rgba(212,187,255,0.05)] transition-all h-full backdrop-blur-sm hover:-translate-y-1">
+                <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-5 text-center hover:border-[#d4bbff]/25 hover:shadow-[0_0_20px_rgba(212,187,255,0.05)] transition-all h-full backdrop-blur-sm hover:-translate-y-1">
                   <p className="text-[10px] font-mono tracking-widest text-[#c9c6c5]/60 mb-2">{tech.label}</p>
                   <p className="text-sm font-headline font-bold text-[#e5e2e1]">{tech.value}</p>
                   <p className="text-[10px] font-mono text-[#d4bbff]/50 mt-1">{tech.sub}</p>
@@ -784,7 +784,7 @@ const Home: FC = () => {
                   { step: 'Build reputation', desc: 'Receive anonymous but verified reviews from real buyers only.' },
                 ].map((item, i) => (
                   <motion.div key={item.step} initial={{ opacity: 0, x: -16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="flex gap-4 items-start">
-                    <div className="w-6 h-6 bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-6 h-6 rounded-lg bg-[#d4bbff]/10 border border-[#d4bbff]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <span className="text-[10px] font-mono text-[#d4bbff]">{i + 1}</span>
                     </div>
                     <div>
@@ -804,7 +804,7 @@ const Home: FC = () => {
               </div>
             </FadeInSection>
             <FadeInSection delay={0.2}>
-              <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/12 p-8 relative overflow-hidden backdrop-blur-sm">
+              <SpotlightCard className="bg-[#0e0d0d]/95 border border-[#d4bbff]/[0.08] rounded-2xl p-8 relative overflow-hidden backdrop-blur-sm">
                 <BorderBeam size={160} duration={16} />
                 <p className="text-[10px] font-mono tracking-widest text-[#7dffa2] mb-4">// INTEGRATION</p>
                 <h3 className="font-headline text-xl font-bold text-[#e5e2e1] uppercase tracking-tight mb-4">E-Commerce Ready</h3>

@@ -160,7 +160,7 @@ const Purchases: FC = () => {
             transition={{ duration: 0.5 }}
             className="mb-8"
           >
-            <Card className="border-[#7dffa2]/15">
+            <Card className="border-[#7dffa2]/15" beam beamColor={{ from: '#7dffa2', to: '#d4bbff' }}>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                 <div>
                   <div className="flex items-center gap-2.5 mb-3">

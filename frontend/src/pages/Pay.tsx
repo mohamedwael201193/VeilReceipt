@@ -206,7 +206,7 @@ const Pay: FC = () => {
   if (error || (!session && !linkData)) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl p-8 max-w-md text-center">
+        <div className="rounded-2xl border border-[#d4bbff]/[0.08] p-8 max-w-md text-center backdrop-blur-sm" style={{ background: 'linear-gradient(135deg, rgba(28,27,27,0.6) 0%, rgba(10,10,10,0.7) 100%)' }}>
           <div className="w-16 h-16 rounded-full bg-[#ffb4ab]/10 flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-[#ffb4ab]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </div>
@@ -243,7 +243,8 @@ const Pay: FC = () => {
 
         {/* Payment Card */}
         <motion.div
-          className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl overflow-hidden backdrop-blur-sm"
+          className="rounded-2xl border border-[#d4bbff]/[0.08] overflow-hidden backdrop-blur-sm"
+          style={{ background: 'linear-gradient(145deg, rgba(28,27,27,0.6) 0%, rgba(10,10,10,0.75) 100%)' }}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 300, damping: 30 }}
