@@ -1,4 +1,4 @@
-// VeilReceipt v4 Backend Server
+// VeilReceipt v5 Backend Server
 // Express API with PostgreSQL (production) / JSON file (development)
 
 import express, { Request, Response, NextFunction } from 'express';
@@ -15,6 +15,9 @@ import merchantRoutes from './routes/merchant';
 import receiptsRoutes from './routes/receipts';
 import escrowRoutes from './routes/escrow';
 import integrateRoutes from './routes/integrate';
+import linkRoutes from './routes/links';
+import provingRoutes from './routes/proving';
+import eventRoutes from './routes/events';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,7 +39,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'healthy',
-    version: '5.0.0',
+    version: '6.0.0',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV || 'development',
   });
@@ -46,15 +49,18 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'VeilReceipt API',
-    version: '5.0.0',
-    program: 'veilreceipt_v7.aleo',
-    description: 'Privacy-first commerce protocol — atomic payments, escrow, Merkle proofs, e-commerce integration',
+    version: '6.0.0',
+    program: 'veilreceipt_v8.aleo',
+    description: 'Privacy-first commerce protocol — atomic payments, escrow, payment links, Merkle proofs, e-commerce integration',
     endpoints: {
       auth: '/auth',
       products: '/products',
       merchant: '/merchant',
       receipts: '/receipts',
       escrow: '/escrow',
+      links: '/links',
+      proving: '/proving',
+      events: '/events',
       integrate: '/integrate',
       tx: '/tx/:txId/status',
     },
@@ -85,6 +91,9 @@ app.use('/merchant', merchantRoutes);
 app.use('/receipts', receiptsRoutes);
 app.use('/escrow', escrowRoutes);
 app.use('/integrate', integrateRoutes);
+app.use('/links', linkRoutes);
+app.use('/proving', provingRoutes);
+app.use('/events', eventRoutes);
 
 // Transaction status endpoint (cached on-chain lookup)
 app.get('/tx/:txId/status', async (req: Request, res: Response) => {
@@ -112,7 +121,7 @@ app.get('/chain/mapping/:name/:key', async (req: Request, res: Response) => {
   try {
     const { name, key } = req.params;
     // Only allow reading from known safe mappings
-    const allowedMappings = ['purchase_exists', 'review_count', 'review_submitted', 'merchant_active', 'escrow_active'];
+    const allowedMappings = ['purchase_exists', 'review_count', 'review_submitted', 'merchant_active', 'escrow_active', 'link_active', 'link_contributions'];
     if (!allowedMappings.includes(name)) {
       res.status(400).json({ error: 'Invalid mapping name' });
       return;
@@ -145,9 +154,9 @@ async function start() {
     app.listen(PORT, () => {
       console.log(`
   ╔══════════════════════════════════════════════════╗
-  ║     VeilReceipt v4 Backend                       ║
+  ║     VeilReceipt v5 Backend                       ║
   ║     Port: ${String(PORT).padEnd(10)}                          ║
-  ║     Program: veilreceipt_v7.aleo                 ║
+  ║     Program: veilreceipt_v8.aleo                 ║
   ╚══════════════════════════════════════════════════╝
       `);
     });

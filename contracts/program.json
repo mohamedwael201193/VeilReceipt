@@ -1,7 +1,7 @@
 {
-  "program": "veilreceipt_v7.aleo",
-  "version": "0.3.0",
-  "description": "Privacy-first commerce protocol: atomic private payments (Credits + USDCx + USAD), escrow, Cart Merkle proofs, receipt-gated access tokens, anonymous verified reviews",
+  "program": "veilreceipt_v8.aleo",
+  "version": "0.4.0",
+  "description": "Privacy-first commerce protocol: atomic private payments (Credits + USDCx + USAD), escrow, payment links, Cart Merkle proofs, receipt-gated access tokens, anonymous verified reviews",
   "license": "MIT",
   "leo": "3.4.0",
   "dependencies": [

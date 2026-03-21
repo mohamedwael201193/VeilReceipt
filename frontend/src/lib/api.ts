@@ -345,6 +345,125 @@ class ApiClient {
       receipt: { total: number; token_type: number; status: string; tx_id: string } | null;
     }>(`/integrate/verify/${commitment}`);
   }
+
+  // ═══════════════════════════════════════════
+  // Payment Links
+  // ═══════════════════════════════════════════
+
+  async createPaymentLink(data: {
+    link_hash: string;
+    amount: number;
+    currency: 'credits' | 'usdcx' | 'usad';
+    link_type: 'one_time' | 'recurring' | 'open';
+    label: string;
+    description: string;
+    tx_id: string;
+  }) {
+    return this.request<any>('/links', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listPaymentLinks() {
+    return this.request<any[]>('/links');
+  }
+
+  async resolvePaymentLink(hash: string) {
+    return this.request<any>(`/links/resolve/${hash}`);
+  }
+
+  async getPaymentLink(id: string) {
+    return this.request<any>(`/links/${id}`);
+  }
+
+  async fulfillPaymentLink(id: string, data: {
+    link_id: string;
+    purchase_commitment: string;
+    buyer_address_hash: string;
+    amount: number;
+    tx_id: string;
+    payment_mode: 'private' | 'escrow';
+  }) {
+    return this.request<any>(`/links/${id}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async closePaymentLink(id: string) {
+    return this.request<any>(`/links/${id}/close`, {
+      method: 'POST',
+    });
+  }
+
+  // ═══════════════════════════════════════════
+  // Delegated Proving Service
+  // ═══════════════════════════════════════════
+
+  async getProvingHealth() {
+    return this.request<{
+      dps_configured: boolean;
+      sponsor_configured: boolean;
+      program_id: string;
+      network: string;
+    }>('/proving/health');
+  }
+
+  async submitDelegatedProof(data: {
+    transition: string;
+    inputs: string[];
+    fee_record?: string;
+  }) {
+    return this.request<any>('/proving/delegate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getProvingStatus(id: string) {
+    return this.request<any>(`/proving/status/${id}`);
+  }
+
+  // ═══════════════════════════════════════════
+  // Real-time Events (SSE)
+  // ═══════════════════════════════════════════
+
+  connectEventStream(onEvent: (event: string, data: any) => void): EventSource | null {
+    const token = this.getToken();
+    if (!token) return null;
+
+    const url = `${API_BASE_URL}/events/stream`;
+    // EventSource doesn't support custom headers, so we pass token as query param
+    // The backend will need to accept this — for now we use a simple approach
+    const eventSource = new EventSource(`${url}?token=${encodeURIComponent(token)}`);
+
+    eventSource.addEventListener('connected', (e) => {
+      onEvent('connected', JSON.parse(e.data));
+    });
+
+    eventSource.addEventListener('link.created', (e) => {
+      onEvent('link.created', JSON.parse(e.data));
+    });
+
+    eventSource.addEventListener('link.fulfilled', (e) => {
+      onEvent('link.fulfilled', JSON.parse(e.data));
+    });
+
+    eventSource.addEventListener('link.closed', (e) => {
+      onEvent('link.closed', JSON.parse(e.data));
+    });
+
+    eventSource.addEventListener('payment.confirmed', (e) => {
+      onEvent('payment.confirmed', JSON.parse(e.data));
+    });
+
+    eventSource.onerror = () => {
+      onEvent('error', { message: 'SSE connection error' });
+    };
+
+    return eventSource;
+  }
 }
 
 export const api = new ApiClient();

@@ -1729,6 +1729,237 @@ export function useVeilWallet() {
   }, []);
 
   // ============================
+  // PAYMENT LINK OPERATIONS
+  // ============================
+
+  /**
+   * Create a payment link on-chain.
+   * Returns the link hash for sharing and the transaction ID.
+   */
+  const createPaymentLink = useCallback(async (
+    amount: number,
+    tokenType: number,
+    linkType: number,
+    expiryHours: number = 24,
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const salt = generateAleoScalar();
+
+      const inputs = [
+        toAleoU64(amount),
+        `${tokenType}u8`,
+        `${linkType}u8`,
+        salt,
+        `${expiryHours}u32`,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.create_payment_link,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'proof',
+        data: { action: 'create_payment_link', amount, tokenType, linkType },
+      });
+
+      toast.success('Payment link created!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Payment link confirmed on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Payment link creation may have failed.');
+        }
+      });
+
+      return { txId, salt };
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  /**
+   * Fulfill a payment link with Aleo Credits.
+   */
+  const fulfillLinkCredits = useCallback(async (
+    merchantAddress: string,
+    amount: number,
+    linkHash: string,
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const creditRecord = await findCreditsRecord(amount);
+      if (!creditRecord) {
+        throw new Error(`Insufficient private credits. Need ${(amount / 1_000_000).toFixed(2)} ALEO.`);
+      }
+
+      const salt = generateAleoScalar();
+      const inputs = [
+        creditRecord,
+        merchantAddress,
+        toAleoU64(amount),
+        toAleoField(linkHash),
+        salt,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.fulfill_link_credits,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { action: 'fulfill_link_credits', merchantAddress, amount, linkHash },
+      });
+
+      toast.success('Payment link fulfilled!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Payment confirmed on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Payment may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findCreditsRecord, executeTransaction, pollTransaction]);
+
+  /**
+   * Fulfill a payment link with escrow (buyer protection).
+   */
+  const fulfillLinkEscrow = useCallback(async (
+    merchantAddress: string,
+    amount: number,
+    linkHash: string,
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const creditRecord = await findCreditsRecord(amount);
+      if (!creditRecord) {
+        throw new Error(`Insufficient private credits. Need ${(amount / 1_000_000).toFixed(2)} ALEO.`);
+      }
+
+      const salt = generateAleoScalar();
+      const inputs = [
+        creditRecord,
+        merchantAddress,
+        toAleoU64(amount),
+        toAleoField(linkHash),
+        salt,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.fulfill_link_escrow_credits,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'escrow',
+        data: { action: 'fulfill_link_escrow', merchantAddress, amount, linkHash },
+      });
+
+      toast.success('Escrow payment via link submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Escrow payment confirmed on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('Escrow payment may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findCreditsRecord, executeTransaction, pollTransaction]);
+
+  /**
+   * Close a payment link (merchant only).
+   * Requires the PaymentLink record plaintext.
+   */
+  const closePaymentLink = useCallback(async (linkRecordPlaintext: string) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.close_payment_link,
+        [linkRecordPlaintext],
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'proof',
+        data: { action: 'close_payment_link' },
+      });
+
+      toast.success('Payment link closed!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('Link closed on-chain!');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, executeTransaction, pollTransaction]);
+
+  /**
+   * Fetch all PaymentLink records owned by the connected wallet.
+   */
+  const getPaymentLinks = useCallback(async () => {
+    const plaintexts = await findAllRecords(
+      {},
+      PROGRAM_ID,
+      (pt) => pt.includes('link_hash') && pt.includes('link_type') && pt.includes('expiry_height'),
+    );
+    return plaintexts.map((pt) => {
+      const parsed = parseRecordPlaintext(pt);
+      return {
+        owner: parsed.owner || address,
+        link_hash: stripSuffix(parsed.link_hash || ''),
+        amount: parseInt(stripSuffix(parsed.amount || '0'), 10),
+        token_type: parseInt(stripSuffix(parsed.token_type || '0'), 10),
+        link_type: parseInt(stripSuffix(parsed.link_type || '0'), 10),
+        expiry_height: parseInt(stripSuffix(parsed.expiry_height || '0'), 10),
+        nonce_seed: stripSuffix(parsed.nonce_seed || ''),
+        _plaintext: pt,
+        _fromWallet: true,
+      };
+    });
+  }, [findAllRecords, address]);
+
+  // ============================
   // UNIFIED PURCHASE FUNCTION
   // ============================
   const purchase = useCallback(async (
@@ -1798,6 +2029,13 @@ export function useVeilWallet() {
     submitAnonymousReview,
     getAccessTokens,
     getReviewTokens,
+
+    // Payment links (v8)
+    createPaymentLink,
+    fulfillLinkCredits,
+    fulfillLinkEscrow,
+    closePaymentLink,
+    getPaymentLinks,
 
     // On-chain mapping reads
     getReviewCount,

@@ -1,4 +1,4 @@
-// Type definitions for VeilReceipt v3 frontend
+// Type definitions for VeilReceipt v4 frontend
 
 export type AleoAddress = string;
 export type AleoField = string;
@@ -146,4 +146,57 @@ export interface EscrowMeta {
 export interface TxStatus {
   status: 'confirmed' | 'pending' | 'failed' | 'not_found';
   blockHeight?: number;
+}
+
+// PaymentLink record from chain (decrypted)
+export interface PaymentLinkRecord {
+  owner: AleoAddress;
+  link_hash: string;
+  amount: number;
+  token_type: number;
+  link_type: number; // 0 = one_time, 1 = recurring, 2 = open
+  expiry_height: number;
+  nonce_seed: string;
+  _plaintext?: string;
+  _fromWallet?: boolean;
+}
+
+// PaymentLink metadata from backend
+export interface PaymentLinkMeta {
+  id: string;
+  merchant_id: string;
+  merchant_address: AleoAddress;
+  link_hash: string;
+  amount: number;
+  currency: 'credits' | 'usdcx' | 'usad';
+  link_type: 'one_time' | 'recurring' | 'open';
+  label: string;
+  description: string;
+  is_active: boolean;
+  total_contributions: number;
+  total_collected: number;
+  tx_id: string;
+  created_at: string;
+}
+
+// Public payment link info (for payers)
+export interface PaymentLinkPublic {
+  id: string;
+  merchant_address: AleoAddress;
+  link_hash: string;
+  amount: number;
+  currency: 'credits' | 'usdcx' | 'usad';
+  link_type: 'one_time' | 'recurring' | 'open';
+  label: string;
+  description: string;
+  is_active: boolean;
+  total_contributions: number;
+}
+
+// DPS proving status
+export interface ProvingHealth {
+  dps_configured: boolean;
+  sponsor_configured: boolean;
+  program_id: string;
+  network: string;
 }

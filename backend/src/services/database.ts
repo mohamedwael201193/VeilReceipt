@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import {
   JsonDatabase, Merchant, Product, ReceiptMeta, EscrowRecord,
   LoyaltyRecord, AuthNonce, PendingTransaction,
-  MerchantApiKey, WebhookEndpoint, WebhookDelivery, PaymentSession
+  MerchantApiKey, WebhookEndpoint, WebhookDelivery, PaymentSession, PaymentLink
 } from '../types';
 
 // ========== Configuration ==========
@@ -46,7 +46,7 @@ export async function initDatabase(): Promise<void> {
       const empty: JsonDatabase = {
         merchants: [], products: [], receipts: [], escrows: [],
         loyalty: [], auth_nonces: [], pending_txs: [],
-        api_keys: [], webhooks: [], webhook_deliveries: [], payment_sessions: []
+        api_keys: [], webhooks: [], webhook_deliveries: [], payment_sessions: [], payment_links: []
       };
       fs.writeFileSync(DB_PATH, JSON.stringify(empty, null, 2));
     }
@@ -189,6 +189,25 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_webhooks_merchant ON webhooks(merchant_id);
       CREATE INDEX IF NOT EXISTS idx_payment_sessions_merchant ON payment_sessions(merchant_id);
       CREATE INDEX IF NOT EXISTS idx_payment_sessions_status ON payment_sessions(status);
+
+      CREATE TABLE IF NOT EXISTS payment_links (
+        id TEXT PRIMARY KEY,
+        merchant_id TEXT NOT NULL,
+        merchant_address TEXT NOT NULL,
+        link_hash TEXT UNIQUE NOT NULL,
+        amount BIGINT NOT NULL DEFAULT 0,
+        currency TEXT DEFAULT 'credits',
+        link_type TEXT NOT NULL DEFAULT 'one_time',
+        label TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        is_active BOOLEAN DEFAULT TRUE,
+        total_contributions INT DEFAULT 0,
+        total_collected BIGINT DEFAULT 0,
+        tx_id TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_links_merchant ON payment_links(merchant_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_links_hash ON payment_links(link_hash);
     `);
     console.log('✅ PostgreSQL tables initialized');
   } finally {
@@ -201,7 +220,7 @@ function readJson(): JsonDatabase {
   try {
     return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
   } catch {
-    return { merchants: [], products: [], receipts: [], escrows: [], loyalty: [], auth_nonces: [], pending_txs: [], api_keys: [], webhooks: [], webhook_deliveries: [], payment_sessions: [] };
+    return { merchants: [], products: [], receipts: [], escrows: [], loyalty: [], auth_nonces: [], pending_txs: [], api_keys: [], webhooks: [], webhook_deliveries: [], payment_sessions: [], payment_links: [] };
   }
 }
 
@@ -738,6 +757,96 @@ export async function getPaymentSessionsByMerchant(merchantId: string): Promise<
     return res.rows;
   }
   return readJson().payment_sessions.filter(s => s.merchant_id === merchantId);
+}
+
+// ========== Payment Links ==========
+export async function createPaymentLink(data: Omit<PaymentLink, 'id' | 'created_at' | 'is_active' | 'total_contributions' | 'total_collected'>): Promise<PaymentLink> {
+  const id = 'pl_' + uuid().replace(/-/g, '');
+  const created_at = new Date().toISOString();
+  const full: PaymentLink = {
+    id, created_at, is_active: true, total_contributions: 0, total_collected: 0,
+    ...data,
+  };
+  if (IS_POSTGRES && pool) {
+    await pool.query(
+      `INSERT INTO payment_links (id, merchant_id, merchant_address, link_hash, amount, currency, link_type, label, description, is_active, tx_id, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,$11)`,
+      [id, data.merchant_id, data.merchant_address, data.link_hash, data.amount, data.currency,
+       data.link_type, data.label, data.description, data.tx_id, created_at]
+    );
+    return full;
+  }
+  const db = readJson();
+  db.payment_links.push(full);
+  writeJson(db);
+  return full;
+}
+
+export async function getPaymentLinkByHash(linkHash: string): Promise<PaymentLink | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM payment_links WHERE link_hash = $1', [linkHash]);
+    return res.rows[0] || null;
+  }
+  return readJson().payment_links.find(l => l.link_hash === linkHash) || null;
+}
+
+export async function getPaymentLink(id: string): Promise<PaymentLink | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query('SELECT * FROM payment_links WHERE id = $1', [id]);
+    return res.rows[0] || null;
+  }
+  return readJson().payment_links.find(l => l.id === id) || null;
+}
+
+export async function getPaymentLinksByMerchant(merchantId: string): Promise<PaymentLink[]> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query(
+      'SELECT * FROM payment_links WHERE merchant_id = $1 ORDER BY created_at DESC LIMIT 100',
+      [merchantId]
+    );
+    return res.rows;
+  }
+  return readJson().payment_links.filter(l => l.merchant_id === merchantId);
+}
+
+export async function closePaymentLink(id: string, merchantId: string): Promise<PaymentLink | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query(
+      `UPDATE payment_links SET is_active = FALSE WHERE id = $1 AND merchant_id = $2 RETURNING *`,
+      [id, merchantId]
+    );
+    return res.rows[0] || null;
+  }
+  const db = readJson();
+  const link = db.payment_links.find(l => l.id === id && l.merchant_id === merchantId);
+  if (!link) return null;
+  link.is_active = false;
+  writeJson(db);
+  return link;
+}
+
+export async function recordLinkContribution(linkHash: string, amount: number): Promise<PaymentLink | null> {
+  if (IS_POSTGRES && pool) {
+    const res = await pool.query(
+      `UPDATE payment_links SET total_contributions = total_contributions + 1, total_collected = total_collected + $1
+       WHERE link_hash = $2 AND is_active = TRUE RETURNING *`,
+      [amount, linkHash]
+    );
+    const link = res.rows[0] || null;
+    if (link && link.link_type === 'one_time') {
+      await pool.query('UPDATE payment_links SET is_active = FALSE WHERE link_hash = $1', [linkHash]);
+      link.is_active = false;
+    }
+    return link;
+  }
+  const db = readJson();
+  const link = db.payment_links.find(l => l.link_hash === linkHash && l.is_active);
+  if (!link) return null;
+  link.total_contributions += 1;
+  link.total_collected += amount;
+  if (link.link_type === 'one_time') link.is_active = false;
+  writeJson(db);
+  return link;
 }
 
 export { IS_POSTGRES, pool };

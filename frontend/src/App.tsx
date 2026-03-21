@@ -43,6 +43,7 @@ const AppLayout: FC = () => {
           <Route path="/verify" element={<Verify />} />
           <Route path="/merchant" element={<Merchant />} />
           <Route path="/integrate" element={<Integrate />} />
+          <Route path="/pay" element={<Pay />} />
           <Route path="/pay/:sessionId" element={<Pay />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

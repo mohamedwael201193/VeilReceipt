@@ -1,9 +1,9 @@
-// Pay Page — Handles payment sessions from external e-commerce platforms
-// URL: /pay/:sessionId
-// The merchant's Shopify/WooCommerce store redirects here with a session ID
+// Pay Page — Handles payment sessions AND payment links
+// URL: /pay/:sessionId  (e-commerce session)
+// URL: /pay?link=<hash> (shareable payment link)
 
 import { FC, useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
@@ -12,7 +12,9 @@ import { Button, Badge } from '@/components/ui/Components';
 import { LoadingSpinner, TokenIcon } from '@/components/icons/Icons';
 import { ShieldIcon, PublicIcon, ClockIcon } from '@/components/icons/Icons';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
+import { hashAddressSync } from '@/lib/utils';
 import type { PaymentPrivacy, TokenType } from '@/lib/chain';
+import type { PaymentLinkPublic } from '@/lib/types';
 
 interface SessionData {
   id: string;
@@ -30,37 +32,96 @@ interface SessionData {
 
 const Pay: FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams();
+  const linkHash = searchParams.get('link');
   const navigate = useNavigate();
-  const { connected, address, purchase, loading: walletLoading } = useVeilWallet();
+  const { connected, address, purchase, fulfillLinkCredits, fulfillLinkEscrow, loading: walletLoading } = useVeilWallet();
 
   const [session, setSession] = useState<SessionData | null>(null);
+  const [linkData, setLinkData] = useState<PaymentLinkPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PaymentPrivacy>('private');
   const [paying, setPaying] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [customAmount, setCustomAmount] = useState('');
 
-  // Load session
+  const isLinkMode = !!linkHash;
+
+  // Load session or link
   useEffect(() => {
-    if (!sessionId) return;
     setLoading(true);
-    api.getPaymentSession(sessionId)
-      .then(data => {
-        setSession(data);
-        if (data.status === 'completed') setCompleted(true);
-      })
-      .catch(err => setError(err.message || 'Session not found'))
-      .finally(() => setLoading(false));
-  }, [sessionId]);
+    if (linkHash) {
+      api.resolvePaymentLink(linkHash)
+        .then(data => {
+          setLinkData(data);
+          if (!data.is_active) setError('This payment link is no longer active');
+        })
+        .catch(err => setError(err.message || 'Payment link not found'))
+        .finally(() => setLoading(false));
+    } else if (sessionId) {
+      api.getPaymentSession(sessionId)
+        .then(data => {
+          setSession(data);
+          if (data.status === 'completed') setCompleted(true);
+        })
+        .catch(err => setError(err.message || 'Session not found'))
+        .finally(() => setLoading(false));
+    } else {
+      setError('No payment session or link specified');
+      setLoading(false);
+    }
+  }, [sessionId, linkHash]);
 
   const isExpired = session ? new Date(session.expires_at) < new Date() : false;
-  const currency = (session?.currency || 'credits') as TokenType;
+  const currency = (isLinkMode ? linkData?.currency : session?.currency || 'credits') as TokenType;
+  const merchantAddress = isLinkMode ? linkData?.merchant_address : session?.merchant_address;
+  const displayAmount = isLinkMode
+    ? (linkData?.link_type === 'open' ? (customAmount ? Math.floor(parseFloat(customAmount) * 1_000_000) : 0) : (linkData?.amount || 0))
+    : (session?.amount || 0);
 
   const formatAmount = (amount: number) => {
     if (currency === 'usdcx') return formatUsdcx(amount);
     if (currency === 'usad') return formatUsad(amount);
     return formatCredits(amount);
   };
+
+  // Handle payment link fulfillment
+  const handlePayLink = useCallback(async () => {
+    if (!linkData || !connected || !address || !merchantAddress) return;
+    if (!linkData.is_active) { toast.error('Link is no longer active'); return; }
+
+    const amount = displayAmount;
+    if (amount <= 0) { toast.error('Enter a valid amount'); return; }
+
+    setPaying(true);
+    try {
+      let txId: string;
+      if (privacy === 'escrow' && currency === 'credits') {
+        txId = await fulfillLinkEscrow(merchantAddress, amount, linkData.link_hash);
+      } else {
+        txId = await fulfillLinkCredits(merchantAddress, amount, linkData.link_hash);
+      }
+
+      // Record fulfillment in backend
+      await api.fulfillPaymentLink(linkData.id, {
+        link_id: linkData.id,
+        purchase_commitment: `link_${linkData.id}_${Date.now()}`,
+        buyer_address_hash: hashAddressSync(address),
+        amount,
+        tx_id: txId,
+        payment_mode: privacy === 'escrow' ? 'escrow' : 'private',
+      });
+
+      setCompleted(true);
+      toast.success('Payment confirmed!');
+    } catch (e: any) {
+      console.error('Link payment error:', e);
+      toast.error(e.message || 'Payment failed');
+    } finally {
+      setPaying(false);
+    }
+  }, [linkData, connected, address, merchantAddress, displayAmount, privacy, currency, fulfillLinkCredits, fulfillLinkEscrow]);
 
   const handlePay = useCallback(async () => {
     if (!session || !connected || !address) return;
@@ -132,14 +193,16 @@ const Pay: FC = () => {
     );
   }
 
-  if (error || !session) {
+  if (error || (!session && !linkData)) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl p-8 max-w-md text-center">
           <div className="w-16 h-16 rounded-full bg-[#ffb4ab]/10 flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-[#ffb4ab]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </div>
-          <h2 className="text-xl font-semibold text-[#e5e2e1] mb-2">Payment Session Not Found</h2>
+          <h2 className="text-xl font-semibold text-[#e5e2e1] mb-2">
+            {isLinkMode ? 'Payment Link Not Found' : 'Payment Session Not Found'}
+          </h2>
           <p className="text-[#c9c6c5]/70 text-sm">{error || 'This payment link is invalid or has expired.'}</p>
           <Button variant="secondary" className="mt-6" onClick={() => navigate('/')}>Go Home</Button>
         </div>
@@ -167,15 +230,48 @@ const Pay: FC = () => {
         <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl overflow-hidden">
           {/* Amount */}
           <div className="p-6 border-b border-[#d4bbff]/8">
-            <p className="text-[#c9c6c5]/60 text-xs uppercase tracking-wider mb-2">Amount Due</p>
-            <div className="flex items-center gap-3">
-              <TokenIcon type={currency} />
-              <span className="text-3xl font-bold text-[#e5e2e1]">{formatAmount(session.amount)}</span>
-              <Badge variant="info">{currency.toUpperCase()}</Badge>
-            </div>
-            {session.description && (
-              <p className="text-[#c9c6c5]/70 text-sm mt-3">{session.description}</p>
-            )}
+            {isLinkMode && linkData ? (
+              <>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[#c9c6c5]/60 text-xs uppercase tracking-wider">
+                    {linkData.link_type === 'one_time' ? 'One-time Payment' : linkData.link_type === 'recurring' ? 'Payment' : 'Donate'}
+                  </p>
+                  <Badge variant="purple">
+                    {linkData.link_type === 'one_time' ? 'One-time' : linkData.link_type === 'recurring' ? 'Recurring' : 'Open'}
+                  </Badge>
+                </div>
+                {linkData.label && (
+                  <h3 className="text-lg font-semibold text-[#e5e2e1] mb-2">{linkData.label}</h3>
+                )}
+                <div className="flex items-center gap-3">
+                  <TokenIcon type={currency} />
+                  {linkData.link_type === 'open' ? (
+                    <span className="text-xl text-[#c9c6c5]/60">Any amount</span>
+                  ) : (
+                    <span className="text-3xl font-bold text-[#e5e2e1]">{formatAmount(linkData.amount)}</span>
+                  )}
+                  <Badge variant="info">{currency.toUpperCase()}</Badge>
+                </div>
+                {linkData.description && (
+                  <p className="text-[#c9c6c5]/70 text-sm mt-3">{linkData.description}</p>
+                )}
+                {linkData.total_contributions > 0 && (
+                  <p className="text-[#c9c6c5]/40 text-xs mt-2">{linkData.total_contributions} payment(s) received</p>
+                )}
+              </>
+            ) : session ? (
+              <>
+                <p className="text-[#c9c6c5]/60 text-xs uppercase tracking-wider mb-2">Amount Due</p>
+                <div className="flex items-center gap-3">
+                  <TokenIcon type={currency} />
+                  <span className="text-3xl font-bold text-[#e5e2e1]">{formatAmount(session.amount)}</span>
+                  <Badge variant="info">{currency.toUpperCase()}</Badge>
+                </div>
+                {session.description && (
+                  <p className="text-[#c9c6c5]/70 text-sm mt-3">{session.description}</p>
+                )}
+              </>
+            ) : null}
           </div>
 
           {completed ? (
@@ -186,11 +282,11 @@ const Pay: FC = () => {
               </div>
               <h3 className="text-lg font-semibold text-[#e5e2e1] mb-1">Payment Complete</h3>
               <p className="text-[#c9c6c5]/60 text-sm">Your zero-knowledge receipt has been issued.</p>
-              {session.redirect_url && (
+              {!isLinkMode && session?.redirect_url && (
                 <p className="text-[#c9c6c5]/40 text-xs mt-4">Redirecting back to merchant...</p>
               )}
             </div>
-          ) : isExpired ? (
+          ) : (!isLinkMode && isExpired) ? (
             /* Expired State */
             <div className="p-6 text-center">
               <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
@@ -209,7 +305,7 @@ const Pay: FC = () => {
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     { value: 'private' as const, label: 'Private', icon: <ShieldIcon size={16} />, disabled: false },
-                    { value: 'public' as const, label: 'Public', icon: <PublicIcon size={16} />, disabled: currency !== 'credits' },
+                    { value: 'public' as const, label: 'Public', icon: <PublicIcon size={16} />, disabled: currency !== 'credits' || isLinkMode },
                     { value: 'escrow' as const, label: 'Escrow', icon: <ClockIcon size={16} />, disabled: currency !== 'credits' },
                   ]).map(opt => (
                     <button
@@ -245,6 +341,21 @@ const Pay: FC = () => {
                 </p>
               </div>
 
+              {/* For open links: custom amount input */}
+              {isLinkMode && linkData?.link_type === 'open' && (
+                <div className="mb-5">
+                  <label className="text-[#c9c6c5]/60 text-xs uppercase tracking-wider mb-2 block">Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="w-full px-4 py-3 bg-[#1c1b1b]/60 border border-[#d4bbff]/10 rounded-xl text-[#e5e2e1] placeholder:text-[#c9c6c5]/25 focus:border-sky-500/40 focus:outline-none transition-colors"
+                  />
+                </div>
+              )}
+
               {/* Connect or Pay */}
               {!connected ? (
                 <div className="text-center">
@@ -256,15 +367,15 @@ const Pay: FC = () => {
                   <Button
                     variant="primary"
                     className="w-full"
-                    onClick={handlePay}
-                    disabled={paying || walletLoading}
+                    onClick={isLinkMode ? handlePayLink : handlePay}
+                    disabled={paying || walletLoading || (isLinkMode && linkData?.link_type === 'open' && !customAmount)}
                   >
                     {paying ? (
                       <span className="flex items-center justify-center gap-2">
                         <LoadingSpinner /> Processing ZK Proof...
                       </span>
                     ) : (
-                      `Pay ${formatAmount(session.amount)}`
+                      `Pay ${displayAmount > 0 ? formatAmount(displayAmount) : ''}`
                     )}
                   </Button>
                   <Button variant="ghost" className="w-full" onClick={handleCancel}>
@@ -275,11 +386,20 @@ const Pay: FC = () => {
             </div>
           )}
 
-          {/* Session Info Footer */}
+          {/* Footer */}
           <div className="px-6 py-3 bg-white/[0.01] border-t border-[#d4bbff]/5">
             <div className="flex items-center justify-between text-xs text-[#c9c6c5]/30">
-              <span>Session: {session.id.slice(0, 16)}...</span>
-              <span>Expires: {new Date(session.expires_at).toLocaleTimeString()}</span>
+              {isLinkMode && linkData ? (
+                <>
+                  <span>Link: {linkData.id.slice(0, 16)}...</span>
+                  <span>{linkData.link_type}</span>
+                </>
+              ) : session ? (
+                <>
+                  <span>Session: {session.id.slice(0, 16)}...</span>
+                  <span>Expires: {new Date(session.expires_at).toLocaleTimeString()}</span>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

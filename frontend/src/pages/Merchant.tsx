@@ -22,12 +22,13 @@ import {
 } from '@/components/icons/Icons';
 import { truncateAddress } from '@/lib/utils';
 import { formatUsdcx, formatCredits, formatUsad } from '@/lib/stablecoin';
-import type { Product } from '@/lib/types';
+import type { Product, PaymentLinkMeta } from '@/lib/types';
+import QRCode from '@/components/ui/QRCode';
 
-type MerchantTab = 'products' | 'analytics';
+type MerchantTab = 'products' | 'analytics' | 'links';
 
 const Merchant: FC = () => {
-  const { connected, address, authenticate, getMerchantReceipts, registerMerchant, getMerchantLicense } = useVeilWallet();
+  const { connected, address, authenticate, getMerchantReceipts, registerMerchant, getMerchantLicense, createPaymentLink } = useVeilWallet();
   const { isMerchant, token } = useUserStore();
 
   const [authenticated, setAuthenticated] = useState(false);
@@ -48,6 +49,41 @@ const Merchant: FC = () => {
     sku: '',
     category: '',
   });
+
+  // Payment links
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLinkMeta[]>([]);
+  const [showCreateLink, setShowCreateLink] = useState(false);
+  const [showQR, setShowQR] = useState<string | null>(null);
+  const [linkForm, setLinkForm] = useState({
+    label: '',
+    description: '',
+    amount: '',
+    currency: 'credits' as 'credits' | 'usdcx' | 'usad',
+    link_type: 'one_time' as 'one_time' | 'recurring' | 'open',
+  });
+  const [sseConnected, setSseConnected] = useState(false);
+
+  // Real-time SSE connection
+  useEffect(() => {
+    if (!authenticated) return;
+    const eventSource = api.connectEventStream((event, data) => {
+      if (event === 'connected') {
+        setSseConnected(true);
+      } else if (event === 'link.fulfilled') {
+        toast.success(`Payment received on link "${data.label}" — ${data.amount} (${data.contributions} total)`);
+        loadPaymentLinks();
+      } else if (event === 'link.closed') {
+        toast.success(`Link "${data.label}" closed`);
+        loadPaymentLinks();
+      } else if (event === 'error') {
+        setSseConnected(false);
+      }
+    });
+    return () => {
+      eventSource?.close();
+      setSseConnected(false);
+    };
+  }, [authenticated]);
 
   // Restore auth from persisted store on mount — validate token is still valid
   useEffect(() => {
@@ -206,8 +242,72 @@ const Merchant: FC = () => {
     }
   };
 
+  const loadPaymentLinks = useCallback(async () => {
+    try {
+      const links = await api.listPaymentLinks();
+      setPaymentLinks(Array.isArray(links) ? links : []);
+    } catch {
+      setPaymentLinks([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authenticated) loadPaymentLinks();
+  }, [authenticated, loadPaymentLinks]);
+
+  const handleCreateLink = async () => {
+    if (!linkForm.label) {
+      toast.error('Label is required');
+      return;
+    }
+    setLoading(true);
+    try {
+      const amount = linkForm.link_type === 'open' ? 0 : Math.floor(parseFloat(linkForm.amount || '0') * 1_000_000);
+      const tokenType = linkForm.currency === 'credits' ? 0 : linkForm.currency === 'usdcx' ? 1 : 2;
+      const linkTypeNum = linkForm.link_type === 'one_time' ? 0 : linkForm.link_type === 'recurring' ? 1 : 2;
+
+      const { txId } = await createPaymentLink(amount, tokenType, linkTypeNum);
+
+      // Store in backend
+      await api.createPaymentLink({
+        link_hash: txId, // Use txId as initial hash reference (updated once on-chain)
+        amount,
+        currency: linkForm.currency,
+        link_type: linkForm.link_type,
+        label: linkForm.label,
+        description: linkForm.description,
+        tx_id: txId,
+      });
+
+      setShowCreateLink(false);
+      setLinkForm({ label: '', description: '', amount: '', currency: 'credits', link_type: 'one_time' });
+      loadPaymentLinks();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create payment link');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseLink = async (link: PaymentLinkMeta) => {
+    try {
+      // Close on backend
+      await api.closePaymentLink(link.id);
+      toast.success('Link closed');
+      loadPaymentLinks();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to close link');
+    }
+  };
+
+  const getPaymentLinkUrl = (link: PaymentLinkMeta): string => {
+    const base = window.location.origin;
+    return `${base}/pay?link=${link.link_hash}`;
+  };
+
   const tabItems: { id: MerchantTab; label: string; icon: any }[] = [
     { id: 'products', label: 'Products', icon: <PackageIcon size={15} /> },
+    { id: 'links', label: 'Payment Links', icon: <DollarIcon size={15} /> },
     { id: 'analytics', label: 'Analytics', icon: <ChartIcon size={15} /> },
   ];
 
@@ -452,6 +552,124 @@ const Merchant: FC = () => {
           </div>
         )}
 
+        {/* ========== PAYMENT LINKS TAB ========== */}
+        {tab === 'links' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-[#e5e2e1]">Payment Links</h2>
+                {sseConnected && (
+                  <Badge variant="success" dot>Live</Badge>
+                )}
+              </div>
+              <Button
+                icon={<PlusIcon size={16} />}
+                variant="glow"
+                onClick={() => setShowCreateLink(true)}
+              >
+                Create Link
+              </Button>
+            </div>
+
+            {paymentLinks.length === 0 ? (
+              <EmptyState
+                icon={<DollarIcon size={52} className="text-white/15" />}
+                title="No Payment Links"
+                description="Create shareable payment links for one-time payments, recurring collections, or open donations."
+                action={
+                  <Button icon={<PlusIcon size={16} />} variant="glow" onClick={() => setShowCreateLink(true)}>
+                    Create Link
+                  </Button>
+                }
+              />
+            ) : (
+              <motion.div
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.08 } },
+                }}
+              >
+                {paymentLinks.map((link) => (
+                  <motion.div
+                    key={link.id}
+                    variants={{
+                      hidden: { opacity: 0, y: 20, scale: 0.96 },
+                      visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5 } },
+                    }}
+                  >
+                    <Card hover>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-[#e5e2e1] font-semibold truncate">{link.label}</h3>
+                          <p className="text-white/35 text-sm mt-1 line-clamp-2">{link.description || 'No description'}</p>
+                        </div>
+                        <Badge variant={link.is_active ? 'success' : 'error'} dot>
+                          {link.is_active ? 'Active' : 'Closed'}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <Badge variant="purple">
+                          {link.link_type === 'one_time' ? 'One-time' : link.link_type === 'recurring' ? 'Recurring' : 'Open'}
+                        </Badge>
+                        <Badge variant="default">{link.currency.toUpperCase()}</Badge>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-lg">
+                          <p className="text-[#c9c6c5]/40 text-[10px] uppercase tracking-wider">Amount</p>
+                          <p className="text-[#e5e2e1] font-mono text-sm mt-0.5">
+                            {link.link_type === 'open' ? 'Any' : (link.amount / 1_000_000).toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-lg">
+                          <p className="text-[#c9c6c5]/40 text-[10px] uppercase tracking-wider">Payments</p>
+                          <p className="text-[#e5e2e1] font-mono text-sm mt-0.5">{link.total_contributions}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex gap-2 pt-3 border-t border-[#d4bbff]/8">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1 text-xs"
+                          onClick={() => {
+                            navigator.clipboard.writeText(getPaymentLinkUrl(link));
+                            toast.success('Link copied!');
+                          }}
+                        >
+                          Copy Link
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1 text-xs"
+                          onClick={() => setShowQR(link.id)}
+                        >
+                          QR Code
+                        </Button>
+                        {link.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-[#ffb4ab]"
+                            onClick={() => handleCloseLink(link)}
+                          >
+                            Close
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </div>
+        )}
+
         {/* ========== ANALYTICS TAB ========== */}
         {tab === 'analytics' && (
           <motion.div
@@ -560,6 +778,94 @@ const Merchant: FC = () => {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* ========== CREATE PAYMENT LINK MODAL ========== */}
+      <Modal
+        isOpen={showCreateLink}
+        onClose={() => setShowCreateLink(false)}
+        title="Create Payment Link"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Label"
+            value={linkForm.label}
+            onChange={(e) => setLinkForm({ ...linkForm, label: e.target.value })}
+            placeholder="Coffee Payment"
+          />
+          <Input
+            label="Description (optional)"
+            value={linkForm.description}
+            onChange={(e) => setLinkForm({ ...linkForm, description: e.target.value })}
+            placeholder="Pay for your morning coffee"
+          />
+          <Select
+            label="Link Type"
+            value={linkForm.link_type}
+            onChange={(e) => setLinkForm({ ...linkForm, link_type: e.target.value as 'one_time' | 'recurring' | 'open' })}
+            options={[
+              { value: 'one_time', label: 'One-time — Closes after single payment' },
+              { value: 'recurring', label: 'Recurring — Accepts multiple payments' },
+              { value: 'open', label: 'Open — Any amount, any token' },
+            ]}
+          />
+          <Select
+            label="Currency"
+            value={linkForm.currency}
+            onChange={(e) => setLinkForm({ ...linkForm, currency: e.target.value as 'credits' | 'usdcx' | 'usad' })}
+            options={[
+              { value: 'credits', label: 'Aleo Credits' },
+              { value: 'usdcx', label: 'USDCx Stablecoin' },
+              { value: 'usad', label: 'USAD Stablecoin' },
+            ]}
+          />
+          {linkForm.link_type !== 'open' && (
+            <Input
+              label={`Amount (in ${linkForm.currency === 'credits' ? 'ALEO' : linkForm.currency.toUpperCase()})`}
+              type="number"
+              step="0.01"
+              value={linkForm.amount}
+              onChange={(e) => setLinkForm({ ...linkForm, amount: e.target.value })}
+              placeholder="5.00"
+            />
+          )}
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="ghost" onClick={() => setShowCreateLink(false)}>Cancel</Button>
+            <Button onClick={handleCreateLink} loading={loading} icon={<PlusIcon size={16} />} variant="glow">
+              Create Link
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ========== QR CODE MODAL ========== */}
+      <Modal
+        isOpen={!!showQR}
+        onClose={() => setShowQR(null)}
+        title="Payment Link QR Code"
+      >
+        {showQR && (() => {
+          const link = paymentLinks.find(l => l.id === showQR);
+          if (!link) return null;
+          const url = getPaymentLinkUrl(link);
+          return (
+            <div className="flex flex-col items-center gap-4">
+              <QRCode value={url} size={220} />
+              <p className="text-[#e5e2e1] font-semibold">{link.label}</p>
+              <p className="text-[#c9c6c5]/50 text-xs text-center break-all font-mono">{url}</p>
+              <Button
+                variant="glow"
+                className="w-full"
+                onClick={() => {
+                  navigator.clipboard.writeText(url);
+                  toast.success('Link copied!');
+                }}
+              >
+                Copy Link
+              </Button>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

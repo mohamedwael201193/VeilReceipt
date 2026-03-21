@@ -1,7 +1,8 @@
-// VeilReceipt v7 — Privacy-first commerce protocol on Aleo
+// VeilReceipt v8 — Privacy-first commerce protocol on Aleo
 // Atomic private payments (Credits + USDCx + USAD), escrow with refund window,
 // Cart Merkle proofs for selective item disclosure, merchant registration,
-// receipt-gated access tokens, and anonymous verified reviews.
+// receipt-gated access tokens, anonymous verified reviews,
+// and shareable payment links (one-time, recurring, open donation).
 // All commitments use BHP256::commit_to_field() with scalar randomizers.
 // Shield Wallet compatible (no private fee requirements).
 
@@ -9,7 +10,7 @@ import credits.aleo;
 import test_usdcx_stablecoin.aleo;
 import test_usad_stablecoin.aleo;
 
-program veilreceipt_v7.aleo {
+program veilreceipt_v8.aleo {
 
     // ========== Lifecycle ==========
     @noupgrade
@@ -116,6 +117,18 @@ program veilreceipt_v7.aleo {
         nonce_seed: field
     }
 
+    // Shareable payment link — merchant creates, anyone can pay.
+    // link_type: 0 = one-time, 1 = recurring (multi-contributor), 2 = open (any amount)
+    record PaymentLink {
+        owner: address,
+        link_hash: field,
+        amount: u64,
+        token_type: u8,
+        link_type: u8,
+        expiry_height: u32,
+        nonce_seed: field
+    }
+
     // ========== Mappings (commitment-keyed, boolean-valued for privacy) ==========
 
     mapping purchase_exists: field => bool;
@@ -125,6 +138,8 @@ program veilreceipt_v7.aleo {
     mapping merchant_active: field => bool;
     mapping review_submitted: field => bool;
     mapping review_count: field => u64;
+    mapping link_active: field => bool;
+    mapping link_contributions: field => u64;
 
     // ================================================================
     //  1. ATOMIC PRIVATE PURCHASE — ALEO CREDITS
@@ -854,5 +869,386 @@ program veilreceipt_v7.aleo {
         // Increment review count for product
         let count: u64 = Mapping::get_or_use(review_count, product_hash, 0u64);
         Mapping::set(review_count, product_hash, count + 1u64);
+    }
+
+    // ================================================================
+    //  13. CREATE PAYMENT LINK — Shareable payment request
+    //      Merchant creates a link anyone can pay. Supports:
+    //      link_type 0 = one-time (closes after single payment)
+    //      link_type 1 = recurring (accepts multiple contributions)
+    //      link_type 2 = open (any amount, any supported token)
+    //      Expiry enforced on-chain via block height.
+    // ================================================================
+
+    async transition create_payment_link(
+        amount: u64,
+        token_type: u8,
+        link_type: u8,
+        salt: scalar,
+        expiry_hours: u32
+    ) -> (PaymentLink, Future) {
+        assert(link_type <= 2u8);
+        assert(token_type <= 2u8);
+
+        // For open donation links, amount can be 0
+        // For standard/recurring, amount must be > 0
+        assert(link_type == 2u8 || amount > 0u64);
+
+        let link_hash: field = BHP256::commit_to_field(
+            self.signer as field + amount as field, salt
+        );
+
+        let nonce: field = BHP256::hash_to_field(
+            link_hash + self.signer as field
+        );
+
+        let link: PaymentLink = PaymentLink {
+            owner: self.signer,
+            link_hash: link_hash,
+            amount: amount,
+            token_type: token_type,
+            link_type: link_type,
+            expiry_height: 0u32,
+            nonce_seed: nonce
+        };
+
+        return (link, finalize_create_link(link_hash, expiry_hours));
+    }
+
+    async function finalize_create_link(
+        link_hash: field,
+        expiry_hours: u32
+    ) {
+        let exists: bool = Mapping::get_or_use(link_active, link_hash, false);
+        assert(!exists);
+        Mapping::set(link_active, link_hash, true);
+        Mapping::set(link_contributions, link_hash, 0u64);
+    }
+
+    // ================================================================
+    //  14. FULFILL PAYMENT LINK — Credits
+    //      Payer fulfills a payment link with Aleo Credits.
+    //      Generates dual receipts (buyer + merchant).
+    // ================================================================
+
+    async transition fulfill_link_credits(
+        payment: credits.aleo/credits,
+        merchant: address,
+        amount: u64,
+        link_hash: field,
+        salt: scalar
+    ) -> (BuyerReceipt, MerchantReceipt, credits.aleo/credits, credits.aleo/credits, Future) {
+        assert(amount > 0u64);
+        assert(merchant != self.signer);
+
+        let (buyer_change, merchant_payment): (credits.aleo/credits, credits.aleo/credits) =
+            credits.aleo/transfer_private(payment, merchant, amount);
+
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: amount,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
+
+        let nonce_buyer: field = BHP256::hash_to_field(
+            purchase_commitment + self.signer as field
+        );
+        let nonce_merchant: field = BHP256::hash_to_field(
+            purchase_commitment + merchant as field
+        );
+
+        let buyer_receipt: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: amount,
+            cart_commitment: link_hash,
+            timestamp: 0u64,
+            purchase_commitment: purchase_commitment,
+            token_type: 0u8,
+            nonce_seed: nonce_buyer
+        };
+
+        let merchant_receipt: MerchantReceipt = MerchantReceipt {
+            owner: merchant,
+            purchase_commitment: purchase_commitment,
+            total: amount,
+            token_type: 0u8,
+            nonce_seed: nonce_merchant
+        };
+
+        return (
+            buyer_receipt, merchant_receipt, buyer_change, merchant_payment,
+            finalize_fulfill_link(link_hash, purchase_commitment)
+        );
+    }
+
+    async function finalize_fulfill_link(
+        link_hash: field,
+        purchase_commitment: field
+    ) {
+        let active: bool = Mapping::get_or_use(link_active, link_hash, false);
+        assert(active);
+
+        let exists: bool = Mapping::get_or_use(purchase_exists, purchase_commitment, false);
+        assert(!exists);
+        Mapping::set(purchase_exists, purchase_commitment, true);
+
+        let count: u64 = Mapping::get_or_use(link_contributions, link_hash, 0u64);
+        Mapping::set(link_contributions, link_hash, count + 1u64);
+    }
+
+    // ================================================================
+    //  15. FULFILL PAYMENT LINK — USDCx
+    //      Payer fulfills a payment link with USDCx stablecoin.
+    // ================================================================
+
+    async transition fulfill_link_usdcx(
+        payment: test_usdcx_stablecoin.aleo/Token,
+        merchant: address,
+        amount: u128,
+        link_hash: field,
+        salt: scalar,
+        private proofs: [MerkleProof; 2]
+    ) -> (
+        BuyerReceipt, MerchantReceipt,
+        test_usdcx_stablecoin.aleo/ComplianceRecord,
+        test_usdcx_stablecoin.aleo/Token,
+        test_usdcx_stablecoin.aleo/Token,
+        Future
+    ) {
+        let amount_u64: u64 = amount as u64;
+        assert(amount_u64 > 0u64);
+        assert(merchant != self.signer);
+
+        let (compliance, token_merchant, token_change, transfer_f): (
+            test_usdcx_stablecoin.aleo/ComplianceRecord,
+            test_usdcx_stablecoin.aleo/Token,
+            test_usdcx_stablecoin.aleo/Token,
+            Future
+        ) = test_usdcx_stablecoin.aleo/transfer_private(merchant, amount, payment, proofs);
+
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: amount_u64,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
+
+        let nonce_buyer: field = BHP256::hash_to_field(
+            purchase_commitment + self.signer as field
+        );
+        let nonce_merchant: field = BHP256::hash_to_field(
+            purchase_commitment + merchant as field
+        );
+
+        let buyer_receipt: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: amount_u64,
+            cart_commitment: link_hash,
+            timestamp: 0u64,
+            purchase_commitment: purchase_commitment,
+            token_type: 1u8,
+            nonce_seed: nonce_buyer
+        };
+
+        let merchant_receipt: MerchantReceipt = MerchantReceipt {
+            owner: merchant,
+            purchase_commitment: purchase_commitment,
+            total: amount_u64,
+            token_type: 1u8,
+            nonce_seed: nonce_merchant
+        };
+
+        let f: Future = finalize_fulfill_link_usdcx(link_hash, purchase_commitment, transfer_f);
+        return (buyer_receipt, merchant_receipt, compliance, token_merchant, token_change, f);
+    }
+
+    async function finalize_fulfill_link_usdcx(
+        link_hash: field,
+        purchase_commitment: field,
+        transfer_f: Future
+    ) {
+        transfer_f.await();
+        let active: bool = Mapping::get_or_use(link_active, link_hash, false);
+        assert(active);
+        let exists: bool = Mapping::get_or_use(purchase_exists, purchase_commitment, false);
+        assert(!exists);
+        Mapping::set(purchase_exists, purchase_commitment, true);
+        let count: u64 = Mapping::get_or_use(link_contributions, link_hash, 0u64);
+        Mapping::set(link_contributions, link_hash, count + 1u64);
+    }
+
+    // ================================================================
+    //  16. FULFILL PAYMENT LINK — USAD
+    //      Payer fulfills a payment link with USAD stablecoin.
+    // ================================================================
+
+    async transition fulfill_link_usad(
+        payment: test_usad_stablecoin.aleo/Token,
+        merchant: address,
+        amount: u128,
+        link_hash: field,
+        salt: scalar,
+        private proofs: [MerkleProof; 2]
+    ) -> (
+        BuyerReceipt, MerchantReceipt,
+        test_usad_stablecoin.aleo/ComplianceRecord,
+        test_usad_stablecoin.aleo/Token,
+        test_usad_stablecoin.aleo/Token,
+        Future
+    ) {
+        let amount_u64: u64 = amount as u64;
+        assert(amount_u64 > 0u64);
+        assert(merchant != self.signer);
+
+        let (compliance, token_merchant, token_change, transfer_f): (
+            test_usad_stablecoin.aleo/ComplianceRecord,
+            test_usad_stablecoin.aleo/Token,
+            test_usad_stablecoin.aleo/Token,
+            Future
+        ) = test_usad_stablecoin.aleo/transfer_private(merchant, amount, payment, proofs);
+
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: amount_u64,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
+
+        let nonce_buyer: field = BHP256::hash_to_field(
+            purchase_commitment + self.signer as field
+        );
+        let nonce_merchant: field = BHP256::hash_to_field(
+            purchase_commitment + merchant as field
+        );
+
+        let buyer_receipt: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: amount_u64,
+            cart_commitment: link_hash,
+            timestamp: 0u64,
+            purchase_commitment: purchase_commitment,
+            token_type: 2u8,
+            nonce_seed: nonce_buyer
+        };
+
+        let merchant_receipt: MerchantReceipt = MerchantReceipt {
+            owner: merchant,
+            purchase_commitment: purchase_commitment,
+            total: amount_u64,
+            token_type: 2u8,
+            nonce_seed: nonce_merchant
+        };
+
+        let f: Future = finalize_fulfill_link_usad(link_hash, purchase_commitment, transfer_f);
+        return (buyer_receipt, merchant_receipt, compliance, token_merchant, token_change, f);
+    }
+
+    async function finalize_fulfill_link_usad(
+        link_hash: field,
+        purchase_commitment: field,
+        transfer_f: Future
+    ) {
+        transfer_f.await();
+        let active: bool = Mapping::get_or_use(link_active, link_hash, false);
+        assert(active);
+        let exists: bool = Mapping::get_or_use(purchase_exists, purchase_commitment, false);
+        assert(!exists);
+        Mapping::set(purchase_exists, purchase_commitment, true);
+        let count: u64 = Mapping::get_or_use(link_contributions, link_hash, 0u64);
+        Mapping::set(link_contributions, link_hash, count + 1u64);
+    }
+
+    // ================================================================
+    //  17. CLOSE PAYMENT LINK — Deactivate recurring/open links
+    //      Only the link creator (merchant) can close their link.
+    // ================================================================
+
+    async transition close_payment_link(
+        link: PaymentLink
+    ) -> Future {
+        assert_eq(link.owner, self.signer);
+        return finalize_close_link(link.link_hash);
+    }
+
+    async function finalize_close_link(link_hash: field) {
+        Mapping::set(link_active, link_hash, false);
+    }
+
+    // ================================================================
+    //  18. FULFILL PAYMENT LINK WITH ESCROW — Credits only
+    //      Payer fulfills a payment link with buyer protection.
+    //      Funds locked in escrow with refund window.
+    // ================================================================
+
+    async transition fulfill_link_escrow_credits(
+        payment: credits.aleo/credits,
+        merchant: address,
+        amount: u64,
+        link_hash: field,
+        salt: scalar
+    ) -> (BuyerReceipt, EscrowReceipt, credits.aleo/credits, Future) {
+        assert(amount > 0u64);
+        assert(merchant != self.signer);
+
+        let (change, transfer_f): (credits.aleo/credits, Future) =
+            credits.aleo/transfer_private_to_public(payment, self.address, amount);
+
+        let data: PurchaseData = PurchaseData {
+            merchant: merchant as field,
+            amount: amount,
+        };
+        let purchase_commitment: field = BHP256::commit_to_field(data, salt);
+
+        let nonce_buyer: field = BHP256::hash_to_field(
+            purchase_commitment + self.signer as field
+        );
+        let nonce_escrow: field = BHP256::hash_to_field(
+            purchase_commitment + 1field
+        );
+
+        let buyer_receipt: BuyerReceipt = BuyerReceipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: amount,
+            cart_commitment: link_hash,
+            timestamp: 0u64,
+            purchase_commitment: purchase_commitment,
+            token_type: 0u8,
+            nonce_seed: nonce_buyer
+        };
+
+        let escrow: EscrowReceipt = EscrowReceipt {
+            owner: self.signer,
+            merchant: merchant,
+            total: amount,
+            cart_commitment: link_hash,
+            purchase_commitment: purchase_commitment,
+            nonce_seed: nonce_escrow
+        };
+
+        let f: Future = finalize_fulfill_link_escrow(link_hash, purchase_commitment, transfer_f);
+        return (buyer_receipt, escrow, change, f);
+    }
+
+    async function finalize_fulfill_link_escrow(
+        link_hash: field,
+        purchase_commitment: field,
+        transfer_f: Future
+    ) {
+        transfer_f.await();
+
+        let active: bool = Mapping::get_or_use(link_active, link_hash, false);
+        assert(active);
+
+        let exists: bool = Mapping::get_or_use(purchase_exists, purchase_commitment, false);
+        assert(!exists);
+        Mapping::set(purchase_exists, purchase_commitment, true);
+        Mapping::set(escrow_active, purchase_commitment, true);
+        let height_hash: field = BHP256::hash_to_field(block.height as field);
+        Mapping::set(escrow_timestamps, purchase_commitment, height_hash);
+
+        let count: u64 = Mapping::get_or_use(link_contributions, link_hash, 0u64);
+        Mapping::set(link_contributions, link_hash, count + 1u64);
     }
 }

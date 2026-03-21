@@ -196,3 +196,27 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * SHA-256 hash of an address string (matches backend hashAddress)
+ */
+export async function hashAddress(address: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(address);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Synchronous simple hash for non-critical uses (address display)
+ */
+export function hashAddressSync(address: string): string {
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) {
+    const char = address.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16).padStart(16, '0');
+}

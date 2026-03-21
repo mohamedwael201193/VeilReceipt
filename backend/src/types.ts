@@ -1,4 +1,4 @@
-// Type definitions for VeilReceipt v3 backend
+// Type definitions for VeilReceipt v4 backend
 
 import { z } from 'zod';
 
@@ -152,6 +152,23 @@ export interface PaymentSession {
   created_at: string;
 }
 
+export interface PaymentLink {
+  id: string;
+  merchant_id: string;
+  merchant_address: string;
+  link_hash: string;
+  amount: number;
+  currency: 'credits' | 'usdcx' | 'usad';
+  link_type: 'one_time' | 'recurring' | 'open';
+  label: string;
+  description: string;
+  is_active: boolean;
+  total_contributions: number;
+  total_collected: number;
+  tx_id: string;
+  created_at: string;
+}
+
 // ========== JSON Database Structure ==========
 export interface JsonDatabase {
   merchants: Merchant[];
@@ -165,6 +182,7 @@ export interface JsonDatabase {
   webhooks: WebhookEndpoint[];
   webhook_deliveries: WebhookDelivery[];
   payment_sessions: PaymentSession[];
+  payment_links: PaymentLink[];
 }
 
 // ========== Zod Schemas ==========
@@ -243,4 +261,23 @@ export const CreatePaymentSessionSchema = z.object({
   metadata: z.record(z.any()).optional().default({}),
   redirect_url: z.string().url().max(500).optional(),
   cancel_url: z.string().url().max(500).optional(),
+});
+
+export const CreatePaymentLinkSchema = z.object({
+  link_hash: z.string(),
+  amount: z.number().min(0),
+  currency: z.enum(['credits', 'usdcx', 'usad']).default('credits'),
+  link_type: z.enum(['one_time', 'recurring', 'open']),
+  label: z.string().min(1).max(200),
+  description: z.string().max(500).default(''),
+  tx_id: z.string(),
+});
+
+export const FulfillPaymentLinkSchema = z.object({
+  link_id: z.string(),
+  purchase_commitment: z.string(),
+  buyer_address_hash: z.string(),
+  amount: z.number().positive(),
+  tx_id: z.string(),
+  payment_mode: z.enum(['private', 'escrow']),
 });
