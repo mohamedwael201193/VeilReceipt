@@ -38,8 +38,6 @@ export const TRANSITIONS = {
   submit_anonymous_review: 'submit_anonymous_review',
   create_payment_link: 'create_payment_link',
   fulfill_link_credits: 'fulfill_link_credits',
-  fulfill_link_usdcx: 'fulfill_link_usdcx',
-  fulfill_link_usad: 'fulfill_link_usad',
   close_payment_link: 'close_payment_link',
   fulfill_link_escrow_credits: 'fulfill_link_escrow_credits',
 } as const;

@@ -1899,7 +1899,129 @@ export function useVeilWallet() {
   }, [address, findCreditsRecord, executeTransaction, pollTransaction]);
 
   /**
-   * Close a payment link (merchant only).
+   * Fulfill a payment link with USDCx stablecoin.
+   * Uses the existing purchase_private_usdcx transition with link_hash as cart_commitment.
+   */
+  const fulfillLinkUsdcx = useCallback(async (
+    merchantAddress: string,
+    amount: number,
+    linkHash: string,
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const tokenRecord = await findTokenRecord(BigInt(amount));
+      if (!tokenRecord) {
+        throw new Error(`Insufficient USDCx. Need ${(amount / 1_000_000).toFixed(2)} USDCx.`);
+      }
+
+      const salt = generateAleoScalar();
+      const proofs = buildUsdcxMerkleProofs();
+
+      const inputs = [
+        tokenRecord,
+        merchantAddress,
+        `${amount}u128`,
+        toAleoField(linkHash),   // link_hash as cart_commitment
+        toAleoU64(0),            // timestamp 0 for link payments
+        salt,
+        proofs,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_private_usdcx,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { action: 'fulfill_link_usdcx', merchantAddress, amount, linkHash },
+      });
+
+      toast.success('USDCx link payment submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('USDCx payment confirmed on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('USDCx payment may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findTokenRecord, executeTransaction, pollTransaction]);
+
+  /**
+   * Fulfill a payment link with USAD stablecoin.
+   * Uses the existing purchase_private_usad transition with link_hash as cart_commitment.
+   */
+  const fulfillLinkUsad = useCallback(async (
+    merchantAddress: string,
+    amount: number,
+    linkHash: string,
+  ) => {
+    if (!address) throw new Error('Wallet not connected');
+    setLoading(true);
+
+    try {
+      const tokenRecord = await findUsadTokenRecord(BigInt(amount));
+      if (!tokenRecord) {
+        throw new Error(`Insufficient USAD. Need ${(amount / 1_000_000).toFixed(2)} USAD.`);
+      }
+
+      const salt = generateAleoScalar();
+      const proofs = buildUsadMerkleProofs();
+
+      const inputs = [
+        tokenRecord,
+        merchantAddress,
+        `${amount}u128`,
+        toAleoField(linkHash),   // link_hash as cart_commitment
+        toAleoU64(0),            // timestamp 0 for link payments
+        salt,
+        proofs,
+      ];
+
+      const txId = await executeTransaction(
+        PROGRAM_ID,
+        TRANSITIONS.purchase_private_usad,
+        inputs,
+      );
+
+      pendingTxStore.addTransaction({
+        txId,
+        type: 'purchase',
+        data: { action: 'fulfill_link_usad', merchantAddress, amount, linkHash },
+      });
+
+      toast.success('USAD link payment submitted!');
+
+      pollTransaction(txId).then((confirmed) => {
+        if (confirmed) {
+          pendingTxStore.confirmTransaction(txId);
+          toast.success('USAD payment confirmed on-chain!');
+        } else {
+          pendingTxStore.failTransaction(txId);
+          toast.error('USAD payment may have failed.');
+        }
+      });
+
+      return txId;
+    } finally {
+      setLoading(false);
+    }
+  }, [address, findUsadTokenRecord, executeTransaction, pollTransaction]);
+
+  /**
+   * Close a payment link. Deactivates it on-chain.
    * Requires the PaymentLink record plaintext.
    */
   const closePaymentLink = useCallback(async (linkRecordPlaintext: string) => {
@@ -2033,6 +2155,8 @@ export function useVeilWallet() {
     // Payment links (v8)
     createPaymentLink,
     fulfillLinkCredits,
+    fulfillLinkUsdcx,
+    fulfillLinkUsad,
     fulfillLinkEscrow,
     closePaymentLink,
     getPaymentLinks,

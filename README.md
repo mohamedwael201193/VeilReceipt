@@ -46,7 +46,7 @@ The protocol covers the full commerce lifecycle:
 | ⚡ **Integration API** | Merchant API keys, webhooks, payment sessions — embed VeilReceipt in any store |
 | 🔌 **Embeddable Widget** | Drop-in JavaScript SDK for Shopify, WooCommerce, or any e-commerce platform |
 
-Everything runs through a single Leo smart contract (`veilreceipt_v7.aleo`) deployed on Aleo Testnet, with a React frontend, Express API backend, and a full merchant integration layer for external platforms.
+Everything runs through a single Leo smart contract (`veilreceipt_v8.aleo`) deployed on Aleo Testnet, with a React frontend, Express API backend, and a full merchant integration layer for external platforms.
 
 ---
 
@@ -87,7 +87,7 @@ Everything runs through a single Leo smart contract (`veilreceipt_v7.aleo`) depl
          ┌──────────▼──────────────────────▼──────────────┐
          │                  Aleo Testnet                   │
          │  ────────────────────────────────────────────   │
-         │  veilreceipt_v7.aleo        (13 transitions)    │
+         │  veilreceipt_v8.aleo        (16 transitions)    │
          │  test_usdcx_stablecoin.aleo                     │
          │  test_usad_stablecoin.aleo                      │
          └──────────────────────┬──────────────────────────┘
@@ -187,9 +187,9 @@ See the embedded demo at [demo-store.html](frontend/public/demo-store.html) — 
 
 ---
 
-## 📜 Smart Contract — `veilreceipt_v7.aleo`
+## 📜 Smart Contract — `veilreceipt_v8.aleo`
 
-The entire protocol lives in one Leo program with **13 transitions**, **8 record types**, and **7 mappings**. All on-chain state uses **BHP256::commit_to_field** with scalar randomizers — raw addresses, amounts, and identities are never stored in any mapping.
+The entire protocol lives in one Leo program with **16 transitions**, **9 record types**, and **9 mappings**. All on-chain state uses **BHP256::commit_to_field** with scalar randomizers — raw addresses, amounts, and identities are never stored in any mapping.
 
 ### Record Types (Private — encrypted for owner)
 
@@ -267,7 +267,7 @@ Buyer pays with Escrow mode
          │
          ▼
 purchase_escrow_credits()
-   Credits locked under veilreceipt_v7.aleo program address
+   Credits locked under veilreceipt_v8.aleo program address
    escrow_active[commitment]     = true
    escrow_timestamps[commitment] = BHP256::hash_to_field(block.height)
    → BuyerReceipt + EscrowReceipt issued to buyer
@@ -531,7 +531,7 @@ npm run dev          # → http://localhost:5173
 ```env
 VITE_API_BASE_URL=http://localhost:3001
 VITE_ALEO_NETWORK=testnet
-VITE_ALEO_PROGRAM_ID=veilreceipt_v7.aleo
+VITE_ALEO_PROGRAM_ID=veilreceipt_v8.aleo
 VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
 ```
 

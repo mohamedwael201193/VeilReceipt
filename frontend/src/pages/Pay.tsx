@@ -35,7 +35,7 @@ const Pay: FC = () => {
   const [searchParams] = useSearchParams();
   const linkHash = searchParams.get('link');
   const navigate = useNavigate();
-  const { connected, address, purchase, fulfillLinkCredits, fulfillLinkEscrow, loading: walletLoading } = useVeilWallet();
+  const { connected, address, purchase, fulfillLinkCredits, fulfillLinkUsdcx, fulfillLinkUsad, fulfillLinkEscrow, loading: walletLoading } = useVeilWallet();
 
   const [session, setSession] = useState<SessionData | null>(null);
   const [linkData, setLinkData] = useState<PaymentLinkPublic | null>(null);
@@ -99,6 +99,10 @@ const Pay: FC = () => {
       let txId: string;
       if (privacy === 'escrow' && currency === 'credits') {
         txId = await fulfillLinkEscrow(merchantAddress, amount, linkData.link_hash);
+      } else if (currency === 'usdcx') {
+        txId = await fulfillLinkUsdcx(merchantAddress, amount, linkData.link_hash);
+      } else if (currency === 'usad') {
+        txId = await fulfillLinkUsad(merchantAddress, amount, linkData.link_hash);
       } else {
         txId = await fulfillLinkCredits(merchantAddress, amount, linkData.link_hash);
       }
@@ -121,7 +125,7 @@ const Pay: FC = () => {
     } finally {
       setPaying(false);
     }
-  }, [linkData, connected, address, merchantAddress, displayAmount, privacy, currency, fulfillLinkCredits, fulfillLinkEscrow]);
+  }, [linkData, connected, address, merchantAddress, displayAmount, privacy, currency, fulfillLinkCredits, fulfillLinkUsdcx, fulfillLinkUsad, fulfillLinkEscrow]);
 
   const handlePay = useCallback(async () => {
     if (!session || !connected || !address) return;
