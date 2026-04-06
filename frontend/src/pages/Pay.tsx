@@ -9,12 +9,18 @@ import toast from 'react-hot-toast';
 import { useVeilWallet } from '@/hooks/useVeilWallet';
 import { api } from '@/lib/api';
 import { Button, Badge } from '@/components/ui/Components';
-import { LoadingSpinner, TokenIcon } from '@/components/icons/Icons';
+import { LoadingSpinner } from '@/components/icons/Icons';
 import { ShieldIcon, PublicIcon, ClockIcon } from '@/components/icons/Icons';
 import { formatCredits, formatUsdcx, formatUsad } from '@/lib/stablecoin';
 import { hashAddressSync } from '@/lib/utils';
 import type { PaymentPrivacy, TokenType } from '@/lib/chain';
 import type { PaymentLinkPublic } from '@/lib/types';
+
+const CURRENCY_LOGOS: Record<string, string> = {
+  credits: '/aleoicon.png',
+  usdcx: '/usdcx.svg',
+  usad: '/USAD.svg',
+};
 
 interface SessionData {
   id: string;
@@ -222,16 +228,26 @@ const Pay: FC = () => {
         className="w-full max-w-md"
       >
         {/* Header */}
-        <div className="text-center mb-8">
+        <motion.div
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
           <div className="w-12 h-12 rounded-full bg-sky-500/10 flex items-center justify-center mx-auto mb-3">
             <ShieldIcon size={24} className="text-sky-400" />
           </div>
           <h1 className="text-2xl font-bold text-[#e5e2e1]">VeilReceipt Checkout</h1>
           <p className="text-[#c9c6c5]/60 text-sm mt-1">Private payment powered by Aleo</p>
-        </div>
+        </motion.div>
 
         {/* Payment Card */}
-        <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl overflow-hidden">
+        <motion.div
+          className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl overflow-hidden backdrop-blur-sm"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, type: 'spring', stiffness: 300, damping: 30 }}
+        >
           {/* Amount */}
           <div className="p-6 border-b border-[#d4bbff]/8">
             {isLinkMode && linkData ? (
@@ -248,7 +264,7 @@ const Pay: FC = () => {
                   <h3 className="text-lg font-semibold text-[#e5e2e1] mb-2">{linkData.label}</h3>
                 )}
                 <div className="flex items-center gap-3">
-                  <TokenIcon type={currency} />
+                  <img src={CURRENCY_LOGOS[currency] || CURRENCY_LOGOS.credits} alt={currency} className="w-8 h-8 rounded-full object-contain" />
                   {linkData.link_type === 'open' ? (
                     <span className="text-xl text-[#c9c6c5]/60">Any amount</span>
                   ) : (
@@ -267,7 +283,7 @@ const Pay: FC = () => {
               <>
                 <p className="text-[#c9c6c5]/60 text-xs uppercase tracking-wider mb-2">Amount Due</p>
                 <div className="flex items-center gap-3">
-                  <TokenIcon type={currency} />
+                  <img src={CURRENCY_LOGOS[currency] || CURRENCY_LOGOS.credits} alt={currency} className="w-8 h-8 rounded-full object-contain" />
                   <span className="text-3xl font-bold text-[#e5e2e1]">{formatAmount(session.amount)}</span>
                   <Badge variant="info">{currency.toUpperCase()}</Badge>
                 </div>
@@ -391,7 +407,7 @@ const Pay: FC = () => {
           )}
 
           {/* Footer */}
-          <div className="px-6 py-3 bg-white/[0.01] border-t border-[#d4bbff]/5">
+          <div className="px-6 py-3 bg-white/[0.01] border-t border-[#d4bbff]/5 rounded-b-2xl">
             <div className="flex items-center justify-between text-xs text-[#c9c6c5]/30">
               {isLinkMode && linkData ? (
                 <>
@@ -406,7 +422,7 @@ const Pay: FC = () => {
               ) : null}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Powered by */}
         <div className="text-center mt-6">
