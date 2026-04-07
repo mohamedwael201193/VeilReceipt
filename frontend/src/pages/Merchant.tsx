@@ -254,6 +254,16 @@ const Merchant: FC = () => {
     if (authenticated) loadPaymentLinks();
   }, [authenticated, loadPaymentLinks]);
 
+  // Auto-refresh links every 15s when on links tab and reload on tab focus
+  useEffect(() => {
+    if (!authenticated || tab !== 'links') return;
+    loadPaymentLinks();
+    const interval = setInterval(loadPaymentLinks, 15000);
+    const onFocus = () => loadPaymentLinks();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(interval); window.removeEventListener('focus', onFocus); };
+  }, [authenticated, tab, loadPaymentLinks]);
+
   const handleCreateLink = async () => {
     if (!linkForm.label) {
       toast.error('Label is required');
@@ -564,13 +574,23 @@ const Merchant: FC = () => {
                   <Badge variant="success" dot>Live</Badge>
                 )}
               </div>
-              <Button
-                icon={<PlusIcon size={16} />}
-                variant="glow"
-                onClick={() => setShowCreateLink(true)}
-              >
-                Create Link
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  icon={<RefreshIcon size={16} />}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => loadPaymentLinks()}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  icon={<PlusIcon size={16} />}
+                  variant="glow"
+                  onClick={() => setShowCreateLink(true)}
+                >
+                  Create Link
+                </Button>
+              </div>
             </div>
 
             {paymentLinks.length === 0 ? (
