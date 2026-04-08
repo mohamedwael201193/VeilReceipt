@@ -1,6 +1,6 @@
 // UI Components — Terminal / Obsidian Intelligence design system
 
-import { FC, ReactNode, ButtonHTMLAttributes, useState, useRef, useEffect } from 'react';
+import { FC, ReactNode, ButtonHTMLAttributes, useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LoadingSpinner } from '@/components/icons/Icons';
 
@@ -51,28 +51,114 @@ export const Button: FC<ButtonProps> = ({
   );
 };
 
-// ========== CARD ==========
+// ========== CARD (Spotlight + BorderBeam) ==========
 interface CardProps {
   children: ReactNode;
   className?: string;
   hover?: boolean;
   glow?: boolean;
+  spotlight?: boolean;
+  beam?: boolean;
+  beamColor?: { from: string; to: string };
+  tilt?: boolean;
   onClick?: () => void;
 }
 
-export const Card: FC<CardProps> = ({ children, className = '', hover = false, glow = false, onClick }) => {
+export const Card: FC<CardProps> = ({
+  children, className = '', hover = false, glow = false,
+  spotlight = true, beam = false, tilt = false,
+  beamColor, onClick,
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+  const [tiltStyle, setTiltStyle] = useState({});
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setMousePos({ x, y });
+    if (tilt) {
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const rotateX = ((y - centerY) / centerY) * -4;
+      const rotateY = ((x - centerX) / centerX) * 4;
+      setTiltStyle({ transform: `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)` });
+    }
+  }, [tilt]);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsHovered(false);
+    if (tilt) setTiltStyle({ transform: 'perspective(800px) rotateX(0deg) rotateY(0deg)' });
+  }, [tilt]);
+
   const Wrapper = onClick ? motion.button : motion.div;
 
   return (
     <Wrapper
-      className={`relative group bg-[#1c1b1b]/60 border border-[#d4bbff]/10 rounded-2xl p-6 transition-all duration-300 backdrop-blur-sm ${
-        hover ? 'hover:bg-[#1c1b1b]/80 hover:border-[#d4bbff]/25 cursor-pointer hover:shadow-lg hover:shadow-[#d4bbff]/[0.03]' : ''
-      } ${glow ? 'hover:border-[#7dffa2]/30 hover:shadow-[0_0_30px_rgba(125,255,162,0.06)]' : ''} ${className}`}
+      ref={cardRef as any}
+      className={`relative group overflow-hidden rounded-2xl border border-[#d4bbff]/[0.08] p-6 transition-all duration-500 ${
+        hover ? 'cursor-pointer' : ''
+      } ${glow ? 'hover:border-[#7dffa2]/25' : ''} ${className}`}
+      style={{
+        background: 'linear-gradient(135deg, rgba(28,27,27,0.7) 0%, rgba(10,10,10,0.8) 100%)',
+        backdropFilter: 'blur(12px)',
+        ...(tilt ? { ...tiltStyle, transition: isHovered ? 'transform 0.1s ease-out' : 'transform 0.4s ease-out' } : {}),
+      }}
       onClick={onClick}
-      whileHover={hover ? { y: -4, transition: { type: 'spring', stiffness: 400, damping: 25 } } : undefined}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={handleMouseLeave}
+      whileHover={hover ? { y: -6, transition: { type: 'spring', stiffness: 400, damping: 25 } } : undefined}
       whileTap={hover ? { scale: 0.98 } : undefined}
     >
-      {children}
+      {/* Spotlight glow following cursor */}
+      {spotlight && isHovered && (
+        <div
+          className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-300"
+          style={{
+            background: `radial-gradient(500px circle at ${mousePos.x}px ${mousePos.y}px, ${
+              glow ? 'rgba(125,255,162,0.06)' : 'rgba(212,187,255,0.06)'
+            }, transparent 45%)`,
+          }}
+        />
+      )}
+
+      {/* Top-edge shimmer line */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4bbff]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+      {/* Border Beam animation */}
+      {beam && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ borderRadius: 'inherit' }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `conic-gradient(from calc(var(--card-beam) * 1deg), transparent 60%, ${beamColor?.from || '#d4bbff'}, ${beamColor?.to || '#7dffa2'}, transparent 80%)`,
+              mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              maskComposite: 'exclude',
+              WebkitMaskComposite: 'xor',
+              padding: '1.5px',
+              animation: 'card-beam-spin 12s linear infinite',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Glass noise overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.015] mix-blend-overlay" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")', backgroundSize: '128px' }} />
+
+      {/* Inner glow on hover */}
+      <div className={`absolute inset-0 pointer-events-none rounded-2xl transition-all duration-700 ${
+        glow
+          ? 'group-hover:shadow-[inset_0_0_60px_rgba(125,255,162,0.04)]'
+          : 'group-hover:shadow-[inset_0_0_60px_rgba(212,187,255,0.03)]'
+      }`} />
+
+      {/* Content */}
+      <div className="relative z-10">{children}</div>
     </Wrapper>
   );
 };
@@ -303,7 +389,7 @@ interface StatCardProps {
 }
 
 export const StatCard: FC<StatCardProps> = ({ label, value, icon, trend, className = '' }) => (
-  <Card className={className}>
+  <Card className={`overflow-hidden ${className}`} tilt spotlight>
     <div className="flex items-start justify-between">
       <div>
         <p className="text-[10px] font-mono tracking-widest uppercase text-[#c9c6c5]">{label}</p>
@@ -314,8 +400,10 @@ export const StatCard: FC<StatCardProps> = ({ label, value, icon, trend, classNa
           </p>
         )}
       </div>
-      {icon && <div className="text-[#d4bbff]/30">{icon}</div>}
+      {icon && <div className="text-[#d4bbff]/30 transition-transform duration-500 group-hover:scale-110 group-hover:text-[#d4bbff]/50">{icon}</div>}
     </div>
+    {/* Bottom accent line */}
+    <div className="absolute bottom-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-[#d4bbff]/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
   </Card>
 );
 

@@ -411,7 +411,7 @@ const Merchant: FC = () => {
           transition={{ duration: 0.5 }}
           className="mb-8"
         >
-          <Card className={onChainRegistered ? 'border-[#7dffa2]/15' : 'border-amber-500/15'}>
+          <Card className={onChainRegistered ? 'border-[#7dffa2]/15' : 'border-amber-500/15'} beam={!onChainRegistered} beamColor={{ from: '#f59e0b', to: '#7dffa2' }}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2.5 mb-2">
@@ -542,7 +542,7 @@ const Merchant: FC = () => {
                           <TrashIcon size={15} />
                         </button>
                       </div>
-                      <div className="mt-4 flex items-end justify-between pt-3 border-t border-[#d4bbff]/8">
+                      <div className="mt-4 flex items-end justify-between pt-3 border-t border-[#d4bbff]/[0.06]">
                         <TokenAmount
                           amount={p.price_type === 'usdcx' ? formatUsdcx(p.price) : p.price_type === 'usad' ? formatUsad(p.price) : formatCredits(p.price)}
                           type={p.price_type === 'usad' ? 'usad' : p.price_type === 'usdcx' ? 'usdcx' : 'credits'}
@@ -624,10 +624,10 @@ const Merchant: FC = () => {
                       visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] } },
                     }}
                   >
-                    <Card hover>
+                    <Card hover beam={link.is_active} beamColor={{ from: '#7dffa2', to: '#d4bbff' }} tilt>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-[#d4bbff]/8 border border-[#d4bbff]/10 flex items-center justify-center flex-shrink-0">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#d4bbff]/10 to-[#7dffa2]/5 border border-[#d4bbff]/10 flex items-center justify-center flex-shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(212,187,255,0.1)]">
                             <img src={currencyLogo} alt={link.currency} className="w-5 h-5 object-contain" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -648,19 +648,19 @@ const Merchant: FC = () => {
                       </div>
 
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-xl">
+                        <div className="p-2.5 bg-[#1c1b1b]/50 border border-[#d4bbff]/[0.06] rounded-xl backdrop-blur-sm">
                           <p className="text-[#c9c6c5]/40 text-[10px] uppercase tracking-wider">Amount</p>
                           <p className="text-[#e5e2e1] font-mono text-sm mt-0.5">
                             {link.link_type === 'open' ? 'Any' : (link.amount / 1_000_000).toFixed(2)}
                           </p>
                         </div>
-                        <div className="p-2.5 bg-[#1c1b1b]/40 border border-[#d4bbff]/8 rounded-xl">
+                        <div className="p-2.5 bg-[#1c1b1b]/50 border border-[#d4bbff]/[0.06] rounded-xl backdrop-blur-sm">
                           <p className="text-[#c9c6c5]/40 text-[10px] uppercase tracking-wider">Payments</p>
                           <p className="text-[#e5e2e1] font-mono text-sm mt-0.5">{link.total_contributions}</p>
                         </div>
                       </div>
 
-                      <div className="mt-4 flex gap-2 pt-3 border-t border-[#d4bbff]/8">
+                      <div className="mt-4 flex gap-2 pt-3 border-t border-[#d4bbff]/[0.06]">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -726,7 +726,8 @@ const Merchant: FC = () => {
                     ].map((item) => (
                       <div
                         key={item.label}
-                        className="p-5 bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-xl"
+                        className="p-5 rounded-xl border border-[#d4bbff]/[0.06] backdrop-blur-sm transition-all duration-300 hover:border-[#d4bbff]/15"
+                        style={{ background: 'linear-gradient(135deg, rgba(28,27,27,0.5) 0%, rgba(10,10,10,0.6) 100%)' }}
                       >
                         <p className="text-[#c9c6c5]/40 text-xs uppercase tracking-wider">{item.label}</p>
                         <p className="text-2xl font-bold text-[#e5e2e1] mt-2">{item.value}</p>

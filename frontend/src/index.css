@@ -125,3 +125,30 @@
   background: linear-gradient(90deg, transparent, #d4bbff33, transparent);
   animation: scanLine 8s linear infinite;
 }
+
+/* Card border beam animation */
+@property --card-beam {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: false;
+}
+
+@keyframes card-beam-spin {
+  to { --card-beam: 360; }
+}
+
+/* Card shimmer sweep */
+@keyframes card-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Gradient shift for animated text */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 4s ease infinite;
+}
