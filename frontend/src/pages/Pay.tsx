@@ -82,6 +82,7 @@ const Pay: FC = () => {
   const isExpired = session ? new Date(session.expires_at) < new Date() : false;
   const currency = (isLinkMode ? linkData?.currency : session?.currency || 'credits') as TokenType;
   const merchantAddress = isLinkMode ? linkData?.merchant_address : session?.merchant_address;
+  const isSelfPayment = !!(connected && address && merchantAddress && address === merchantAddress);
   const displayAmount = isLinkMode
     ? (linkData?.link_type === 'open' ? (customAmount ? Math.floor(parseFloat(customAmount) * 1_000_000) : 0) : (linkData?.amount || 0))
     : (session?.amount || 0);
@@ -96,6 +97,7 @@ const Pay: FC = () => {
   const handlePayLink = useCallback(async () => {
     if (!linkData || !connected || !address || !merchantAddress) return;
     if (!linkData.is_active) { toast.error('Link is no longer active'); return; }
+    if (address === merchantAddress) { toast.error('You cannot pay your own payment link'); return; }
 
     const amount = displayAmount;
     if (amount <= 0) { toast.error('Enter a valid amount'); return; }
@@ -136,6 +138,7 @@ const Pay: FC = () => {
   const handlePay = useCallback(async () => {
     if (!session || !connected || !address) return;
     if (isExpired) { toast.error('Session expired'); return; }
+    if (session.merchant_address === address) { toast.error('You cannot pay your own payment session'); return; }
 
     // Validate constraints
     if (currency === 'usdcx' && privacy !== 'private') {
@@ -377,6 +380,14 @@ const Pay: FC = () => {
                 </div>
               )}
 
+              {/* Self-payment warning */}
+              {isSelfPayment && (
+                <div className="mb-5 p-3 rounded-xl bg-red-500/[0.08] border border-red-500/20">
+                  <p className="text-red-400 text-sm font-medium mb-1">Cannot pay yourself</p>
+                  <p className="text-red-400/60 text-xs">The connected wallet is the same as the merchant. Please switch to a different wallet to complete this payment.</p>
+                </div>
+              )}
+
               {/* Connect or Pay */}
               {!connected ? (
                 <div className="text-center">
@@ -389,12 +400,14 @@ const Pay: FC = () => {
                     variant="primary"
                     className="w-full"
                     onClick={isLinkMode ? handlePayLink : handlePay}
-                    disabled={paying || walletLoading || (isLinkMode && linkData?.link_type === 'open' && !customAmount)}
+                    disabled={paying || walletLoading || isSelfPayment || (isLinkMode && linkData?.link_type === 'open' && !customAmount)}
                   >
                     {paying ? (
                       <span className="flex items-center justify-center gap-2">
                         <LoadingSpinner /> Processing ZK Proof...
                       </span>
+                    ) : isSelfPayment ? (
+                      'Cannot pay yourself'
                     ) : (
                       `Pay ${displayAmount > 0 ? formatAmount(displayAmount) : ''}`
                     )}
