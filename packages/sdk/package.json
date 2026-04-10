@@ -1,5 +1,5 @@
 {
-  "name": "@veilreceipt/sdk",
+  "name": "veilreceipt-sdk",
   "version": "1.0.0",
   "description": "VeilReceipt SDK — Accept private payments on Aleo with payment links, escrow, and ZK receipts",
   "main": "dist/index.js",
@@ -7,9 +7,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/index.mjs"
     }
   },
   "files": [

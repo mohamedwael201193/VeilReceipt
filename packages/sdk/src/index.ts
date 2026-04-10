@@ -65,7 +65,7 @@ export { VeilReceiptError };
  * VeilReceipt SDK Client
  *
  * ```ts
- * import { VeilReceipt } from '@veilreceipt/sdk';
+ * import { VeilReceipt } from 'veilreceipt-sdk';
  *
  * const veil = new VeilReceipt({
  *   baseUrl: 'https://api.veilreceipt.com',

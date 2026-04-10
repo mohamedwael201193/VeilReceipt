@@ -16,6 +16,7 @@ const navLinks = [
   { path: '/merchant', label: 'MERCHANT' },
   { path: '/verify', label: 'VERIFY' },
   { path: '/integrate', label: 'API' },
+  { path: '/developer', label: 'DOCS' },
 ];
 
 export const Header: FC = () => {

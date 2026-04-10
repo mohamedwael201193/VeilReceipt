@@ -1,17 +1,17 @@
-# @veilreceipt/sdk
+# veilreceipt-sdk
 
 TypeScript SDK for integrating **VeilReceipt** — private, ZK-powered payments on Aleo — into any application.
 
 ## Installation
 
 ```bash
-npm install @veilreceipt/sdk
+npm install veilreceipt-sdk
 ```
 
 ## Quick Start
 
 ```ts
-import { VeilReceipt } from '@veilreceipt/sdk';
+import { VeilReceipt } from 'veilreceipt-sdk';
 
 const veil = new VeilReceipt({
   baseUrl: 'https://api.veilreceipt.com',
@@ -102,7 +102,7 @@ console.log('Signing secret:', wh.signing_secret);
 ## Error Handling
 
 ```ts
-import { VeilReceipt, VeilReceiptError } from '@veilreceipt/sdk';
+import { VeilReceipt, VeilReceiptError } from 'veilreceipt-sdk';
 
 try {
   await veil.getPaymentSession('invalid');

@@ -432,8 +432,8 @@ function verifyWebhook(body, signature, secret) {
               <div className="bg-[#1c1b1b]/40 border border-[#d4bbff]/10 rounded-2xl p-6">
                 <h2 className="text-lg font-semibold text-[#e5e2e1] mb-4">TypeScript SDK</h2>
                 <p className="text-[#c9c6c5]/60 text-sm mb-4">Install the official SDK for type-safe API access:</p>
-                <pre className="bg-[#050505]/50 border border-[#d4bbff]/10 rounded-xl p-4 text-sm text-[#e5e2e1]/80 overflow-x-auto font-mono mb-4">{`npm install @veilreceipt/sdk`}</pre>
-                <pre className="bg-[#050505]/50 border border-[#d4bbff]/10 rounded-xl p-4 text-sm text-[#e5e2e1]/80 overflow-x-auto font-mono">{`import { VeilReceipt } from '@veilreceipt/sdk';
+                <pre className="bg-[#050505]/50 border border-[#d4bbff]/10 rounded-xl p-4 text-sm text-[#e5e2e1]/80 overflow-x-auto font-mono mb-4">{`npm install veilreceipt-sdk`}</pre>
+                <pre className="bg-[#050505]/50 border border-[#d4bbff]/10 rounded-xl p-4 text-sm text-[#e5e2e1]/80 overflow-x-auto font-mono">{`import { VeilReceipt } from 'veilreceipt-sdk';
 
 const veil = new VeilReceipt({
   baseUrl: '${window.location.origin.replace('localhost:5173', 'localhost:3001')}',

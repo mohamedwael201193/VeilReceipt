@@ -4,607 +4,454 @@
 
 # VeilReceipt
 
-### 🛡️ Privacy-First Commerce Protocol on Aleo
+### Privacy-First Zero-Knowledge Commerce Protocol on Aleo
 
 *Buy anything. Prove everything. Reveal nothing.*
 
 <br/>
 
-[![Aleo Testnet](https://img.shields.io/badge/Network-Aleo%20Testnet-6366f1?style=for-the-badge)](https://explorer.provable.com/testnet)
-[![Contract](https://img.shields.io/badge/Contract-veilreceipt__v7.aleo-8b5cf6?style=for-the-badge)](https://testnet.explorer.provable.com)
-[![Leo](https://img.shields.io/badge/Leo-Smart%20Contract-a855f7?style=for-the-badge)](https://leo-lang.org/)
+[![Live App](https://img.shields.io/badge/Live-veil--receipt.vercel.app-7dffa2?style=for-the-badge)](https://veil-receipt.vercel.app)
+[![Contract](https://img.shields.io/badge/Contract-veilreceipt__v8.aleo-8b5cf6?style=for-the-badge)](https://testnet.explorer.provable.com/program/veilreceipt_v8.aleo)
+[![SDK](https://img.shields.io/badge/npm-veilreceipt--sdk-cb3837?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/veilreceipt-sdk)
+[![Leo](https://img.shields.io/badge/Leo-3.4.0-a855f7?style=for-the-badge)](https://leo-lang.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 
 <br/>
 
-**[🛒 Shop](frontend/src/pages/Checkout.tsx)** &nbsp;·&nbsp; **[🧾 Receipts](frontend/src/pages/Receipts.tsx)** &nbsp;·&nbsp; **[🔐 Verify](frontend/src/pages/Verify.tsx)** &nbsp;·&nbsp; **[📊 Merchant](frontend/src/pages/Merchant.tsx)** &nbsp;·&nbsp; **[⚡ Integrate](frontend/src/pages/Integrate.tsx)** &nbsp;·&nbsp; **[📜 Contract](contracts/src/main.leo)**
+**[Live App](https://veil-receipt.vercel.app)** · **[SDK Docs](https://veil-receipt.vercel.app/developer)** · **[Contract Explorer](https://testnet.explorer.provable.com/program/veilreceipt_v8.aleo)** · **[Leo Source](contracts/src/main.leo)**
 
 </div>
 
 ---
 
-## 🔍 What is VeilReceipt?
+## What is VeilReceipt?
 
-**VeilReceipt** is a zero-knowledge commerce protocol built entirely on [Aleo](https://aleo.org). It lets buyers shop privately and merchants accept payments — with cryptographic proof that every transaction happened, but **zero information leaked** about who bought what, for how much, or from whom.
+VeilReceipt is a zero-knowledge commerce protocol on [Aleo](https://aleo.org). Buyers shop privately and merchants accept payments — with cryptographic proof that every transaction happened, but **zero information leaked** about who bought what, for how much, or from whom.
 
-> 🔐 **What you bought** — hidden &nbsp;|&nbsp; 💰 **How much you paid** — hidden &nbsp;|&nbsp; 🏪 **Who you paid** — hidden
+The protocol covers the **full commerce lifecycle** through a single Leo smart contract (`veilreceipt_v8.aleo`) with **17 transitions, 9 record types, and 9 mappings** — all commitment-keyed using `BHP256::commit_to_field()` with scalar randomizers.
 
-The protocol covers the full commerce lifecycle:
-
-| Feature | What it does |
+| What's Private (ZK Protected) | What's Public (On-Chain) |
 |---|---|
-| 🔒 **Private Purchase** | ZK proof of payment — `BHP256::commit_to_field()` with scalar randomizers |
-| 🌐 **Public Purchase** | Auditable on-chain payment for compliance use cases |
-| 🔐 **Escrow** | Trustless fund lock with BHP256-hashed timestamps and 500-block (~8h) refund window |
-| 🌲 **Cart Merkle Proofs** | Prove individual cart items without revealing the rest of your purchase |
-| 🎤 **Support Proofs** | Shareable proof codes for dispute resolution — paste to verify instantly |
-| 📎 **Merchant Registration** | On-chain merchant identity with MerchantLicense records |
-| 💎 **Three Payment Tokens** | Private purchases via Aleo Credits, USDCx, and USAD stablecoins |
-| 🎟️ **Access Tokens** | Receipt-gated access tokens — prove purchase without revealing details (5 tiers) |
-| ⭐ **Anonymous Reviews** | Verified star ratings with nullifier-based double-review prevention |
-| ⚡ **Integration API** | Merchant API keys, webhooks, payment sessions — embed VeilReceipt in any store |
-| 🔌 **Embeddable Widget** | Drop-in JavaScript SDK for Shopify, WooCommerce, or any e-commerce platform |
-
-Everything runs through a single Leo smart contract (`veilreceipt_v8.aleo`) deployed on Aleo Testnet, with a React frontend, Express API backend, and a full merchant integration layer for external platforms.
+| Payment amounts | BHP256 commitment hashes (opaque) |
+| Buyer & merchant addresses | Boolean flags (exists, active) |
+| Cart items & quantities | Review count aggregates |
+| Escrow timestamps (BHP256-hashed) | Link contribution counts |
+| Review ratings (records only) | Transaction confirmations |
+| Access token tiers | Program execution metadata |
 
 ---
 
-## 🏗️ Architecture
+## Features
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                         USER BROWSER                           │
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │          React Frontend  (Vite + Tailwind CSS)            │  │
-│  │                                                           │  │
-│  │  🛒 Shop     🧾 Receipts   🔐 Verify   📊 Merchant       │  │
-│  │  ⚡ Integrate  💳 Pay (hosted checkout)                   │  │
-│  │                                                           │  │
-│  │          useVeilWallet hook  (Shield Wallet SDK)           │  │
-│  └────────────────┬──────────────────────┬───────────────────┘  │
-│                   │  wallet calls         │  REST API           │
-└───────────────────┼──────────────────────┼─────────────────────┘
-                    │                      │
-         ┌──────────▼──────┐    ┌──────────▼──────────────────┐
-         │  Shield Wallet  │    │  Express Backend API v5      │
-         │  ─────────────  │    │  ──────────────────────────  │
-         │  ZK proof gen   │    │  /auth     /products         │
-         │  TX signing     │    │  /receipts /merchant         │
-         │  Record decrypt │    │  /escrow   /integrate  ← NEW │
-         └──────────┬──────┘    └──────────┬───────────────────┘
-                    │                      │
-                    │        ┌─────────────┼─────────────┐
-                    │        │  Integration Layer (NEW)  │
-                    │        │  ─────────────────────── │
-                    │        │  API Keys (HMAC-SHA256)  │
-                    │        │  Webhooks (signed)       │
-                    │        │  Payment Sessions        │
-                    │        │  Embeddable JS SDK       │
-                    │        └─────────────┬─────────────┘
-                    │                      │
-         ┌──────────▼──────────────────────▼──────────────┐
-         │                  Aleo Testnet                   │
-         │  ────────────────────────────────────────────   │
-         │  veilreceipt_v8.aleo        (16 transitions)    │
-         │  test_usdcx_stablecoin.aleo                     │
-         │  test_usad_stablecoin.aleo                      │
-         └──────────────────────┬──────────────────────────┘
-                                │  metadata only
-                     ┌──────────▼──────────┐
-                     │  PostgreSQL (prod)   │
-                     │  JSON file  (dev)    │
-                     │  commitment hashes   │
-                     │  no private data     │
-                     └─────────────────────┘
-
-         ┌──────────────────────────────────────────────┐
-         │           External E-Commerce Platforms       │
-         │  Shopify · WooCommerce · Custom Stores       │
-         │                                              │
-         │  1. POST /integrate/payments (API key)       │
-         │  2. Redirect customer → /pay/:sessionId      │
-         │  3. Receive webhook on payment confirmation   │
-         │  4. Verify purchase: GET /integrate/verify/   │
-         └──────────────────────────────────────────────┘
-```
-
----
-
-## ⚡ E-Commerce Integration API
-
-VeilReceipt provides a **complete merchant integration layer** that lets any e-commerce platform accept private payments powered by Aleo zero-knowledge proofs.
-
-### Quick Start
-
-```bash
-# 1. Generate an API key (from the Integrate dashboard or via JWT-authenticated endpoint)
-curl -X POST https://veilreceipt-api.onrender.com/integrate/keys \
-  -H "Authorization: Bearer <your-jwt>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "My Store", "permissions": ["payments:create", "payments:read"]}'
-
-# 2. Create a payment session
-curl -X POST https://veilreceipt-api.onrender.com/integrate/payments \
-  -H "X-API-Key: veil_pk_abc123..." \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 500000, "currency": "credits", "description": "Order #42", "redirect_url": "https://mystore.com/success"}'
-# → Returns { session_id, checkout_url }
-
-# 3. Redirect customer to checkout_url → they pay with ZK proof
-# 4. Receive webhook notification when payment confirms
-```
-
-### Integration Endpoints
-
-| Endpoint | Auth | Description |
-|---|---|---|
-| `POST /integrate/keys` | JWT | Create an API key |
-| `GET /integrate/keys` | JWT | List your API keys |
-| `DELETE /integrate/keys/:id` | JWT | Revoke an API key |
-| `POST /integrate/webhooks` | JWT | Register a webhook endpoint |
-| `GET /integrate/webhooks` | JWT | List webhook endpoints |
-| `DELETE /integrate/webhooks/:id` | JWT | Delete a webhook |
-| `POST /integrate/payments` | API Key | Create a payment session |
-| `GET /integrate/payments/:id` | Public | Get session status |
-| `POST /integrate/payments/:id/complete` | Public | Complete payment with TX proof |
-| `GET /integrate/payments` | API Key | List your payment sessions |
-| `GET /integrate/verify/:commitment` | Public | Verify a purchase commitment |
-
-### Webhook Events
-
-Webhooks are signed with **HMAC-SHA256** using your webhook secret. Events:
-
-| Event | Fired When |
+| Feature | Description |
 |---|---|
-| `payment.confirmed` | A receipt is stored after on-chain confirmation |
-| `payment.session_completed` | A payment session is completed |
-| `escrow.created` | An escrow is locked on-chain |
-| `escrow.completed` | An escrow is released to the merchant |
-| `refund.processed` | An escrow is refunded to the buyer |
-
-### Embeddable Checkout Widget
-
-```html
-<!-- Add to your store's HTML -->
-<script src="https://veil-receipt.vercel.app/veil-checkout.js"></script>
-<script>
-  // Open checkout in a popup
-  VeilCheckout.open({
-    sessionId: 'ps_abc123',
-    mode: 'popup',
-    onSuccess: function(data) {
-      console.log('Paid!', data.tx_id);
-    }
-  });
-</script>
-```
-
-### Demo Store
-
-See the embedded demo at [demo-store.html](frontend/public/demo-store.html) — a complete example of a digital goods store integrated with VeilReceipt.
+| **Triple Token Support** | Private payments via Aleo Credits, USDCx, and USAD stablecoins |
+| **3 Payment Modes** | Private (full ZK), Public (auditable), Escrow (buyer-protected) |
+| **On-Chain Escrow** | Trustless fund lock with BHP256-hashed timestamps and 500-block (~8h) refund window |
+| **Cart Merkle Proofs** | Prove individual cart items without revealing the rest of the purchase (depth-2 tree) |
+| **Payment Links** | Shareable on-chain links: one-time, recurring, open donation — with QR codes |
+| **Access Tokens** | Receipt-gated 5-tier tokens (Bronze→Diamond) to prove purchase without revealing details |
+| **Anonymous Reviews** | Verified star ratings with nullifier-based double-review prevention |
+| **Support Proofs** | Shareable base64 proof codes — paste to verify instantly on-chain |
+| **Merchant Dashboard** | Revenue analytics split by token, product CRUD, escrow tracking, payment links with QR |
+| **Integration API** | API keys (SHA-256 hashed), HMAC-SHA256 webhooks, payment sessions, embeddable checkout |
+| **TypeScript SDK** | `veilreceipt-sdk` on npm — typed methods for sessions, links, products, receipts, escrow, verification |
+| **Real-time SSE** | Server-Sent Events for live payment notifications to merchants |
+| **Delegated Proving** | Backend proxy to Provable DPS for faster ZK proof generation |
+| **Self-Payment Guard** | Contract-level `assert(merchant != self.signer)` + frontend warning |
 
 ---
 
-## 📜 Smart Contract — `veilreceipt_v8.aleo`
+## Architecture
 
-The entire protocol lives in one Leo program with **16 transitions**, **9 record types**, and **9 mappings**. All on-chain state uses **BHP256::commit_to_field** with scalar randomizers — raw addresses, amounts, and identities are never stored in any mapping.
+```
+┌──────────────────────────────────────────────────────────┐
+│                      USER BROWSER                         │
+│                                                           │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │        React Frontend (Vite 5 + TailwindCSS)       │   │
+│  │                                                     │   │
+│  │  Home · Shop · Pay · Receipts · Purchases           │   │
+│  │  Merchant · Verify · Integrate · Developer          │   │
+│  │                                                     │   │
+│  │         useVeilWallet (Shield Wallet SDK)            │   │
+│  └──────────┬───────────────────────┬──────────────────┘   │
+│             │ wallet calls           │ REST API            │
+└─────────────┼───────────────────────┼─────────────────────┘
+              │                       │
+   ┌──────────▼─────┐     ┌──────────▼────────────────────┐
+   │  Shield Wallet  │     │     Express Backend API        │
+   │  ────────────── │     │  ──────────────────────────    │
+   │  ZK proof gen   │     │  /auth      /products          │
+   │  TX signing     │     │  /receipts  /merchant          │
+   │  Record decrypt │     │  /escrow    /links             │
+   └──────────┬──────┘     │  /events    /integrate         │
+              │            │  /proving                       │
+              │            │                                 │
+              │            │  Integration Layer:             │
+              │            │  · API Keys (SHA-256)           │
+              │            │  · Webhooks (HMAC-SHA256)       │
+              │            │  · Payment Sessions (30min)     │
+              │            │  · veilreceipt-sdk              │
+              │            └──────────┬──────────────────────┘
+              │                       │
+   ┌──────────▼───────────────────────▼───────────────────┐
+   │                   Aleo Testnet                        │
+   │  ──────────────────────────────────────────────       │
+   │  veilreceipt_v8.aleo   (17 transitions, 9 records)   │
+   │  credits.aleo                                         │
+   │  test_usdcx_stablecoin.aleo                           │
+   │  test_usad_stablecoin.aleo                            │
+   └───────────────────────────────────────────────────────┘
 
-### Record Types (Private — encrypted for owner)
-
-| Record | Owner | Key Fields | Purpose |
-|--------|-------|-----------|---------|
-| `BuyerReceipt` | Buyer | merchant, total, cart_commitment, timestamp, purchase_commitment, token_type | Buyer proof of purchase |
-| `MerchantReceipt` | Merchant | purchase_commitment, total, token_type | Merchant proof of sale |
-| `EscrowReceipt` | Buyer | merchant, total, purchase_commitment | Escrow lock claim |
-| `ReturnClaim` | Buyer | purchase_commitment, refund_amount, return_reason_hash | Refund receipt |
-| `CartItemProof` | Verifier | item_commitment, cart_root, verified | Merkle inclusion proof |
-| `MerchantLicense` | Merchant | store_commitment | On-chain registration |
-| `AccessToken` | Buyer | merchant, gate_commitment, token_tier | Receipt-gated access proof |
-| `ReviewToken` | Buyer | product_hash, rating, review_commitment | Anonymous verified review |
-
-### On-Chain Mappings (Commitment-keyed — no raw data stored)
-
-```leo
-mapping purchase_exists:    field => bool    // replay-attack prevention
-mapping escrow_active:      field => bool    // is escrow live?
-mapping escrow_timestamps:  field => field   // BHP256-hashed block height at lock
-mapping return_processed:   field => bool    // double-refund prevention
-mapping merchant_active:    field => bool    // merchant registration status
-mapping review_submitted:   field => bool    // nullifier for double-review prevention
-mapping review_count:       field => u64     // aggregate review count per product
+   ┌───────────────────────────────────────────────────┐
+   │        External E-Commerce Platforms               │
+   │  Shopify · WooCommerce · Custom Stores            │
+   │                                                    │
+   │  1. POST /integrate/payments  (API key auth)       │
+   │  2. Redirect → /pay/:sessionId (hosted checkout)   │
+   │  3. Webhook callback on confirmation               │
+   │  4. GET /integrate/verify/:commitment              │
+   └───────────────────────────────────────────────────┘
 ```
 
-No raw merchant addresses, amounts, buyer identities, or block heights are stored — only BHP256 commitment hashes and opaque nullifiers.
+---
 
-### All 13 Transitions
+## Smart Contract — `veilreceipt_v8.aleo`
+
+**Deployed on Aleo Testnet**
+- **Deployment TX:** `at1cs0c6j3ghkdlplr4evp9xce6fr373zwp5xamghw45wnauxf2pugsk9wh8z`
+- **Cost:** 28.751776 credits
+- **Variables:** 1,984,571 / 2,097,152 (94.6% of testnet limit)
+- **Imports:** `credits.aleo`, `test_usdcx_stablecoin.aleo`, `test_usad_stablecoin.aleo`
+
+### 17 Transitions
 
 | # | Transition | Type | Description |
-|---|-----------|------|-------------|
-| 1 | `purchase_private_credits` | async | Atomic private ALEO purchase → BuyerReceipt + MerchantReceipt |
-| 2 | `purchase_private_usdcx` | async | Atomic private USDCx purchase + compliance record |
-| 3 | `purchase_private_usad` | async | Atomic private USAD purchase + compliance record |
-| 4 | `purchase_public_credits` | async | Public ALEO purchase (amounts visible) + private receipts |
-| 5 | `purchase_escrow_credits` | async | Lock credits on-chain under program address + EscrowReceipt |
-| 6 | `complete_escrow` | async | Buyer releases locked funds → private credits to merchant |
-| 7 | `refund_escrow` | async | Buyer self-refunds within 500-block window (hash-verified) |
-| 8 | `prove_cart_item` | inline | Merkle proof for a specific cart item |
-| 9 | `prove_purchase_support` | inline | Selective-disclosure support proof token |
-| 10 | `verify_support_token` | inline | Public verification of a support token |
-| 11 | `register_merchant` | async | On-chain merchant registration with MerchantLicense |
-| 12 | `mint_access_token` | inline | Receipt-gated access token minting (5 tiers) |
-| 13 | `submit_anonymous_review` | async | Anonymous verified review with nullifier |
+|---|---|---|---|
+| 1 | `purchase_private_credits` | async | Atomic private ALEO payment → BuyerReceipt + MerchantReceipt |
+| 2 | `purchase_private_usdcx` | async | Private USDCx stablecoin payment + compliance |
+| 3 | `purchase_private_usad` | async | Private USAD stablecoin payment + compliance |
+| 4 | `purchase_public_credits` | async | Public ALEO payment (auditable) + private receipts |
+| 5 | `purchase_escrow_credits` | async | Lock credits on-chain + EscrowReceipt |
+| 6 | `complete_escrow` | async | Release locked funds → merchant private credits |
+| 7 | `refund_escrow` | async | Self-refund within 500-block window (BHP256-hash verified) |
+| 8 | `prove_cart_item` | inline | Merkle proof for specific cart item → CartItemProof |
+| 9 | `prove_purchase_support` | inline | Generate support proof token |
+| 10 | `verify_support_token` | inline | Public verification of support claim |
+| 11 | `register_merchant` | async | On-chain merchant registration → MerchantLicense |
+| 12 | `mint_access_token` | inline | Receipt-gated access token (5 tiers) → AccessToken |
+| 13 | `submit_anonymous_review` | async | Anonymous review with nullifier → ReviewToken |
+| 14 | `create_payment_link` | async | Create on-chain payment link → PaymentLink record |
+| 15 | `fulfill_link_credits` | async | Pay link with credits → dual receipts |
+| 16 | `close_payment_link` | async | Deactivate a payment link |
+| 17 | `fulfill_link_escrow_credits` | async | Pay link with escrow lock |
+
+### 9 Record Types
+
+| Record | Owner | Purpose |
+|---|---|---|
+| `BuyerReceipt` | Buyer | Purchase proof with merchant, total, cart_commitment, token_type |
+| `MerchantReceipt` | Merchant | Sales record with purchase_commitment, total, token_type |
+| `EscrowReceipt` | Buyer | Escrow lock claim with merchant, total, purchase_commitment |
+| `ReturnClaim` | Buyer | Refund proof with purchase_commitment, refund_amount |
+| `CartItemProof` | Verifier | Merkle inclusion proof for a specific cart item |
+| `MerchantLicense` | Merchant | On-chain registration with store_commitment |
+| `AccessToken` | Buyer | Receipt-gated access with merchant, gate_commitment, tier |
+| `ReviewToken` | Buyer | Anonymous review with product_hash, rating, review_commitment |
+| `PaymentLink` | Merchant | Link record with link_hash, amount, currency, link_type |
+
+### 9 Mappings (All Commitment-Keyed)
+
+```leo
+mapping purchase_exists:    field => bool    // Replay prevention
+mapping escrow_active:      field => bool    // Active escrow tracking
+mapping escrow_timestamps:  field => field   // BHP256-hashed block height
+mapping return_processed:   field => bool    // Double-refund prevention
+mapping merchant_active:    field => bool    // Merchant registry
+mapping review_submitted:   field => bool    // Nullifier for double-review
+mapping review_count:       field => u64     // Aggregate review count
+mapping link_active:        field => bool    // Payment link status
+mapping link_contributions: field => u64     // Contribution count per link
+```
+
+**No raw addresses, amounts, or identities stored in any mapping.**
 
 ---
 
-## 🔄 End-to-End Flows
+## End-to-End Flows
 
-### 🔒 Private Purchase (Credits / USDCx / USAD)
+### Private Purchase (Credits / USDCx / USAD)
 
 ```
 Buyer                    Shield Wallet              Aleo Testnet
 ──────                   ─────────────              ────────────
 Add items to cart
-Select "Private" mode
-Choose token (Credits/USDCx/USAD)
+Select Private mode
+Choose token
 Click Pay
                          Generate ZK proof
                          purchase_private_*()
                                                     finalize:
-                                                    purchase_exists
-                                                    [commitment] = true
-                         ← at1xyz... TX ID
-BuyerReceipt ✓ (encrypted, only buyer can read)
-                         MerchantReceipt ✓ (encrypted, only merchant can read)
-TX panel → ✓ DONE
+                                                    purchase_exists[commit] = true
+                         ← at1... TX ID
+BuyerReceipt ✓ (encrypted for buyer)
+MerchantReceipt ✓ (encrypted for merchant)
 ```
 
-### 🔐 Escrow → Release or Refund
+### Escrow → Release or Refund
 
 ```
-Buyer pays with Escrow mode
-         │
-         ▼
 purchase_escrow_credits()
-   Credits locked under veilreceipt_v8.aleo program address
-   escrow_active[commitment]     = true
-   escrow_timestamps[commitment] = BHP256::hash_to_field(block.height)
-   → BuyerReceipt + EscrowReceipt issued to buyer
-         │
-         ├── Within 500 blocks (~8h) ──► refund_escrow(created_block)
-         │        assert hash(created_block) == stored_hash
-         │        assert block.height < created_block + 500
-         │        assert !return_processed[commitment]
-         │        Credits returned → buyer private record
-         │        → ReturnClaim issued
-         │
-         └── Buyer satisfied ──────────► complete_escrow()
-                  Credits released → merchant private record
-                  → MerchantReceipt issued
+  → Credits locked under program address
+  → escrow_active[commit] = true
+  → escrow_timestamps[commit] = BHP256::hash_to_field(block.height)
+  → BuyerReceipt + EscrowReceipt issued
+       │
+       ├── Within 500 blocks ──► refund_escrow()
+       │     Verify hash, check window, return credits
+       │     → ReturnClaim issued
+       │
+       └── Satisfied ────────► complete_escrow()
+             Release to merchant private record
+             → MerchantReceipt issued
 ```
 
-### 🌲 Cart Merkle Proofs
+### Cart Merkle Proofs
 
 ```
-Purchase with 3 items (padded to 4 leaves)
-         │
-         ▼
-Build depth-2 Merkle tree:
-   leaf_0 = hash(item_0)   leaf_1 = hash(item_1)
-   leaf_2 = hash(item_2)   leaf_3 = hash(0field)  ← zero padding
+4 items → depth-2 Merkle tree:
+  leaf₀ = hash(item₀)   leaf₁ = hash(item₁)
+  leaf₂ = hash(item₂)   leaf₃ = hash(0field)  ← zero padding
+  root = hash(hash(leaf₀, leaf₁), hash(leaf₂, leaf₃))
+  root = cart_commitment in receipt
 
-   node_01 = hash(leaf_0, leaf_1)
-   node_23 = hash(leaf_2, leaf_3)
-   root    = hash(node_01, node_23)  ← stored as cart_commitment
-
-         ┌─────────────────────────────────────────────────────┐
-         │  prove_cart_item(receipt, item_1, path, verifier)   │
-         │                                                     │
-         │  Verifies Merkle path from item_1 to cart root      │
-         │  Verifier receives: CartItemProof { verified }       │
-         │  Verifier never sees: other items, total, merchant  │
-         └─────────────────────────────────────────────────────┘
+prove_cart_item(receipt, item₁, path, verifier)
+  → Verifies Merkle path → CartItemProof to verifier
+  → Verifier sees: item₁ was in purchase. Nothing else.
 ```
 
-### 🎤 Support Proof → Shareable Code → Verify
+### Support Proof → Share → Verify
 
 ```
-Buyer (Receipts page)              Merchant (Verify page)
-─────────────────────              ──────────────────────
-Click "Support Proof"
-prove_purchase_support()
-← proof_token + proofData
-     (commitment, product_hash,
-      salt, merchant, timestamp)
+Buyer: prove_purchase_support() → proofData
+       "Copy Proof Code" → base64 string
+       Share with merchant
 
-Click "Copy Proof Code"
-→ base64-encoded JSON string
-                                   Paste proof code in "Quick Verify"
-Share with merchant                → Auto-fills all fields
-                                   Click "Verify On-Chain"
-                                   → Checks purchase_exists mapping
-                                   → ✓ Verified / ✗ Not Verified
+Merchant: Paste on /verify → auto-fill → "Verify On-Chain"
+          → Checks purchase_exists mapping → ✓ Verified
 ```
 
-### 🎟️ Access Tokens (Receipt-Gated)
+### Access Tokens (Receipt-Gated)
 
 ```
-Buyer has a BuyerReceipt
-         │
-         ▼
 mint_access_token(receipt, gate_id, tier)
-   gate_commitment = hash(purchase_commitment + gate_id)
-   → AccessToken { merchant, gate_commitment, token_tier }
-         │
-         ▼
-5 tiers: Bronze (1) → Silver (2) → Gold (3) → Platinum (4) → Diamond (5)
-Token proves purchase from merchant without revealing amount, items, or identity
-"Copy Proof" generates shareable base64 code
-"Token Minted" badge shown on receipts from same merchant
+  gate_commitment = hash(purchase_commitment + gate_id)
+  → AccessToken { tier: Bronze | Silver | Gold | Platinum | Diamond }
+  Proves purchase without revealing amount, items, or identity.
 ```
 
-### ⭐ Anonymous Reviews
+### Anonymous Reviews
 
 ```
-Buyer has a BuyerReceipt + selects product by SKU
-         │
-         ▼
 submit_anonymous_review(receipt, product_hash, rating)
-   nullifier = hash(purchase_commitment + product_hash + signer)
-   finalize: assert !review_submitted[nullifier]  → prevents double-review
-             review_count[product_hash] += 1       → aggregate count
-   → ReviewToken { product_hash, rating, review_commitment }
-         │
-         ▼
-Shop page shows: ★ star rating bar with count on each product
-Click rating bar → review detail modal with your rating, total count, ZK privacy info
-Ratings are private (stored only in ReviewToken record) — only counts are public
+  nullifier = hash(purchase_commitment + product_hash + signer)
+  → Prevents double-review (nullifier stored on-chain)
+  → review_count[product_hash] += 1 (aggregate only)
+  → Rating stored in private ReviewToken record only
+  Shop page displays: ★ bars with verified counts
+```
+
+### Payment Links
+
+```
+Merchant: create_payment_link(link_hash, amount, currency, link_type)
+  → PaymentLink record + link_active[hash] = true
+
+Buyer: /pay?link=<hash> → choose token → fulfill_link_credits()
+  → BuyerReceipt + MerchantReceipt + link_contributions++
+
+Supports: one_time (auto-close after 1 payment), recurring, open (payer sets amount)
+QR codes generated for each link.
 ```
 
 ---
 
-## 💳 Payment Modes
+## Application Pages
 
-| Mode | Privacy | Tokens | On-chain State | Best For |
-|---|---|---|---|---|
-| 🔒 **Private** | Full ZK | ALEO · USDCx · USAD | Commitment hash only | Default — maximum privacy |
-| 🌐 **Public** | Amount visible | ALEO | Amount + addresses | Auditable / compliance |
-| 🔐 **Escrow** | Full ZK | ALEO | Commitment + locked funds | Buyer protection |
+| Page | Route | Description |
+|---|---|---|
+| **Home** | `/` | Animated hero, live network stats, 6 feature cards with SVG illustrations, "How it Works" flow |
+| **Shop** | `/checkout` | Product catalog, 3 privacy modes, 3 tokens, cart, star ratings with verified review counts |
+| **Pay** | `/pay` | Unified payment handler for sessions and links, self-payment guard, token selection, escrow |
+| **Receipts** | `/receipts` | 3 tabs: Receipts (support proofs), Sales (revenue by token), Escrow (release/refund countdown) |
+| **Purchases** | `/purchases` | Purchase history, Merkle proof actions, support proof generation, copy proof codes |
+| **Verify** | `/verify` | Access tokens (mint 5 tiers), anonymous reviews (star ratings), proof verification (paste code) |
+| **Merchant** | `/merchant` | On-chain registration, revenue analytics, product CRUD, payment links with QR, real-time SSE |
+| **Integrate** | `/integrate` | API key management, webhook configuration, Quick Start docs, full API reference |
+| **Developer** | `/developer` | Public SDK documentation, REST API reference, webhook events, privacy model table |
 
 ---
 
-## 🗃️ Project Structure
+## Integration API
+
+### Quick Start
+
+```bash
+# 1. Create API key (from /integrate dashboard)
+# 2. Create payment session
+curl -X POST https://veilreceipt-api.onrender.com/integrate/payments \
+  -H "X-API-Key: veil_pk_..." \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 5000000, "currency": "credits", "description": "Order #42"}'
+# → { id, checkout_url, status, expires_at }
+
+# 3. Redirect customer to checkout_url
+# 4. Receive webhook: payment.confirmed
+# 5. Verify: GET /integrate/verify/:commitment
+```
+
+### SDK
+
+```bash
+npm install veilreceipt-sdk
+```
+
+```typescript
+import { VeilReceipt } from 'veilreceipt-sdk';
+
+const veil = new VeilReceipt({
+  baseUrl: 'https://veilreceipt-api.onrender.com',
+  apiKey: 'veil_pk_...',
+});
+
+const session = await veil.getPaymentSession('ps_abc123');
+const result = await veil.verifyPurchase('commitment...');
+const link = await veil.resolvePaymentLink('hash...');
+```
+
+### Webhook Events
+
+| Event | Trigger |
+|---|---|
+| `payment.confirmed` | On-chain payment confirmed |
+| `payment.failed` | Payment failed |
+| `escrow.created` | Funds locked in escrow |
+| `escrow.completed` | Escrow released to merchant |
+| `refund.processed` | Escrow refunded to buyer |
+| `link.fulfilled` | Payment link received payment |
+| `link.closed` | Payment link deactivated |
+
+Signed with HMAC-SHA256 (`X-VeilReceipt-Signature` header). Auto-disabled after 10 consecutive failures.
+
+---
+
+## Privacy Design Decisions
+
+1. **BHP256::commit_to_field()** with `scalar` randomizers — proper hiding + binding commitment scheme for all purchases
+2. **No addresses in finalize** — all 13 finalize blocks receive only commitment hashes, never raw addresses or amounts
+3. **Hashed escrow timestamps** — `BHP256::hash_to_field(block.height)` prevents timing analysis attacks
+4. **Review nullifiers** — `hash(commitment + product + signer)` prevents double-review without identity leak
+5. **Ratings never on-chain** — stored exclusively in encrypted `ReviewToken` records
+6. **Atomic dual-record issuance** — BuyerReceipt + MerchantReceipt in one ZK transaction
+7. **Backend stores only metadata** — commitment hashes and token types, never amounts or addresses
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Contract | Leo 3.4.0 · BHP256 commitments · 17 transitions · credits.aleo + USDCx + USAD |
+| Wallet | Shield Wallet SDK (ZK proofs + auto-decryption) |
+| Frontend | React 18 · TypeScript · Vite 5 · TailwindCSS · Zustand · Framer Motion · GSAP |
+| Backend | Node.js · Express · TypeScript · PostgreSQL / JSON · Zod validation · JWT |
+| SDK | veilreceipt-sdk · TypeScript · tsup (CJS + ESM + .d.ts) |
+| Real-time | Server-Sent Events with 30s keep-alive |
+| Integration | HMAC-SHA256 webhooks · SHA-256 API keys · Delegated proving via Provable DPS |
+
+---
+
+## Project Structure
 
 ```
 VeilReceipt/
-│
-├── 📜 contracts/
-│   ├── src/main.leo              ← Full protocol (13 transitions, 8 records, 7 mappings)
-│   └── build/                   ← Compiled .aleo bytecode
-│
-├── 🖥️ backend/
+├── contracts/
+│   ├── src/main.leo              ← Full protocol (17 transitions, 9 records, 9 mappings)
+│   └── build/main.aleo           ← Compiled bytecode
+├── backend/
 │   └── src/
-│       ├── index.ts              ← Express server (v5.0.0)
-│       ├── types.ts              ← Zod schemas + shared types
+│       ├── index.ts              ← Express server
 │       ├── routes/
-│       │   ├── auth.ts           ← Nonce-based wallet auth
+│       │   ├── auth.ts           ← Nonce-based wallet auth (JWT)
 │       │   ├── products.ts       ← Product catalog CRUD
-│       │   ├── merchant.ts       ← Revenue dashboard + token analytics
-│       │   ├── receipts.ts       ← Off-chain receipt metadata + webhook firing
-│       │   ├── escrow.ts         ← Escrow record management + webhook firing
-│       │   └── integrate.ts      ← API keys, webhooks, payment sessions, verification
+│       │   ├── merchant.ts       ← Revenue dashboard
+│       │   ├── receipts.ts       ← Receipt storage + webhooks
+│       │   ├── escrow.ts         ← Escrow lifecycle + webhooks
+│       │   ├── links.ts         ← Payment link CRUD
+│       │   ├── events.ts         ← SSE real-time streaming
+│       │   ├── integrate.ts      ← API keys, webhooks, payment sessions
+│       │   └── proving.ts        ← Delegated proving proxy
 │       ├── middleware/
 │       │   ├── auth.ts           ← JWT authentication
-│       │   └── apiKey.ts         ← API key auth (SHA-256 hashed, HMAC-SHA256 signing)
+│       │   └── apiKey.ts         ← API key auth (SHA-256 hashed)
 │       └── services/
 │           ├── database.ts       ← PostgreSQL (prod) / JSON (dev)
-│           ├── aleo.ts           ← TX status + block height RPC
-│           └── webhooks.ts       ← Webhook dispatcher with HMAC-SHA256 signing
-│
-└── 🎨 frontend/
-    ├── public/
-    │   ├── veil-checkout.js      ← Embeddable checkout SDK (drop into any website)
-    │   └── demo-store.html       ← Demo e-commerce store with VeilReceipt integration
-    └── src/
-        ├── pages/
-        │   ├── Home.tsx          ← Landing page + feature showcase + live stats
-        │   ├── Checkout.tsx      ← Shop + cart + star ratings + 3-token checkout
-        │   ├── Purchases.tsx     ← Purchase history + Merkle proofs + support proofs
-        │   ├── Merchant.tsx      ← Revenue dashboard + on-chain registration
-        │   ├── Receipts.tsx      ← Receipts + escrow + Copy Code + JSON export
-        │   ├── Verify.tsx        ← Access tokens + reviews + My Tokens + Verify Proof
-        │   ├── Integrate.tsx     ← Merchant integration dashboard (API keys, webhooks, docs)
-        │   └── Pay.tsx           ← Hosted checkout page for payment sessions
-        ├── hooks/
-        │   └── useVeilWallet.ts  ← All wallet ops + ZK proof + TX polling
-        ├── stores/
-        │   ├── cartStore.ts      ← Zustand cart state
-        │   ├── txStore.ts        ← TX tracker (shield→at1 ID resolution)
-        │   └── userStore.ts      ← Auth + session
-        ├── lib/
-        │   ├── api.ts            ← Backend REST client
-        │   ├── chain.ts          ← Constants (escrow window, program ID)
-        │   ├── merkle.ts         ← Cart Merkle tree builder + proof formatting
-        │   ├── stablecoin.ts     ← USDCx / USAD / Credits formatting
-        │   └── utils.ts          ← toAleoField, formatting utilities
-        └── components/
-            ├── ui/Components.tsx ← Design system (Card, Badge, Button…)
-            ├── icons/Icons.tsx   ← ALEO + USDCx + USAD token icons
-            └── layout/Header.tsx ← Navigation
+│           ├── aleo.ts           ← On-chain RPC queries
+│           └── webhooks.ts       ← HMAC-SHA256 webhook dispatcher
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       │   ├── Home.tsx          ← Landing + feature showcase
+│       │   ├── Checkout.tsx      ← Shop + cart + star ratings
+│       │   ├── Pay.tsx           ← Unified payment (sessions + links)
+│       │   ├── Receipts.tsx      ← Receipt management + escrow lifecycle
+│       │   ├── Purchases.tsx     ← History + Merkle proofs
+│       │   ├── Merchant.tsx      ← Dashboard + analytics + payment links
+│       │   ├── Verify.tsx        ← Access tokens + reviews + proof verification
+│       │   ├── Integrate.tsx     ← API key / webhook management
+│       │   └── Developer.tsx     ← Public SDK / API documentation
+│       ├── hooks/
+│       │   └── useVeilWallet.ts  ← All wallet ops + ZK proof + TX polling
+│       ├── stores/               ← Zustand (cart, tx, user)
+│       └── lib/                  ← API client, chain constants, Merkle tree, utils
+└── packages/
+    └── sdk/                      ← veilreceipt-sdk npm package
+        └── src/index.ts          ← VeilReceipt client class
 ```
 
 ---
 
-## 🧠 Key Design Decisions
-
-### 🔑 BHP256::commit_to_field() Commitments
-
-Aleo mappings are **public state**. VeilReceipt uses proper `BHP256::commit_to_field(PurchaseData, scalar_salt)` for all purchase commitments. The `scalar` type provides a cryptographic randomizer that makes commitments binding and hiding — a blockchain observer sees only commitments, the purchase relationship is completely hidden.
-
-### 🎟️ Receipt-Gated Access Tokens
-
-Buyers mint an `AccessToken` from any purchase receipt. The token proves purchase from a specific merchant without revealing what was bought, how much was paid, or when. `gate_commitment = BHP256::hash_to_field(purchase_commitment + gate_id)` binds the token to a specific gate/purpose. The receipt is non-consuming — nonce_seed rotation prevents replay. Five tiers (Bronze→Diamond) enable tiered access control.
-
-### ⭐ Anonymous Verified Reviews
-
-Buyers submit reviews by proving purchase via receipt and selecting a product by SKU. A double-review nullifier `BHP256::hash_to_field(purchase_commitment + product_hash + signer)` prevents submitting multiple reviews for the same product from the same receipt. Ratings (1-5 stars) are stored only in the private `ReviewToken` record — never on-chain. The `review_count` mapping shows aggregate popularity without any reviewer identity. The Shop page displays star rating bars with counts, and a review detail modal shows your personal rating alongside the total count.
-
-### 🎤 Shareable Support Proof Codes
-
-Support proofs are generated from receipts via `prove_purchase_support`. The proof data (purchase commitment, product hash, salt, merchant, timestamp) is encoded as a base64 JSON string — buyers click "Copy Proof Code" and share it. Merchants paste the code on the Verify page to auto-fill all fields and verify on-chain with one click. The proof reveals nothing about the payment amount or other items.
-
-### 🔒 Hashed Escrow Timestamps
-
-Escrow creation block heights are stored as `BHP256::hash_to_field(block.height)` instead of raw values. This prevents timing analysis that could deanonymize purchases. At refund time, the buyer provides the raw block height; finalize verifies the hash matches before checking the 500-block window.
-
-### ⚛️ Atomic Dual-Record Issuance
-
-Each purchase creates a `BuyerReceipt` and a `MerchantReceipt` in the **same ZK transaction**. The circuit guarantees both records are issued simultaneously — no race condition, no partial state. This applies to all three tokens (Credits, USDCx, USAD).
-
-### 🌲 Merkle Cart Proofs
-
-Cart items are organized into a depth-2 binary Merkle tree (max 4 items per purchase). The root becomes the `cart_commitment` in the receipt. Later, `prove_cart_item` verifies a Merkle path on-chain and issues a `CartItemProof` to a verifier — proving a specific item was purchased without revealing other items, the total, or the merchant.
-
-### 🗄️ Backend Stores Only Metadata
-
-The backend stores commitment hashes and non-sensitive fields (`token_type`, `purchase_type`). **No amounts, no addresses, no identities** are ever sent to the backend. All private data stays exclusively in the user's wallet.
-
----
-
-## 🎨 Application Pages
-
-### 🏠 Home
-Landing page with wallet connect, animated hero, live network stats (contract version, 13 transitions, block height, 8 ZK proof types), feature showcase with SVG illustrations for all 6 core features (Private Payments, Dual Receipts, Escrow & Refunds, Support Proofs, Access Tokens, Anonymous Reviews), and a 4-step "How it Works" flow.
-
-### 🛒 Shop
-Product catalog fetched from API. Three privacy modes (Private, Public, Escrow) and three tokens (Aleo Credits, USDCx, USAD). Cart sidebar with itemized totals. Order confirmation modal before checkout. Star rating bar on each product card showing verified review count — click to see detailed review modal with your personal rating, total count, and ZK privacy explanation. Self-purchase prevention enforced by the contract.
-
-### 🧾 Receipts
-Three tabs — **Receipts** (buyer receipts with token type badges, "Support Proof" button, "Copy Code" for proven receipts, JSON export), **Sales** (merchant receipts with revenue summary split by Credits/USDCx/USAD), **Escrow** (active escrows with Release/Refund actions, 500-block countdown). "Proof Sent" badge persists across page reloads via localStorage.
-
-### 📦 Purchases
-Purchase history dashboard with Merkle proof actions. "Prove Item" generates a cart Merkle proof for any item (warranty, returns, review verification). "Support Proof" generates a shareable proof code. Copy Proof Code button for all proven receipts.
-
-### 🔐 Verify
-Four tabs — **Access Tokens** (mint receipt-gated tokens with 5 tiers, "Token Minted" badge), **Reviews** (select product by SKU, star rating selector, on-chain review count display), **My Tokens** (access tokens with tier labels + review tokens with star display and per-product counts), **Verify Proof** (paste base64 proof code for instant auto-fill, one-click on-chain verification via `purchase_exists` mapping).
-
-### 📊 Merchant
-On-chain registration with `register_merchant` transition. Revenue analytics split by token type (ALEO, USDCx, USAD). Product CRUD management with price currency selection. Sales history. Privacy note: all buyer addresses are hashed before storage.
-
-### ⚡ Integrate
-Merchant integration dashboard with four tabs — **Overview** (active API keys, webhooks, total payments), **API Keys** (create/revoke keys with granular permissions), **Webhooks** (register/delete HMAC-signed endpoints for payment and escrow events), **Docs** (Quick Start Guide with curl examples, embeddable widget code, Shopify/WooCommerce integration patterns, full API reference table).
-
-### 💳 Pay (Hosted Checkout)
-Payment session checkout page at `/pay/:sessionId`. Loads session details from API, displays amount and currency with token icon, offers privacy mode selector (Private/Public/Escrow), wallet connect prompt, pay button that executes the on-chain transaction and completes the session. Auto-redirects to merchant's redirect URL on success. Handles expired and invalid sessions gracefully.
-
----
-
-## 🚀 Local Development
-
-### Prerequisites
-
-- **Node.js** 18+
-- **Leo CLI** — `curl -sSf https://install.leo-lang.org | sh`
-- **Shield Wallet** — [Chrome Extension](https://chromewebstore.google.com)
-
-### Setup
+## Local Development
 
 ```bash
 # Clone
 git clone https://github.com/mohamedwael201193/VeilReceipt
 cd VeilReceipt
 
-# Backend  (terminal 1)
-cd backend
-npm install
-npm run dev          # → http://localhost:3001
+# Backend (terminal 1)
+cd backend && npm install && npm run dev    # → http://localhost:3001
 
-# Frontend  (terminal 2)
-cd frontend
-npm install
-npm run dev          # → http://localhost:5173
+# Frontend (terminal 2)
+cd frontend && npm install && npm run dev   # → http://localhost:5173
 ```
 
-### Frontend `.env`
+### Environment
 
 ```env
+# Frontend .env
 VITE_API_BASE_URL=http://localhost:3001
 VITE_ALEO_NETWORK=testnet
 VITE_ALEO_PROGRAM_ID=veilreceipt_v8.aleo
-VITE_ALEO_RPC_URL=https://api.explorer.provable.com/v1
+
+# Backend .env
+DATABASE_URL=postgresql://...
+JWT_SECRET=your_secret
+ALEO_PROGRAM_ID=veilreceipt_v8.aleo
 ```
 
 ---
 
-## 🗺️ Roadmap
+## License
 
-### ✅ Shipped (v7 — Wave 3)
-- [x] Leo smart contract with **13 transitions, 8 record types, 7 mappings** — deployed on Aleo Testnet
-- [x] Proper `BHP256::commit_to_field()` with scalar randomizers for all commitments
-- [x] **Three payment tokens**: Aleo Credits + USDCx + USAD stablecoins
-- [x] Atomic private purchases with all three tokens (ZK proof, no on-chain identity)
-- [x] Public purchase mode for auditable transactions
-- [x] Trustless escrow with **BHP256-hashed timestamps** and 500-block (~8 hour) refund window
-- [x] Cart Merkle tree proofs — prove individual items without revealing the full cart
-- [x] On-chain merchant registration with MerchantLicense records
-- [x] **Shareable support proof codes** — base64-encoded, paste-to-verify workflow
-- [x] **Receipt-gated access tokens** — 5-tier system (Bronze→Diamond), Copy Proof, Token Minted badges
-- [x] **Anonymous verified reviews** — product SKU selection, nullifier-based double-review prevention, aggregate counting
-- [x] **Star rating display on Shop** — rating bars with counts, review detail modal, personal rating badges
-- [x] **Persistent proof state** — Proof Sent badges and proof data survive page reloads via localStorage
-- [x] Verify page with 4 tabs: Access Tokens, Reviews, My Tokens, Verify Proof
-- [x] Quick Verify: paste proof code → auto-fill all fields → one-click on-chain verification
-- [x] Order confirmation modal with itemized cart summary before checkout
-- [x] Receipt JSON export for record-keeping
-- [x] Live stats dashboard — contract version, transitions, block height, privacy features
-- [x] Express API with PostgreSQL (prod) / JSON (dev) adapter
-- [x] React + Shield Wallet frontend with real-time TX tracker
-- [x] TX ID resolution: shield temp → real `at1` on-chain ID with RPC auto-confirm
-- [x] Merchant revenue analytics split by token type (ALEO / USDCx / USAD)
-- [x] Redesigned all pages with custom dark UI, SVG illustrations, animations
-- [x] Wallet record fetch retry logic for reliable first-click transactions
-
-### � New in v5 — E-Commerce Integration Layer (Wave 4)
-- [x] **Merchant API Keys** — SHA-256 hashed, `veil_pk_` prefix, granular permissions (payments:create, payments:read, webhooks:manage)
-- [x] **Webhook System** — HMAC-SHA256 signed payloads, 5 event types, auto-disable after 10 failures
-- [x] **Payment Sessions** — 30-minute expiry, hosted checkout at `/pay/:sessionId`, callback URLs
-- [x] **Embeddable Checkout Widget** — Vanilla JS SDK (`veil-checkout.js`), popup and redirect modes, no dependencies
-- [x] **Integration Dashboard** — API key management, webhook configuration, Quick Start docs, full API reference
-- [x] **Demo Store** — Complete example e-commerce site (`demo-store.html`) showing Shopify-like integration
-- [x] **Payment Verification API** — `GET /integrate/verify/:commitment` for external receipt verification
-- [x] **Webhook events** — `payment.confirmed`, `payment.session_completed`, `escrow.created`, `escrow.completed`, `refund.processed`
-
-### 🔬 Future
-- [ ] Partial category disclosure — prove purchase category, not specific product
-- [ ] Third-party escrow arbitration with ZK evidence submission
-- [ ] Cross-merchant private reputation scoring
-- [ ] Official Shopify App with App Bridge integration
-- [ ] WooCommerce plugin (PHP)
-- [ ] Mobile wallet support
-- [ ] Mainnet deployment
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Commit with clear messages
-4. Open a Pull Request
-
----
-
-## 📄 License
-
-MIT © VeilReceipt
-
----
-
-<div align="center">
-
-Built with 💜 on [Aleo](https://aleo.org)
-
-*The future of private commerce is zero-knowledge.*
-
-</div>
+MIT

@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { path: '/merchant', label: 'Merchant', icon: 'storefront' },
   { path: '/verify', label: 'Verify', icon: 'verified_user' },
   { path: '/integrate', label: 'API Docs', icon: 'bolt' },
+  { path: '/developer', label: 'SDK Docs', icon: 'menu_book' },
 ];
 
 export const Sidebar: FC = () => {

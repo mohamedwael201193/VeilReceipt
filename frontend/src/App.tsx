@@ -17,6 +17,7 @@ import Merchant from '@/pages/Merchant';
 import Verify from '@/pages/Verify';
 import Pay from '@/pages/Pay';
 import Integrate from '@/pages/Integrate';
+import Developer from '@/pages/Developer';
 
 const AppLayout: FC = () => {
   const location = useLocation();
@@ -43,6 +44,7 @@ const AppLayout: FC = () => {
           <Route path="/verify" element={<Verify />} />
           <Route path="/merchant" element={<Merchant />} />
           <Route path="/integrate" element={<Integrate />} />
+          <Route path="/developer" element={<Developer />} />
           <Route path="/pay" element={<Pay />} />
           <Route path="/pay/:sessionId" element={<Pay />} />
           <Route path="*" element={<Navigate to="/" replace />} />
