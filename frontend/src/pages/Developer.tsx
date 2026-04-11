@@ -45,12 +45,6 @@ const SectionCard: FC<{ title: string; children: React.ReactNode; id?: string }>
   </div>
 );
 
-const Badge: FC<{ children: React.ReactNode; color?: string }> = ({ children, color = 'sky' }) => (
-  <span className={`px-2 py-0.5 text-xs bg-${color}-500/10 text-${color}-300 rounded-full font-medium`}>
-    {children}
-  </span>
-);
-
 const BASE_URL = 'https://veilreceipt-api.onrender.com';
 const APP_URL = 'https://veil-receipt.vercel.app';
 
