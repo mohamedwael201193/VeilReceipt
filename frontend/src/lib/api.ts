@@ -124,6 +124,13 @@ class ApiClient {
   }
 
   // Merchant endpoints
+  async registerMerchantBackend(name: string, category = 'general') {
+    return this.request<any>('/merchant/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, category }),
+    });
+  }
+
   async getMerchantProfile() {
     return this.request<{ merchant: any }>('/merchant/profile');
   }

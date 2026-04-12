@@ -97,7 +97,11 @@ const Integrate: FC = () => {
       toast.success('API key created!');
       loadData();
     } catch (e: any) {
-      toast.error(e.message || 'Failed to create key');
+      if (e.message?.includes('Register as merchant first')) {
+        toast.error('Go to Merchant page first and authenticate to register your account.');
+      } else {
+        toast.error(e.message || 'Failed to create key');
+      }
     } finally {
       setCreatingKey(false);
     }

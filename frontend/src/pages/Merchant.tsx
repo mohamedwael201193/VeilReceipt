@@ -112,6 +112,8 @@ const Merchant: FC = () => {
       // Token exists and is not expired — restore session
       api.setToken(t);
       setAuthenticated(true);
+      // Ensure backend merchant record exists (idempotent)
+      api.registerMerchantBackend(address, 'general').catch(() => {});
       getMerchantLicense().then(license => {
         setOnChainRegistered(!!license);
       }).catch(() => {});
@@ -128,6 +130,8 @@ const Merchant: FC = () => {
       await authenticate('merchant');
       setAuthenticated(true);
       toast.success('Authenticated as merchant');
+      // Register in backend DB (idempotent — safe to call every time)
+      await api.registerMerchantBackend(address || 'Merchant', 'general').catch(() => {});
       // Check on-chain registration
       const license = await getMerchantLicense();
       setOnChainRegistered(!!license);
